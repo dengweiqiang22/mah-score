@@ -3,6 +3,8 @@ import { defineConfig, loadEnv, type Plugin } from "vite";
 
 import roomFunction from "../backend/api/room";
 import createRoomFunction from "../backend/api/room/create";
+import roomEventFunction from "../backend/api/room/event";
+import roomEventsFunction from "../backend/api/room/events";
 import joinRoomFunction from "../backend/api/room/join";
 import startRoomFunction from "../backend/api/room/start";
 import removePlayerFunction from "../backend/api/room/player/remove";
@@ -113,6 +115,30 @@ function localApiPlugin(): Plugin {
 
         const apiRequest = await createRequestFromIncomingMessage(request, "/api/room/start");
         const apiResponse = await startRoomFunction.fetch(apiRequest);
+
+        await sendApiResponse(response, apiResponse);
+      });
+      server.middlewares.use("/api/room/event", async (request, response, next) => {
+        if (request.method !== "POST") {
+          next();
+          return;
+        }
+
+        const apiRequest = await createRequestFromIncomingMessage(request, "/api/room/event");
+        const apiResponse = await roomEventFunction.fetch(apiRequest);
+
+        await sendApiResponse(response, apiResponse);
+      });
+      server.middlewares.use("/api/room/events", async (request, response, next) => {
+        if (request.method !== "GET" || request.url === undefined) {
+          next();
+          return;
+        }
+
+        const apiRequest = new Request(new URL(request.url, "http://localhost"), {
+          method: "GET",
+        });
+        const apiResponse = await roomEventsFunction.fetch(apiRequest);
 
         await sendApiResponse(response, apiResponse);
       });

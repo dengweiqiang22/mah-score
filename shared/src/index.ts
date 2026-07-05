@@ -1,5 +1,13 @@
 export type { ApiFailureResponse, ApiResponse, ApiSuccessResponse } from "./types/api";
 export type {
+  AppendRoomEventRequest,
+  AppendRoomEventResponse,
+  GetRoomEventsResponse,
+  RoomEvent,
+  RoomEventPayload,
+  RoomEventType,
+} from "./types/event";
+export type {
   CreateRoomResponse,
   GetRoomResponse,
   JoinRoomRequest,
