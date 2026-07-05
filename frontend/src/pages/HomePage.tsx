@@ -1,10 +1,14 @@
 import { useState } from "react";
 
-import { createRoom } from "../api/roomApi";
+import { createRoom, joinRoom } from "../api/roomApi";
 import { HomeActionButton } from "../components/HomeActionButton";
 
 export function HomePage() {
   const [isCreatingRoom, setIsCreatingRoom] = useState(false);
+  const [isJoiningRoom, setIsJoiningRoom] = useState(false);
+  const [isJoinFormOpen, setIsJoinFormOpen] = useState(false);
+  const [joinNickname, setJoinNickname] = useState("");
+  const [joinRoomId, setJoinRoomId] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
 
   async function handleCreateRoom() {
@@ -27,6 +31,33 @@ export function HomePage() {
     }
   }
 
+  async function handleJoinRoom() {
+    setIsJoiningRoom(true);
+    setErrorMessage(undefined);
+
+    try {
+      const response = await joinRoom({
+        roomId: joinRoomId,
+        nickname: joinNickname,
+      });
+
+      if (!response.success) {
+        setErrorMessage(response.message);
+        return;
+      }
+
+      window.location.assign(`/room/${response.data.roomId}`);
+    } catch {
+      setErrorMessage("加入房间失败，请稍后再试。");
+    } finally {
+      setIsJoiningRoom(false);
+    }
+  }
+
+  function handleJoinRoomIdChange(value: string) {
+    setJoinRoomId(value.replace(/\D/gu, "").slice(0, 3));
+  }
+
   return (
     <main className="min-h-screen bg-stone-50 px-5 py-6 text-stone-950">
       <section className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-md flex-col justify-between">
@@ -44,7 +75,42 @@ export function HomePage() {
           <HomeActionButton disabled={isCreatingRoom} onClick={handleCreateRoom} variant="primary">
             {isCreatingRoom ? "创建中..." : "创建房间"}
           </HomeActionButton>
-          <HomeActionButton variant="secondary">加入房间</HomeActionButton>
+          {isJoinFormOpen ? (
+            <div className="grid gap-3 rounded-md border border-stone-200 bg-white p-4">
+              <input
+                className="h-12 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-emerald-700"
+                inputMode="numeric"
+                maxLength={3}
+                onChange={(event) => {
+                  handleJoinRoomIdChange(event.target.value);
+                }}
+                placeholder="房间号"
+                value={joinRoomId}
+              />
+              <input
+                className="h-12 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-emerald-700"
+                maxLength={12}
+                onChange={(event) => {
+                  setJoinNickname(event.target.value);
+                }}
+                placeholder="昵称"
+                value={joinNickname}
+              />
+              <HomeActionButton disabled={isJoiningRoom} onClick={handleJoinRoom} variant="secondary">
+                {isJoiningRoom ? "加入中..." : "确认加入"}
+              </HomeActionButton>
+            </div>
+          ) : (
+            <HomeActionButton
+              onClick={() => {
+                setIsJoinFormOpen(true);
+                setErrorMessage(undefined);
+              }}
+              variant="secondary"
+            >
+              加入房间
+            </HomeActionButton>
+          )}
         </div>
       </section>
     </main>

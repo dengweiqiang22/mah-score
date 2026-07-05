@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     "./api/health": "./api/health.ts",
-    "./api/room/create": "./api/room/create.ts"
+    "./api/room/create": "./api/room/create.ts",
+    "./api/room/join": "./api/room/join.ts"
   },
   "scripts": {
     "build": "tsc -b",

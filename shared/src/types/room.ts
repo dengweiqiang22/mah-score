@@ -17,3 +17,13 @@ export interface RoomRecord {
 export interface CreateRoomResponse {
   readonly roomId: string;
 }
+
+export interface JoinRoomRequest {
+  readonly roomId: string;
+  readonly nickname: string;
+}
+
+export interface JoinRoomResponse {
+  readonly roomId: string;
+  readonly playerId: string;
+}
