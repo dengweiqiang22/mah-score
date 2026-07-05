@@ -8,6 +8,7 @@
     "typecheck": "tsc -b --pretty false"
   },
   "dependencies": {
-    "@mah-score/shared": "file:../shared"
+    "@mah-score/shared": "file:../shared",
+    "@vercel/kv": "^3.0.0"
   }
 }
