@@ -11,6 +11,7 @@ export function isExpectedPlayerEditError(error: unknown): boolean {
     error instanceof Error &&
     (error.message === "ROOM_NOT_FOUND" ||
       error.message === "ROOM_NOT_EDITABLE" ||
+      error.message === "ROOM_NOT_STARTABLE" ||
       error.message === "PLAYER_NOT_FOUND" ||
       error.message === "PLAYER_NICKNAME_EXISTS")
   );

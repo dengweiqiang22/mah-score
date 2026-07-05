@@ -4,6 +4,7 @@ import { redis } from "./redis";
 import { createCandidateRoomId } from "./roomId";
 
 const maxRoomIdAttempts = 20;
+const minPlayersToStart = 2;
 const maxPlayers = 4;
 
 function getRoomKey(roomId: string): string {
@@ -226,4 +227,34 @@ export async function removePlayer(roomId: string, playerId: string): Promise<vo
     players: JSON.stringify(updatedPlayers),
     updatedAt: now,
   });
+}
+
+export async function startRoom(roomId: string): Promise<RoomRecord> {
+  const room = await getRoom(roomId);
+
+  if (room === undefined) {
+    throw new Error("ROOM_NOT_FOUND");
+  }
+
+  if (room.status !== "WAITING") {
+    throw new Error("ROOM_NOT_STARTABLE");
+  }
+
+  if (room.players.length < minPlayersToStart || room.players.length > maxPlayers) {
+    throw new Error("INVALID_PLAYER_COUNT");
+  }
+
+  const now = new Date().toISOString();
+  const startedRoom: RoomRecord = {
+    ...room,
+    status: "PLAYING",
+    updatedAt: now,
+  };
+
+  await redis.hset(getRoomKey(roomId), {
+    status: startedRoom.status,
+    updatedAt: startedRoom.updatedAt,
+  });
+
+  return startedRoom;
 }

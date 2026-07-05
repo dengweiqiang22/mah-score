@@ -9,4 +9,5 @@ export type {
   RoomPlayer,
   RoomRecord,
   RoomStatus,
+  StartRoomRequest,
 } from "./types/room";

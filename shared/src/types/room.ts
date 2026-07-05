@@ -42,3 +42,7 @@ export interface RemovePlayerRequest {
   readonly roomId: string;
   readonly playerId: string;
 }
+
+export interface StartRoomRequest {
+  readonly roomId: string;
+}

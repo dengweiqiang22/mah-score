@@ -4,6 +4,7 @@ import { defineConfig, loadEnv, type Plugin } from "vite";
 import roomFunction from "../backend/api/room";
 import createRoomFunction from "../backend/api/room/create";
 import joinRoomFunction from "../backend/api/room/join";
+import startRoomFunction from "../backend/api/room/start";
 import removePlayerFunction from "../backend/api/room/player/remove";
 import renamePlayerFunction from "../backend/api/room/player/rename";
 
@@ -101,6 +102,17 @@ function localApiPlugin(): Plugin {
 
         const apiRequest = await createRequestFromIncomingMessage(request, "/api/room/join");
         const apiResponse = await joinRoomFunction.fetch(apiRequest);
+
+        await sendApiResponse(response, apiResponse);
+      });
+      server.middlewares.use("/api/room/start", async (request, response, next) => {
+        if (request.method !== "POST") {
+          next();
+          return;
+        }
+
+        const apiRequest = await createRequestFromIncomingMessage(request, "/api/room/start");
+        const apiResponse = await startRoomFunction.fetch(apiRequest);
 
         await sendApiResponse(response, apiResponse);
       });

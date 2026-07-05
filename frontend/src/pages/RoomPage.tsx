@@ -2,7 +2,7 @@ import type { RoomRecord } from "@mah-score/shared";
 
 import { useEffect, useState } from "react";
 
-import { getRoom, removePlayer, renamePlayer } from "../api/roomApi";
+import { getRoom, removePlayer, renamePlayer, startRoom } from "../api/roomApi";
 
 interface RoomPageProps {
   readonly roomId: string;
@@ -12,6 +12,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
   const [editingPlayerId, setEditingPlayerId] = useState<string | undefined>();
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
   const [isLoading, setIsLoading] = useState(true);
+  const [isStarting, setIsStarting] = useState(false);
   const [nicknameInput, setNicknameInput] = useState("");
   const [room, setRoom] = useState<RoomRecord | undefined>();
 
@@ -82,7 +83,32 @@ export function RoomPage({ roomId }: RoomPageProps) {
     }
   }
 
+  async function handleStartRoom() {
+    setIsStarting(true);
+    setErrorMessage(undefined);
+
+    try {
+      const response = await startRoom({
+        roomId,
+      });
+
+      if (!response.success) {
+        setErrorMessage(response.message);
+        return;
+      }
+
+      setEditingPlayerId(undefined);
+      setNicknameInput("");
+      await loadRoom();
+    } catch {
+      setErrorMessage("开始游戏失败，请稍后再试。");
+    } finally {
+      setIsStarting(false);
+    }
+  }
+
   const isWaiting = room?.status === "WAITING";
+  const canStart = isWaiting && room.players.length >= 2 && room.players.length <= 4;
 
   return (
     <main className="min-h-screen bg-stone-50 px-5 py-6 text-stone-950">
@@ -90,6 +116,9 @@ export function RoomPage({ roomId }: RoomPageProps) {
         <div className="pt-8">
           <p className="text-sm font-semibold text-emerald-700">房间</p>
           <h1 className="mt-3 text-4xl font-semibold tracking-normal">{roomId}</h1>
+          <p className="mt-3 text-sm font-medium text-stone-500">
+            {room === undefined ? "读取中" : room.status === "WAITING" ? "等待开始" : "游戏中"}
+          </p>
         </div>
 
         {errorMessage !== undefined ? (
@@ -193,6 +222,24 @@ export function RoomPage({ roomId }: RoomPageProps) {
             </div>
           ))}
         </section>
+
+        {room !== undefined ? (
+          <div className="mt-auto grid gap-3 pb-3">
+            {isWaiting && room.players.length < 2 ? (
+              <p className="text-sm leading-6 text-stone-500">至少 2 名玩家才能开始游戏</p>
+            ) : null}
+            <button
+              className="h-14 rounded-md bg-emerald-700 px-4 text-base font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={!canStart || isStarting}
+              onClick={() => {
+                void handleStartRoom();
+              }}
+              type="button"
+            >
+              {room.status === "PLAYING" ? "游戏已开始" : isStarting ? "开始中..." : "开始游戏"}
+            </button>
+          </div>
+        ) : null}
       </section>
     </main>
   );
