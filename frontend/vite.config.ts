@@ -1,8 +1,11 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig, loadEnv, type Plugin } from "vite";
 
+import roomFunction from "../backend/api/room";
 import createRoomFunction from "../backend/api/room/create";
 import joinRoomFunction from "../backend/api/room/join";
+import removePlayerFunction from "../backend/api/room/player/remove";
+import renamePlayerFunction from "../backend/api/room/player/rename";
 
 function applyRootEnv(mode: string): void {
   const rootEnv = loadEnv(mode, "..", "");
@@ -15,9 +18,71 @@ function applyRootEnv(mode: string): void {
 }
 
 function localApiPlugin(): Plugin {
+  async function createRequestFromIncomingMessage(
+    request: Parameters<Parameters<Plugin["configureServer"]>[0]["middlewares"]["use"]>[1],
+    pathname: string,
+  ): Promise<Request> {
+    const bodyChunks: Uint8Array[] = [];
+
+    for await (const chunk of request) {
+      bodyChunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+    }
+
+    const requestUrl = new URL(pathname, "http://localhost");
+
+    return new Request(requestUrl, {
+      body: bodyChunks.length > 0 ? Buffer.concat(bodyChunks) : undefined,
+      headers: {
+        "Content-Type": request.headers["content-type"] ?? "application/json",
+      },
+      method: request.method,
+    });
+  }
+
+  async function sendApiResponse(
+    response: Parameters<Parameters<Plugin["configureServer"]>[0]["middlewares"]["use"]>[2],
+    apiResponse: Response,
+  ): Promise<void> {
+    const responseBody = await apiResponse.text();
+
+    response.statusCode = apiResponse.status;
+    apiResponse.headers.forEach((value, key) => {
+      response.setHeader(key, value);
+    });
+    response.end(responseBody);
+  }
+
   return {
     name: "mah-score-local-api",
     configureServer(server) {
+      server.middlewares.use("/api/room/player/rename", async (request, response, next) => {
+        if (request.method !== "POST") {
+          next();
+          return;
+        }
+
+        const apiRequest = await createRequestFromIncomingMessage(
+          request,
+          "/api/room/player/rename",
+        );
+        const apiResponse = await renamePlayerFunction.fetch(apiRequest);
+
+        await sendApiResponse(response, apiResponse);
+      });
+      server.middlewares.use("/api/room/player/remove", async (request, response, next) => {
+        if (request.method !== "POST") {
+          next();
+          return;
+        }
+
+        const apiRequest = await createRequestFromIncomingMessage(
+          request,
+          "/api/room/player/remove",
+        );
+        const apiResponse = await removePlayerFunction.fetch(apiRequest);
+
+        await sendApiResponse(response, apiResponse);
+      });
       server.middlewares.use("/api/room/create", async (request, response, next) => {
         if (request.method !== "POST") {
           next();
@@ -25,13 +90,8 @@ function localApiPlugin(): Plugin {
         }
 
         const apiResponse = await createRoomFunction.fetch();
-        const responseBody = await apiResponse.text();
 
-        response.statusCode = apiResponse.status;
-        apiResponse.headers.forEach((value, key) => {
-          response.setHeader(key, value);
-        });
-        response.end(responseBody);
+        await sendApiResponse(response, apiResponse);
       });
       server.middlewares.use("/api/room/join", async (request, response, next) => {
         if (request.method !== "POST") {
@@ -39,27 +99,23 @@ function localApiPlugin(): Plugin {
           return;
         }
 
-        const bodyChunks: Uint8Array[] = [];
+        const apiRequest = await createRequestFromIncomingMessage(request, "/api/room/join");
+        const apiResponse = await joinRoomFunction.fetch(apiRequest);
 
-        for await (const chunk of request) {
-          bodyChunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+        await sendApiResponse(response, apiResponse);
+      });
+      server.middlewares.use("/api/room", async (request, response, next) => {
+        if (request.method !== "GET" || request.url === undefined) {
+          next();
+          return;
         }
 
-        const apiRequest = new Request("http://localhost/api/room/join", {
-          body: Buffer.concat(bodyChunks),
-          headers: {
-            "Content-Type": request.headers["content-type"] ?? "application/json",
-          },
-          method: "POST",
+        const apiRequest = new Request(new URL(request.url, "http://localhost"), {
+          method: "GET",
         });
-        const apiResponse = await joinRoomFunction.fetch(apiRequest);
-        const responseBody = await apiResponse.text();
+        const apiResponse = await roomFunction.fetch(apiRequest);
 
-        response.statusCode = apiResponse.status;
-        apiResponse.headers.forEach((value, key) => {
-          response.setHeader(key, value);
-        });
-        response.end(responseBody);
+        await sendApiResponse(response, apiResponse);
       });
     },
   };

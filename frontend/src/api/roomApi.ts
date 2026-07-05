@@ -1,4 +1,14 @@
-import type { ApiResponse, CreateRoomResponse, JoinRoomRequest, JoinRoomResponse } from "@mah-score/shared";
+import type {
+  ApiResponse,
+  CreateRoomResponse,
+  GetRoomResponse,
+  JoinRoomRequest,
+  JoinRoomResponse,
+  RemovePlayerRequest,
+  RenamePlayerRequest,
+} from "@mah-score/shared";
+
+type EmptyResponse = Record<string, never>;
 
 export async function createRoom(): Promise<ApiResponse<CreateRoomResponse>> {
   const response = await fetch("/api/room/create", {
@@ -20,6 +30,39 @@ export async function joinRoom(request: JoinRoomRequest): Promise<ApiResponse<Jo
   });
 
   const data = (await response.json()) as ApiResponse<JoinRoomResponse>;
+
+  return data;
+}
+
+export async function getRoom(roomId: string): Promise<ApiResponse<GetRoomResponse>> {
+  const response = await fetch(`/api/room?roomId=${encodeURIComponent(roomId)}`);
+  const data = (await response.json()) as ApiResponse<GetRoomResponse>;
+
+  return data;
+}
+
+export async function renamePlayer(request: RenamePlayerRequest): Promise<ApiResponse<EmptyResponse>> {
+  const response = await fetch("/api/room/player/rename", {
+    body: JSON.stringify(request),
+    headers: {
+      "Content-Type": "application/json",
+    },
+    method: "POST",
+  });
+  const data = (await response.json()) as ApiResponse<EmptyResponse>;
+
+  return data;
+}
+
+export async function removePlayer(request: RemovePlayerRequest): Promise<ApiResponse<EmptyResponse>> {
+  const response = await fetch("/api/room/player/remove", {
+    body: JSON.stringify(request),
+    headers: {
+      "Content-Type": "application/json",
+    },
+    method: "POST",
+  });
+  const data = (await response.json()) as ApiResponse<EmptyResponse>;
 
   return data;
 }

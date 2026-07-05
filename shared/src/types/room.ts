@@ -27,3 +27,18 @@ export interface JoinRoomResponse {
   readonly roomId: string;
   readonly playerId: string;
 }
+
+export interface GetRoomResponse {
+  readonly room: RoomRecord;
+}
+
+export interface RenamePlayerRequest {
+  readonly roomId: string;
+  readonly playerId: string;
+  readonly nickname: string;
+}
+
+export interface RemovePlayerRequest {
+  readonly roomId: string;
+  readonly playerId: string;
+}

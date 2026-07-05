@@ -5,8 +5,11 @@
   "type": "module",
   "exports": {
     "./api/health": "./api/health.ts",
+    "./api/room": "./api/room/index.ts",
     "./api/room/create": "./api/room/create.ts",
-    "./api/room/join": "./api/room/join.ts"
+    "./api/room/join": "./api/room/join.ts",
+    "./api/room/player/rename": "./api/room/player/rename.ts",
+    "./api/room/player/remove": "./api/room/player/remove.ts"
   },
   "scripts": {
     "build": "tsc -b",
