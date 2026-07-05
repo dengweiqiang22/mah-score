@@ -13,6 +13,7 @@
   },
   "scripts": {
     "build": "tsc -b",
+    "test": "npm run build && node scripts/check-replay.mjs",
     "typecheck": "tsc -b --pretty false"
   }
 }

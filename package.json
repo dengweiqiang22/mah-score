@@ -13,6 +13,7 @@
     "build": "npm run build --workspaces --if-present",
     "typecheck": "tsc -b --pretty false",
     "lint": "eslint .",
+    "test": "npm run test --workspaces --if-present",
     "format": "prettier --write .",
     "check": "npm run typecheck && npm run lint"
   },

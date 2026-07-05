@@ -1,4 +1,5 @@
-export type { ApiFailureResponse, ApiResponse, ApiSuccessResponse } from "./types/api";
+export type { ApiFailureResponse, ApiResponse, ApiSuccessResponse } from "./types/api.js";
+export { replayRoomEvents } from "./domain/replay.js";
 export type {
   AppendRoomEventRequest,
   AppendRoomEventResponse,
@@ -6,7 +7,8 @@ export type {
   RoomEvent,
   RoomEventPayload,
   RoomEventType,
-} from "./types/event";
+} from "./types/event.js";
+export type { RoomState, RoundState, ScoreState } from "./types/roomState.js";
 export type {
   CreateRoomResponse,
   GetRoomResponse,
@@ -18,4 +20,4 @@ export type {
   RoomRecord,
   RoomStatus,
   StartRoomRequest,
-} from "./types/room";
+} from "./types/room.js";
