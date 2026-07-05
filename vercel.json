@@ -1,0 +1,15 @@
+{
+  "buildCommand": "npm run build",
+  "installCommand": "npm install",
+  "outputDirectory": "frontend/dist",
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/backend/api/$1"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
