@@ -30,3 +30,11 @@ export async function POST(): Promise<Response> {
     });
   }
 }
+
+const createRoomFunction = {
+  async fetch(): Promise<Response> {
+    return POST();
+  },
+};
+
+export default createRoomFunction;

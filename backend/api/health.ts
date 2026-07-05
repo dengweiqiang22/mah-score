@@ -8,10 +8,18 @@ export function GET(): Response {
   const response: ApiResponse<HealthData> = {
     success: true,
     data: {
-      status: "ok"
+      status: "ok",
     },
-    message: ""
+    message: "",
   };
 
   return Response.json(response);
 }
+
+const healthFunction = {
+  fetch(): Response {
+    return GET();
+  },
+};
+
+export default healthFunction;
