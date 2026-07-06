@@ -1,4 +1,13 @@
-import type { RoomEvent, RoomPlayer, RoomRecord, RoomState, RoundState } from "@mah-score/shared";
+import type {
+  KongType,
+  RoomEvent,
+  RoomPlayer,
+  RoomRecord,
+  RoomState,
+  RoundState,
+  ScoreFan,
+  ScoreEventRequest,
+} from "@mah-score/shared";
 
 import { useEffect, useState } from "react";
 import { replayRoomEvents } from "@mah-score/shared";
@@ -19,10 +28,85 @@ interface RoomPageProps {
   readonly roomId: string;
 }
 
+type QuickScoreMode =
+  "DISCARD_WIN" | "SELF_DRAW" | "DISCARD_KONG" | "SUPPLEMENT_KONG" | "CONCEALED_KONG" | "DRAW_GAME";
+
+interface QuickScoreModeOption {
+  readonly mode: QuickScoreMode;
+  readonly label: string;
+}
+
+const quickScoreModes: readonly QuickScoreModeOption[] = [
+  {
+    mode: "DISCARD_WIN",
+    label: "点炮",
+  },
+  {
+    mode: "SELF_DRAW",
+    label: "自摸",
+  },
+  {
+    mode: "DISCARD_KONG",
+    label: "直杠",
+  },
+  {
+    mode: "SUPPLEMENT_KONG",
+    label: "补杠",
+  },
+  {
+    mode: "CONCEALED_KONG",
+    label: "暗杠",
+  },
+  {
+    mode: "DRAW_GAME",
+    label: "流局",
+  },
+];
+
+const scoreFans: readonly ScoreFan[] = [1, 2, 3, 4];
+
 function getPayloadString(payload: RoomEvent["payload"], key: string): string | undefined {
   const value = payload[key];
 
   return typeof value === "string" ? value : undefined;
+}
+
+function getPayloadNumber(payload: RoomEvent["payload"], key: string): number | undefined {
+  const value = payload[key];
+
+  return typeof value === "number" ? value : undefined;
+}
+
+function getFanScore(fan: number | undefined): number {
+  if (fan === 2) {
+    return 2;
+  }
+
+  if (fan === 3) {
+    return 4;
+  }
+
+  if (fan === 4) {
+    return 8;
+  }
+
+  return 1;
+}
+
+function getKongTypeLabel(kongType: string | undefined): string {
+  if (kongType === "DISCARD_KONG") {
+    return "直杠";
+  }
+
+  if (kongType === "SUPPLEMENT_KONG") {
+    return "补杠";
+  }
+
+  if (kongType === "CONCEALED_KONG") {
+    return "暗杠";
+  }
+
+  return "杠牌";
 }
 
 function getPlayerNickname(players: readonly RoomPlayer[], playerId: string | undefined): string {
@@ -46,21 +130,99 @@ function formatRoundTitle(round: RoundState, players: readonly RoomPlayer[]): st
     return `${winnerName} 自摸`;
   }
 
+  if (round.type === "KONG") {
+    const playerName = getPlayerNickname(players, getPayloadString(round.payload, "playerId"));
+    const kongType = getPayloadString(round.payload, "kongType");
+
+    return `${playerName} ${getKongTypeLabel(kongType)}`;
+  }
+
   return "流局";
 }
 
 function formatRoundDetail(round: RoundState, players: readonly RoomPlayer[]): string {
   if (round.type === "DISCARD_WIN") {
-    const discarderName = getPlayerNickname(players, getPayloadString(round.payload, "discarderId"));
+    const discarderName = getPlayerNickname(
+      players,
+      getPayloadString(round.payload, "discarderId"),
+    );
+    const fan = getPayloadNumber(round.payload, "fan");
+    const score = getFanScore(fan);
 
-    return `${discarderName} 点炮 · +1 / -1`;
+    return `${discarderName} 点炮 · ${fan ?? 1} 番 · +${score} / -${score}`;
   }
 
   if (round.type === "SELF_DRAW") {
-    return `三家付分 · +${Math.max(players.length - 1, 0)} / -1`;
+    const fan = getPayloadNumber(round.payload, "fan");
+    const score = getFanScore(fan);
+
+    return `未胡玩家付分 · ${fan ?? 1} 番 · 每家 ${score}`;
+  }
+
+  if (round.type === "KONG") {
+    const kongType = getPayloadString(round.payload, "kongType");
+
+    if (kongType === "DISCARD_KONG") {
+      const fromPlayerName = getPlayerNickname(
+        players,
+        getPayloadString(round.payload, "fromPlayerId"),
+      );
+
+      return `${fromPlayerName} 引杠 · +1 / -1`;
+    }
+
+    if (kongType === "CONCEALED_KONG") {
+      return "未胡玩家各付 2 分";
+    }
+
+    return "未胡玩家各付 1 分";
   }
 
   return "本局不计分";
+}
+
+function needsRelatedPlayer(mode: QuickScoreMode): boolean {
+  return mode === "DISCARD_WIN" || mode === "DISCARD_KONG";
+}
+
+function needsFan(mode: QuickScoreMode): boolean {
+  return mode === "DISCARD_WIN" || mode === "SELF_DRAW";
+}
+
+function getModePrimaryPlayerLabel(mode: QuickScoreMode): string {
+  if (mode === "DISCARD_KONG" || mode === "SUPPLEMENT_KONG" || mode === "CONCEALED_KONG") {
+    return "杠牌玩家";
+  }
+
+  if (mode === "DRAW_GAME") {
+    return "无需选择玩家";
+  }
+
+  return "胡牌玩家";
+}
+
+function getModeRelatedPlayerLabel(mode: QuickScoreMode): string {
+  if (mode === "DISCARD_KONG") {
+    return "引杠玩家";
+  }
+
+  return "点炮玩家";
+}
+
+function getKongType(mode: QuickScoreMode): KongType | undefined {
+  if (mode === "DISCARD_KONG") {
+    return "DISCARD_KONG";
+  }
+
+  if (mode === "SUPPLEMENT_KONG") {
+    return "SUPPLEMENT_KONG";
+  }
+
+  if (mode === "CONCEALED_KONG") {
+    return "CONCEALED_KONG";
+  }
+
+  return undefined;
 }
 
 export function RoomPage({ roomId }: RoomPageProps) {
@@ -75,16 +237,26 @@ export function RoomPage({ roomId }: RoomPageProps) {
   const [events, setEvents] = useState<readonly RoomEvent[]>([]);
   const [room, setRoom] = useState<RoomRecord | undefined>();
   const [roomVersion, setRoomVersion] = useState(0);
-  const [selectedDiscarderId, setSelectedDiscarderId] = useState<string | undefined>();
-  const [selectedWinnerId, setSelectedWinnerId] = useState<string | undefined>();
+  const [quickScoreMode, setQuickScoreMode] = useState<QuickScoreMode>("DISCARD_WIN");
+  const [selectedPrimaryPlayerId, setSelectedPrimaryPlayerId] = useState<string | undefined>();
+  const [selectedRelatedPlayerId, setSelectedRelatedPlayerId] = useState<string | undefined>();
+  const [selectedFan, setSelectedFan] = useState<ScoreFan>(1);
   const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "error">("idle");
+
+  function resetQuickScoreSelection() {
+    setSelectedPrimaryPlayerId(undefined);
+    setSelectedRelatedPlayerId(undefined);
+  }
 
   async function loadRoom() {
     setIsLoading(true);
     setErrorMessage(undefined);
 
     try {
-      const [roomResponse, eventsResponse] = await Promise.all([getRoom(roomId), getRoomEvents(roomId)]);
+      const [roomResponse, eventsResponse] = await Promise.all([
+        getRoom(roomId),
+        getRoomEvents(roomId),
+      ]);
 
       if (!roomResponse.success) {
         setErrorMessage(roomResponse.message);
@@ -167,8 +339,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
         return;
       }
 
-      setSelectedDiscarderId(undefined);
-      setSelectedWinnerId(undefined);
+      resetQuickScoreSelection();
       setEditingPlayerId(undefined);
       setNicknameInput("");
       await loadRoom();
@@ -191,8 +362,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
         return;
       }
 
-      setSelectedDiscarderId(undefined);
-      setSelectedWinnerId(undefined);
+      resetQuickScoreSelection();
       await loadRoom();
     } catch {
       setErrorMessage("删除玩家失败，请稍后再试。");
@@ -213,8 +383,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
         return;
       }
 
-      setSelectedDiscarderId(undefined);
-      setSelectedWinnerId(undefined);
+      resetQuickScoreSelection();
       setEditingPlayerId(undefined);
       setNicknameInput("");
       await loadRoom();
@@ -240,8 +409,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
         return;
       }
 
-      setSelectedDiscarderId(undefined);
-      setSelectedWinnerId(undefined);
+      resetQuickScoreSelection();
       await loadRoom();
     } catch {
       setErrorMessage("撤销失败，请稍后再试。");
@@ -250,118 +418,148 @@ export function RoomPage({ roomId }: RoomPageProps) {
     }
   }
 
-  function handleSelectScorePlayer(playerId: string) {
+  function handleSelectQuickScorePlayer(playerId: string) {
     if (room?.status !== "PLAYING" || isScoring) {
       return;
     }
 
     setErrorMessage(undefined);
 
-    if (selectedWinnerId === undefined) {
-      setSelectedWinnerId(playerId);
+    if (quickScoreMode === "DRAW_GAME") {
       return;
     }
 
-    if (selectedWinnerId === playerId) {
-      setSelectedWinnerId(undefined);
-      setSelectedDiscarderId(undefined);
+    if (selectedPrimaryPlayerId === undefined) {
+      setSelectedPrimaryPlayerId(playerId);
       return;
     }
 
-    if (selectedDiscarderId === playerId) {
-      setSelectedDiscarderId(undefined);
+    if (selectedPrimaryPlayerId === playerId) {
+      resetQuickScoreSelection();
       return;
     }
 
-    setSelectedDiscarderId(playerId);
+    if (!needsRelatedPlayer(quickScoreMode)) {
+      setSelectedPrimaryPlayerId(playerId);
+      setSelectedRelatedPlayerId(undefined);
+      return;
+    }
+
+    if (selectedRelatedPlayerId === playerId) {
+      setSelectedRelatedPlayerId(undefined);
+      return;
+    }
+
+    setSelectedRelatedPlayerId(playerId);
   }
 
-  async function handleRecordSelfDraw() {
-    if (selectedWinnerId === undefined) {
-      setErrorMessage("请先选择自摸玩家。");
-      return;
-    }
-
-    setIsScoring(true);
-    setErrorMessage(undefined);
-
-    try {
-      const response = await recordScoreEvent({
-        roomId,
-        action: "SELF_DRAW",
-        operator: "room",
-        winnerId: selectedWinnerId,
-      });
-
-      if (!response.success) {
-        setErrorMessage(response.message);
-        return;
-      }
-
-      setSelectedDiscarderId(undefined);
-      setSelectedWinnerId(undefined);
-      await loadRoom();
-    } catch {
-      setErrorMessage("记录自摸失败，请稍后再试。");
-    } finally {
-      setIsScoring(false);
-    }
-  }
-
-  async function handleRecordDiscardWin() {
-    if (selectedWinnerId === undefined || selectedDiscarderId === undefined) {
-      setErrorMessage("请先选择赢家和点炮玩家。");
-      return;
-    }
-
-    setIsScoring(true);
-    setErrorMessage(undefined);
-
-    try {
-      const response = await recordScoreEvent({
-        roomId,
-        action: "DISCARD_WIN",
-        operator: "room",
-        winnerId: selectedWinnerId,
-        discarderId: selectedDiscarderId,
-      });
-
-      if (!response.success) {
-        setErrorMessage(response.message);
-        return;
-      }
-
-      setSelectedDiscarderId(undefined);
-      setSelectedWinnerId(undefined);
-      await loadRoom();
-    } catch {
-      setErrorMessage("记录点炮失败，请稍后再试。");
-    } finally {
-      setIsScoring(false);
-    }
-  }
-
-  async function handleRecordDrawGame() {
-    setIsScoring(true);
-    setErrorMessage(undefined);
-
-    try {
-      const response = await recordScoreEvent({
+  function getQuickScoreRequest(): ScoreEventRequest | undefined {
+    if (quickScoreMode === "DRAW_GAME") {
+      return {
         roomId,
         action: "DRAW_GAME",
         operator: "room",
-      });
+      };
+    }
+
+    if (selectedPrimaryPlayerId === undefined) {
+      return undefined;
+    }
+
+    if (quickScoreMode === "SELF_DRAW") {
+      return {
+        roomId,
+        action: "SELF_DRAW",
+        operator: "room",
+        winnerId: selectedPrimaryPlayerId,
+        fan: selectedFan,
+      };
+    }
+
+    if (quickScoreMode === "DISCARD_WIN") {
+      if (selectedRelatedPlayerId === undefined) {
+        return undefined;
+      }
+
+      return {
+        roomId,
+        action: "DISCARD_WIN",
+        operator: "room",
+        winnerId: selectedPrimaryPlayerId,
+        discarderId: selectedRelatedPlayerId,
+        fan: selectedFan,
+      };
+    }
+
+    const kongType = getKongType(quickScoreMode);
+
+    if (kongType === undefined) {
+      return undefined;
+    }
+
+    if (kongType === "DISCARD_KONG") {
+      if (selectedRelatedPlayerId === undefined) {
+        return undefined;
+      }
+
+      return {
+        roomId,
+        action: "KONG",
+        operator: "room",
+        playerId: selectedPrimaryPlayerId,
+        kongType,
+        fromPlayerId: selectedRelatedPlayerId,
+      };
+    }
+
+    return {
+      roomId,
+      action: "KONG",
+      operator: "room",
+      playerId: selectedPrimaryPlayerId,
+      kongType,
+    };
+  }
+
+  function getQuickScoreMissingMessage(): string {
+    if (quickScoreMode === "DRAW_GAME") {
+      return "";
+    }
+
+    if (selectedPrimaryPlayerId === undefined) {
+      return `请选择${getModePrimaryPlayerLabel(quickScoreMode)}。`;
+    }
+
+    if (needsRelatedPlayer(quickScoreMode) && selectedRelatedPlayerId === undefined) {
+      return `请选择${getModeRelatedPlayerLabel(quickScoreMode)}。`;
+    }
+
+    return "";
+  }
+
+  async function handleRecordQuickScore() {
+    const scoreRequest = getQuickScoreRequest();
+
+    if (scoreRequest === undefined) {
+      setErrorMessage(getQuickScoreMissingMessage());
+      return;
+    }
+
+    setIsScoring(true);
+    setErrorMessage(undefined);
+
+    try {
+      const response = await recordScoreEvent(scoreRequest);
 
       if (!response.success) {
         setErrorMessage(response.message);
         return;
       }
 
-      setSelectedDiscarderId(undefined);
-      setSelectedWinnerId(undefined);
+      resetQuickScoreSelection();
       await loadRoom();
     } catch {
-      setErrorMessage("记录流局失败，请稍后再试。");
+      setErrorMessage("记录计分失败，请稍后再试。");
     } finally {
       setIsScoring(false);
     }
@@ -384,8 +582,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
         return;
       }
 
-      setSelectedDiscarderId(undefined);
-      setSelectedWinnerId(undefined);
+      resetQuickScoreSelection();
       await loadRoom();
     } catch {
       setErrorMessage("结束游戏失败，请稍后再试。");
@@ -424,9 +621,16 @@ export function RoomPage({ roomId }: RoomPageProps) {
   }
 
   const canUndo = (replayState?.rounds.length ?? 0) > 0;
-  const canRecordSelfDraw = isPlaying && selectedWinnerId !== undefined && !isScoring;
-  const canRecordDiscardWin =
-    isPlaying && selectedWinnerId !== undefined && selectedDiscarderId !== undefined && !isScoring;
+  const canRecordQuickScore = isPlaying && getQuickScoreRequest() !== undefined && !isScoring;
+  const quickScoreMissingMessage = getQuickScoreMissingMessage();
+  const selectedPrimaryPlayerName = getPlayerNickname(
+    replayState?.players ?? [],
+    selectedPrimaryPlayerId,
+  );
+  const selectedRelatedPlayerName = getPlayerNickname(
+    replayState?.players ?? [],
+    selectedRelatedPlayerId,
+  );
   const recentRounds = [...(replayState?.rounds ?? [])]
     .sort((left, right) => right.version - left.version)
     .slice(0, 5);
@@ -510,24 +714,24 @@ export function RoomPage({ roomId }: RoomPageProps) {
           {room?.players.map((player) => (
             <div
               className={`grid gap-3 rounded-md border p-4 ${
-                selectedWinnerId === player.id
+                selectedPrimaryPlayerId === player.id
                   ? "border-emerald-600 bg-emerald-50"
-                  : selectedDiscarderId === player.id
+                  : selectedRelatedPlayerId === player.id
                     ? "border-red-300 bg-red-50"
                     : "border-stone-200 bg-white"
-              } ${isPlaying ? "cursor-pointer" : ""}`}
+              } ${isPlaying && quickScoreMode !== "DRAW_GAME" ? "cursor-pointer" : ""}`}
               key={player.id}
               onClick={() => {
-                handleSelectScorePlayer(player.id);
+                handleSelectQuickScorePlayer(player.id);
               }}
               onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") {
                   event.preventDefault();
-                  handleSelectScorePlayer(player.id);
+                  handleSelectQuickScorePlayer(player.id);
                 }
               }}
-              role={isPlaying ? "button" : undefined}
-              tabIndex={isPlaying ? 0 : undefined}
+              role={isPlaying && quickScoreMode !== "DRAW_GAME" ? "button" : undefined}
+              tabIndex={isPlaying && quickScoreMode !== "DRAW_GAME" ? 0 : undefined}
             >
               {editingPlayerId === player.id ? (
                 <div className="grid gap-3">
@@ -566,10 +770,10 @@ export function RoomPage({ roomId }: RoomPageProps) {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-lg font-semibold">{player.nickname}</p>
                     <p className="mt-1 text-sm text-stone-500">
-                      {selectedWinnerId === player.id
-                        ? "赢家"
-                        : selectedDiscarderId === player.id
-                          ? "点炮"
+                      {selectedPrimaryPlayerId === player.id
+                        ? getModePrimaryPlayerLabel(quickScoreMode)
+                        : selectedRelatedPlayerId === player.id
+                          ? getModeRelatedPlayerLabel(quickScoreMode)
                           : isWaiting
                             ? "等待开始"
                             : "累计分数"}
@@ -613,7 +817,9 @@ export function RoomPage({ roomId }: RoomPageProps) {
           <div className="border-b border-stone-200 pb-3">
             <h2 className="text-xl font-semibold tracking-normal">最近事件</h2>
             <p className="mt-1 text-sm text-stone-500">
-              {recentRounds.length === 0 ? "暂无计分事件" : `最近 ${recentRounds.length} 条计分事件`}
+              {recentRounds.length === 0
+                ? "暂无计分事件"
+                : `最近 ${recentRounds.length} 条计分事件`}
             </p>
           </div>
 
@@ -665,55 +871,92 @@ export function RoomPage({ roomId }: RoomPageProps) {
             ) : null}
             {room.status === "PLAYING" ? (
               <div className="grid gap-3">
-                <p className="text-sm leading-6 text-stone-500">
-                  {selectedWinnerId === undefined
-                    ? "点击玩家选择赢家"
-                    : selectedDiscarderId === undefined
-                      ? "可直接记录自摸，或继续点击点炮玩家"
-                      : "可记录点炮胡牌"}
-                </p>
+                <div className="grid grid-cols-3 gap-2">
+                  {quickScoreModes.map((option) => (
+                    <button
+                      className={`h-11 rounded-md border px-2 text-sm font-semibold ${
+                        quickScoreMode === option.mode
+                          ? "border-emerald-700 bg-emerald-700 text-white"
+                          : "border-stone-300 bg-white text-stone-900"
+                      }`}
+                      key={option.mode}
+                      onClick={() => {
+                        setQuickScoreMode(option.mode);
+                        resetQuickScoreSelection();
+                        setErrorMessage(undefined);
+                      }}
+                      type="button"
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+
+                {needsFan(quickScoreMode) ? (
+                  <div className="grid grid-cols-4 gap-2">
+                    {scoreFans.map((fan) => (
+                      <button
+                        className={`h-11 rounded-md border px-2 text-sm font-semibold ${
+                          selectedFan === fan
+                            ? "border-stone-900 bg-stone-900 text-white"
+                            : "border-stone-300 bg-white text-stone-900"
+                        }`}
+                        key={fan}
+                        onClick={() => {
+                          setSelectedFan(fan);
+                        }}
+                        type="button"
+                      >
+                        {fan} 番
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+
+                <div className="rounded-md border border-stone-200 bg-white p-3">
+                  <p className="text-sm font-semibold text-stone-900">
+                    {quickScoreMode === "DRAW_GAME"
+                      ? "流局"
+                      : `${getModePrimaryPlayerLabel(quickScoreMode)}：${selectedPrimaryPlayerId === undefined ? "未选择" : selectedPrimaryPlayerName}`}
+                  </p>
+                  {needsRelatedPlayer(quickScoreMode) ? (
+                    <p className="mt-1 text-sm font-medium text-stone-500">
+                      {getModeRelatedPlayerLabel(quickScoreMode)}：
+                      {selectedRelatedPlayerId === undefined ? "未选择" : selectedRelatedPlayerName}
+                    </p>
+                  ) : null}
+                  {needsFan(quickScoreMode) ? (
+                    <p className="mt-1 text-sm font-medium text-stone-500">
+                      番数：{selectedFan} 番 · {getFanScore(selectedFan)} 分
+                    </p>
+                  ) : null}
+                  {quickScoreMissingMessage !== "" ? (
+                    <p className="mt-2 text-xs font-medium text-stone-400">
+                      {quickScoreMissingMessage}
+                    </p>
+                  ) : null}
+                </div>
+
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     className="h-14 rounded-md bg-emerald-700 px-4 text-base font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={!canRecordSelfDraw}
+                    disabled={!canRecordQuickScore}
                     onClick={() => {
-                      void handleRecordSelfDraw();
+                      void handleRecordQuickScore();
                     }}
                     type="button"
                   >
-                    {isScoring ? "记录中..." : "记录自摸"}
+                    {isScoring ? "记录中..." : "确认记录"}
                   </button>
                   <button
-                    className="h-14 rounded-md bg-stone-900 px-4 text-base font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={!canRecordDiscardWin}
-                    onClick={() => {
-                      void handleRecordDiscardWin();
-                    }}
-                    type="button"
-                  >
-                    {isScoring ? "记录中..." : "记录点炮"}
-                  </button>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    className="h-12 rounded-md border border-stone-300 bg-white px-4 text-base font-semibold text-stone-900 disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={isScoring}
-                    onClick={() => {
-                      void handleRecordDrawGame();
-                    }}
-                    type="button"
-                  >
-                    记录流局
-                  </button>
-                  <button
-                    className="h-12 rounded-md border border-red-200 bg-red-50 px-4 text-base font-semibold text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="h-14 rounded-md border border-red-200 bg-red-50 px-4 text-base font-semibold text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
                     disabled={!canUndo || isUndoing || isScoring}
                     onClick={() => {
                       void handleUndoRoomEvent();
                     }}
                     type="button"
                   >
-                    {isUndoing ? "撤销中..." : "撤销上一局"}
+                    {isUndoing ? "撤销中..." : "撤销上一条"}
                   </button>
                 </div>
                 <button
