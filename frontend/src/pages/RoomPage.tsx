@@ -1,4 +1,4 @@
-import type { RoomEvent, RoomRecord, RoomState } from "@mah-score/shared";
+import type { RoomEvent, RoomPlayer, RoomRecord, RoomState, RoundState } from "@mah-score/shared";
 
 import { useEffect, useState } from "react";
 import { replayRoomEvents } from "@mah-score/shared";
@@ -15,6 +15,50 @@ import {
 
 interface RoomPageProps {
   readonly roomId: string;
+}
+
+function getPayloadString(payload: RoomEvent["payload"], key: string): string | undefined {
+  const value = payload[key];
+
+  return typeof value === "string" ? value : undefined;
+}
+
+function getPlayerNickname(players: readonly RoomPlayer[], playerId: string | undefined): string {
+  if (playerId === undefined) {
+    return "未知玩家";
+  }
+
+  return players.find((player) => player.id === playerId)?.nickname ?? "未知玩家";
+}
+
+function formatRoundTitle(round: RoundState, players: readonly RoomPlayer[]): string {
+  if (round.type === "DISCARD_WIN") {
+    const winnerName = getPlayerNickname(players, getPayloadString(round.payload, "winnerId"));
+
+    return `${winnerName} 胡牌`;
+  }
+
+  if (round.type === "SELF_DRAW") {
+    const winnerName = getPlayerNickname(players, getPayloadString(round.payload, "winnerId"));
+
+    return `${winnerName} 自摸`;
+  }
+
+  return "流局";
+}
+
+function formatRoundDetail(round: RoundState, players: readonly RoomPlayer[]): string {
+  if (round.type === "DISCARD_WIN") {
+    const discarderName = getPlayerNickname(players, getPayloadString(round.payload, "discarderId"));
+
+    return `${discarderName} 点炮 · +1 / -1`;
+  }
+
+  if (round.type === "SELF_DRAW") {
+    return `三家付分 · +${Math.max(players.length - 1, 0)} / -1`;
+  }
+
+  return "本局不计分";
 }
 
 export function RoomPage({ roomId }: RoomPageProps) {
@@ -216,6 +260,9 @@ export function RoomPage({ roomId }: RoomPageProps) {
   }
 
   const canUndo = (replayState?.rounds.length ?? 0) > 0;
+  const recentRounds = [...(replayState?.rounds ?? [])]
+    .sort((left, right) => right.version - left.version)
+    .slice(0, 5);
 
   return (
     <main className="min-h-screen bg-stone-50 px-5 py-6 text-stone-950">
@@ -235,6 +282,23 @@ export function RoomPage({ roomId }: RoomPageProps) {
           <p className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-700">
             {errorMessage}
           </p>
+        ) : null}
+
+        {room !== undefined ? (
+          <section className="grid grid-cols-3 gap-3">
+            <div className="rounded-md border border-stone-200 bg-white p-3">
+              <p className="text-xs font-medium text-stone-500">玩家</p>
+              <p className="mt-2 text-xl font-semibold">{room.players.length}/4</p>
+            </div>
+            <div className="rounded-md border border-stone-200 bg-white p-3">
+              <p className="text-xs font-medium text-stone-500">局数</p>
+              <p className="mt-2 text-xl font-semibold">{replayState?.rounds.length ?? 0}</p>
+            </div>
+            <div className="rounded-md border border-stone-200 bg-white p-3">
+              <p className="text-xs font-medium text-stone-500">版本</p>
+              <p className="mt-2 text-xl font-semibold">{replayState?.version ?? room.version}</p>
+            </div>
+          </section>
         ) : null}
 
         <section className="grid gap-4">
@@ -307,8 +371,13 @@ export function RoomPage({ roomId }: RoomPageProps) {
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-lg font-semibold">{player.nickname}</p>
-                    <p className="mt-1 text-sm text-stone-500">总分 {getPlayerScore(player.id)}</p>
+                    <p className="mt-1 text-sm text-stone-500">
+                      {isWaiting ? "等待开始" : `${replayState?.rounds.length ?? 0} 局后分数`}
+                    </p>
                   </div>
+                  <p className="shrink-0 text-2xl font-semibold tabular-nums">
+                    {getPlayerScore(player.id)}
+                  </p>
                   {isWaiting ? (
                     <div className="flex shrink-0 gap-2">
                       <button
@@ -338,8 +407,45 @@ export function RoomPage({ roomId }: RoomPageProps) {
           ))}
         </section>
 
+        <section className="grid gap-4">
+          <div className="border-b border-stone-200 pb-3">
+            <h2 className="text-xl font-semibold tracking-normal">最近事件</h2>
+            <p className="mt-1 text-sm text-stone-500">
+              {recentRounds.length === 0 ? "暂无计分事件" : `最近 ${recentRounds.length} 条计分事件`}
+            </p>
+          </div>
+
+          {recentRounds.length === 0 ? (
+            <p className="rounded-md border border-stone-200 bg-white p-4 text-base text-stone-600">
+              游戏开始后，计分事件会显示在这里
+            </p>
+          ) : (
+            <div className="grid gap-3">
+              {recentRounds.map((round) => (
+                <div
+                  className="flex items-center justify-between gap-4 rounded-md border border-stone-200 bg-white p-4"
+                  key={round.eventId}
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-base font-semibold">
+                      {formatRoundTitle(round, replayState?.players ?? [])}
+                    </p>
+                    <p className="mt-1 text-sm text-stone-500">
+                      {formatRoundDetail(round, replayState?.players ?? [])}
+                    </p>
+                  </div>
+                  <p className="shrink-0 text-sm font-medium text-stone-400">#{round.version}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
         {room !== undefined ? (
           <div className="mt-auto grid gap-3 pb-3">
+            <div className="border-b border-stone-200 pb-3">
+              <h2 className="text-xl font-semibold tracking-normal">操作</h2>
+            </div>
             {isWaiting && room.players.length < 2 ? (
               <p className="text-sm leading-6 text-stone-500">至少 2 名玩家才能开始游戏</p>
             ) : null}
