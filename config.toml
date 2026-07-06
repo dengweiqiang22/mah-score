@@ -1,12 +1,19 @@
 # 必须放在文件最顶层，指定默认加载的权限组
 default_permissions = "project-edit"
 
+# 允许读写当前项目目录下的所有文件
+[permissions.project-edit.filesystem]
+":minimal" = "read"
+
+[permissions.project-edit.filesystem.":workspace_roots"]
+"." = "write"
+
 # 开启网络权限并允许本地绑定
 [permissions.project-edit.network]
 enabled = true
 allow_local_binding = true
 
-# 具体的域名白名单
+# 本地服务白名单
 [permissions.project-edit.network.domains]
 "localhost" = "allow"
 "127.0.0.1" = "allow"
