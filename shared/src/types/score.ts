@@ -1,4 +1,12 @@
-export type ScoreActionType = "DISCARD_WIN" | "SELF_DRAW" | "DRAW_GAME";
+export const scoreFans = [1, 2, 3, 4] as const;
+
+export type ScoreFan = (typeof scoreFans)[number];
+
+export const kongTypes = ["DISCARD_KONG", "SUPPLEMENT_KONG", "CONCEALED_KONG"] as const;
+
+export type KongType = (typeof kongTypes)[number];
+
+export type ScoreActionType = "DISCARD_WIN" | "SELF_DRAW" | "KONG" | "DRAW_GAME";
 
 export interface DiscardWinScoreRequest {
   readonly roomId: string;
@@ -6,6 +14,7 @@ export interface DiscardWinScoreRequest {
   readonly operator: string;
   readonly winnerId: string;
   readonly discarderId: string;
+  readonly fan?: ScoreFan;
 }
 
 export interface SelfDrawScoreRequest {
@@ -13,6 +22,32 @@ export interface SelfDrawScoreRequest {
   readonly action: "SELF_DRAW";
   readonly operator: string;
   readonly winnerId: string;
+  readonly fan?: ScoreFan;
+}
+
+export interface DiscardKongScoreRequest {
+  readonly roomId: string;
+  readonly action: "KONG";
+  readonly operator: string;
+  readonly playerId: string;
+  readonly kongType: "DISCARD_KONG";
+  readonly fromPlayerId: string;
+}
+
+export interface SupplementKongScoreRequest {
+  readonly roomId: string;
+  readonly action: "KONG";
+  readonly operator: string;
+  readonly playerId: string;
+  readonly kongType: "SUPPLEMENT_KONG";
+}
+
+export interface ConcealedKongScoreRequest {
+  readonly roomId: string;
+  readonly action: "KONG";
+  readonly operator: string;
+  readonly playerId: string;
+  readonly kongType: "CONCEALED_KONG";
 }
 
 export interface DrawGameScoreRequest {
@@ -24,4 +59,7 @@ export interface DrawGameScoreRequest {
 export type ScoreEventRequest =
   | DiscardWinScoreRequest
   | SelfDrawScoreRequest
+  | DiscardKongScoreRequest
+  | SupplementKongScoreRequest
+  | ConcealedKongScoreRequest
   | DrawGameScoreRequest;

@@ -1,4 +1,4 @@
-import type { AppendRoomEventResponse, RoomEvent, RoomRecord, ScoreEventRequest } from "@mah-score/shared";
+import type { AppendRoomEventResponse, RoomEvent, RoomRecord, ScoreEventRequest, ScoreFan } from "@mah-score/shared";
 
 import { replayRoomEvents } from "@mah-score/shared";
 import { jsonFailure, jsonSuccess } from "../../services/apiResponse";
@@ -8,7 +8,25 @@ import { readJsonBody } from "../../services/requestBody";
 import { getRedisConfigurationError } from "../../services/redis";
 import { getRoom } from "../../services/roomService";
 import { isValidRoomId } from "../../services/roomValidation";
-import { getScoreEventPayload, isScoreAction, roomHasPlayer } from "../../services/scoreValidation";
+import {
+  getScoreEventPayload,
+  isKongType,
+  isScoreAction,
+  isScoreFan,
+  roomHasPlayer,
+} from "../../services/scoreValidation";
+
+function getOptionalScoreFan(value: object): ScoreFan | undefined {
+  if (!("fan" in value)) {
+    return undefined;
+  }
+
+  return isScoreFan(value.fan) ? value.fan : undefined;
+}
+
+function hasInvalidScoreFan(value: object): boolean {
+  return "fan" in value && !isScoreFan(value.fan);
+}
 
 function parseScoreEventRequest(value: unknown): ScoreEventRequest | undefined {
   if (
@@ -30,7 +48,8 @@ function parseScoreEventRequest(value: unknown): ScoreEventRequest | undefined {
       !("winnerId" in value) ||
       !("discarderId" in value) ||
       typeof value.winnerId !== "string" ||
-      typeof value.discarderId !== "string"
+      typeof value.discarderId !== "string" ||
+      hasInvalidScoreFan(value)
     ) {
       return undefined;
     }
@@ -41,11 +60,12 @@ function parseScoreEventRequest(value: unknown): ScoreEventRequest | undefined {
       operator: value.operator.trim(),
       winnerId: value.winnerId.trim(),
       discarderId: value.discarderId.trim(),
+      ...(getOptionalScoreFan(value) === undefined ? {} : { fan: getOptionalScoreFan(value) }),
     };
   }
 
   if (value.action === "SELF_DRAW") {
-    if (!("winnerId" in value) || typeof value.winnerId !== "string") {
+    if (!("winnerId" in value) || typeof value.winnerId !== "string" || hasInvalidScoreFan(value)) {
       return undefined;
     }
 
@@ -54,6 +74,42 @@ function parseScoreEventRequest(value: unknown): ScoreEventRequest | undefined {
       action: value.action,
       operator: value.operator.trim(),
       winnerId: value.winnerId.trim(),
+      ...(getOptionalScoreFan(value) === undefined ? {} : { fan: getOptionalScoreFan(value) }),
+    };
+  }
+
+  if (value.action === "KONG") {
+    if (
+      !("playerId" in value) ||
+      !("kongType" in value) ||
+      typeof value.playerId !== "string" ||
+      typeof value.kongType !== "string" ||
+      !isKongType(value.kongType)
+    ) {
+      return undefined;
+    }
+
+    if (value.kongType === "DISCARD_KONG") {
+      if (!("fromPlayerId" in value) || typeof value.fromPlayerId !== "string") {
+        return undefined;
+      }
+
+      return {
+        roomId: value.roomId.trim(),
+        action: value.action,
+        operator: value.operator.trim(),
+        playerId: value.playerId.trim(),
+        kongType: value.kongType,
+        fromPlayerId: value.fromPlayerId.trim(),
+      };
+    }
+
+    return {
+      roomId: value.roomId.trim(),
+      action: value.action,
+      operator: value.operator.trim(),
+      playerId: value.playerId.trim(),
+      kongType: value.kongType,
     };
   }
 
@@ -154,6 +210,24 @@ export async function POST(request: Request): Promise<Response> {
 
   if (parsedRequest.action === "SELF_DRAW" && !roomHasPlayer(room, parsedRequest.winnerId)) {
     return getInvalidPlayerResponse();
+  }
+
+  if (parsedRequest.action === "KONG") {
+    if (!roomHasPlayer(room, parsedRequest.playerId)) {
+      return getInvalidPlayerResponse();
+    }
+
+    if (parsedRequest.kongType === "DISCARD_KONG") {
+      if (!roomHasPlayer(room, parsedRequest.fromPlayerId)) {
+        return getInvalidPlayerResponse();
+      }
+
+      if (parsedRequest.playerId === parsedRequest.fromPlayerId) {
+        return jsonFailure("杠牌玩家和引杠玩家不能是同一名玩家。", "INVALID_KONG_PLAYERS", {
+          status: 400,
+        });
+      }
+    }
   }
 
   const winnerId = getScoreWinnerId(parsedRequest);

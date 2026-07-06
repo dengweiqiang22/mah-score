@@ -129,7 +129,10 @@ export function getLastUndoableEvent(
   const undoableEvents = events.filter(
     (event) =>
       event.type !== "UNDO" &&
-      (event.type === "DISCARD_WIN" || event.type === "SELF_DRAW" || event.type === "DRAW_GAME") &&
+      (event.type === "DISCARD_WIN" ||
+        event.type === "SELF_DRAW" ||
+        event.type === "KONG" ||
+        event.type === "DRAW_GAME") &&
       !undoneEventIds.has(event.id),
   );
 

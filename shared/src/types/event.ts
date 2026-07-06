@@ -7,6 +7,7 @@ export type RoomEventType =
   | "GAME_FINISHED"
   | "DISCARD_WIN"
   | "SELF_DRAW"
+  | "KONG"
   | "DRAW_GAME"
   | "UNDO";
 

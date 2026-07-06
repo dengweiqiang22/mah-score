@@ -9,6 +9,7 @@ const roomEventTypes = [
   "GAME_FINISHED",
   "DISCARD_WIN",
   "SELF_DRAW",
+  "KONG",
   "DRAW_GAME",
   "UNDO",
 ] as const satisfies readonly RoomEventType[];
