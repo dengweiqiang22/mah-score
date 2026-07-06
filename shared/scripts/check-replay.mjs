@@ -136,11 +136,11 @@ assert.deepEqual(state.players, [
 assert.deepEqual(state.scores, [
   {
     playerId: "player_1",
-    total: -1,
+    total: 0,
   },
   {
     playerId: "player_2",
-    total: 1,
+    total: 0,
   },
   {
     playerId: "player_3",
@@ -175,3 +175,209 @@ assert.deepEqual(
   drawGameState.rounds.map((round) => round.eventId),
   ["event_6", "event_draw"],
 );
+
+const extendedScoreEvents = [
+  {
+    ...baseEvent,
+    id: "extended_1",
+    type: "PLAYER_JOINED",
+    version: 1,
+    payload: {
+      playerId: "player_1",
+      nickname: "张三",
+    },
+  },
+  {
+    ...baseEvent,
+    id: "extended_2",
+    type: "PLAYER_JOINED",
+    version: 2,
+    payload: {
+      playerId: "player_2",
+      nickname: "李四",
+    },
+  },
+  {
+    ...baseEvent,
+    id: "extended_3",
+    type: "PLAYER_JOINED",
+    version: 3,
+    payload: {
+      playerId: "player_3",
+      nickname: "王五",
+    },
+  },
+  {
+    ...baseEvent,
+    id: "extended_4",
+    type: "PLAYER_JOINED",
+    version: 4,
+    payload: {
+      playerId: "player_4",
+      nickname: "赵六",
+    },
+  },
+  {
+    ...baseEvent,
+    id: "extended_5",
+    type: "GAME_STARTED",
+    version: 5,
+    payload: {},
+  },
+  {
+    ...baseEvent,
+    id: "extended_6",
+    type: "DISCARD_WIN",
+    version: 6,
+    payload: {
+      winnerId: "player_1",
+      discarderId: "player_2",
+      fan: 3,
+    },
+  },
+  {
+    ...baseEvent,
+    id: "extended_7",
+    type: "KONG",
+    version: 7,
+    payload: {
+      playerId: "player_3",
+      kongType: "DISCARD_KONG",
+      fromPlayerId: "player_4",
+    },
+  },
+  {
+    ...baseEvent,
+    id: "extended_8",
+    type: "KONG",
+    version: 8,
+    payload: {
+      playerId: "player_4",
+      kongType: "SUPPLEMENT_KONG",
+    },
+  },
+  {
+    ...baseEvent,
+    id: "extended_9",
+    type: "KONG",
+    version: 9,
+    payload: {
+      playerId: "player_2",
+      kongType: "CONCEALED_KONG",
+    },
+  },
+  {
+    ...baseEvent,
+    id: "extended_10",
+    type: "SELF_DRAW",
+    version: 10,
+    payload: {
+      winnerId: "player_3",
+      fan: 4,
+    },
+  },
+  {
+    ...baseEvent,
+    id: "extended_11",
+    type: "UNDO",
+    version: 11,
+    payload: {
+      targetEventId: "extended_9",
+    },
+  },
+];
+
+const extendedScoreState = replayRoomEvents(extendedScoreEvents);
+
+assert.deepEqual(extendedScoreState.currentRound, {
+  number: 1,
+  winnerIds: ["player_1", "player_3"],
+});
+assert.deepEqual(extendedScoreState.scores, [
+  {
+    playerId: "player_1",
+    total: 4,
+  },
+  {
+    playerId: "player_2",
+    total: -13,
+  },
+  {
+    playerId: "player_3",
+    total: 16,
+  },
+  {
+    playerId: "player_4",
+    total: -7,
+  },
+]);
+assert.deepEqual(
+  extendedScoreState.rounds.map((round) => round.eventId),
+  ["extended_6", "extended_7", "extended_8", "extended_10"],
+);
+
+const concealedKongState = replayRoomEvents([
+  ...extendedScoreEvents.slice(0, 5),
+  {
+    ...baseEvent,
+    id: "concealed_kong",
+    type: "KONG",
+    version: 6,
+    payload: {
+      playerId: "player_2",
+      kongType: "CONCEALED_KONG",
+    },
+  },
+]);
+
+assert.deepEqual(concealedKongState.scores, [
+  {
+    playerId: "player_1",
+    total: -2,
+  },
+  {
+    playerId: "player_2",
+    total: 6,
+  },
+  {
+    playerId: "player_3",
+    total: -2,
+  },
+  {
+    playerId: "player_4",
+    total: -2,
+  },
+]);
+
+const legacyFanState = replayRoomEvents([
+  ...extendedScoreEvents.slice(0, 5),
+  {
+    ...baseEvent,
+    id: "legacy_fan",
+    type: "DISCARD_WIN",
+    version: 6,
+    payload: {
+      winnerId: "player_1",
+      discarderId: "player_2",
+    },
+  },
+]);
+
+assert.deepEqual(legacyFanState.scores, [
+  {
+    playerId: "player_1",
+    total: 1,
+  },
+  {
+    playerId: "player_2",
+    total: -1,
+  },
+  {
+    playerId: "player_3",
+    total: 0,
+  },
+  {
+    playerId: "player_4",
+    total: 0,
+  },
+]);
