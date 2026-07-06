@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { createRoom, joinRoom } from "../api/roomApi";
 import { HomeActionButton } from "../components/HomeActionButton";
@@ -11,6 +11,16 @@ export function HomePage() {
   const [joinNickname, setJoinNickname] = useState("");
   const [joinRoomId, setJoinRoomId] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
+
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const invitedRoomId = searchParams.get("roomId")?.replace(/\D/gu, "").slice(0, 3);
+
+    if (invitedRoomId?.length === 3) {
+      setJoinRoomId(invitedRoomId);
+      setIsJoinFormOpen(true);
+    }
+  }, []);
 
   async function handleCreateRoom() {
     setIsCreatingRoom(true);
@@ -114,7 +124,11 @@ export function HomePage() {
                 placeholder="昵称"
                 value={joinNickname}
               />
-              <HomeActionButton disabled={isJoiningRoom} onClick={handleJoinRoom} variant="secondary">
+              <HomeActionButton
+                disabled={isJoiningRoom}
+                onClick={handleJoinRoom}
+                variant="secondary"
+              >
                 {isJoiningRoom ? "加入中..." : "确认加入"}
               </HomeActionButton>
             </div>

@@ -11,6 +11,7 @@ import type {
 
 import { useEffect, useState } from "react";
 import { replayRoomEvents } from "@mah-score/shared";
+import QRCode from "qrcode";
 
 import {
   getRoom,
@@ -237,6 +238,8 @@ export function RoomPage({ roomId }: RoomPageProps) {
   const [events, setEvents] = useState<readonly RoomEvent[]>([]);
   const [room, setRoom] = useState<RoomRecord | undefined>();
   const [roomVersion, setRoomVersion] = useState(0);
+  const [shareMessage, setShareMessage] = useState<string | undefined>();
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string | undefined>();
   const [quickScoreMode, setQuickScoreMode] = useState<QuickScoreMode>("DISCARD_WIN");
   const [selectedPrimaryPlayerId, setSelectedPrimaryPlayerId] = useState<string | undefined>();
   const [selectedRelatedPlayerId, setSelectedRelatedPlayerId] = useState<string | undefined>();
@@ -247,6 +250,8 @@ export function RoomPage({ roomId }: RoomPageProps) {
     setSelectedPrimaryPlayerId(undefined);
     setSelectedRelatedPlayerId(undefined);
   }
+
+  const inviteUrl = new URL(`/?roomId=${roomId}`, window.location.origin).toString();
 
   async function loadRoom() {
     setIsLoading(true);
@@ -281,6 +286,30 @@ export function RoomPage({ roomId }: RoomPageProps) {
   useEffect(() => {
     void loadRoom();
   }, [roomId]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    void QRCode.toDataURL(inviteUrl, {
+      errorCorrectionLevel: "M",
+      margin: 2,
+      width: 192,
+    })
+      .then((dataUrl) => {
+        if (isActive) {
+          setQrCodeDataUrl(dataUrl);
+        }
+      })
+      .catch(() => {
+        if (isActive) {
+          setQrCodeDataUrl(undefined);
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [inviteUrl]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -391,6 +420,37 @@ export function RoomPage({ roomId }: RoomPageProps) {
       setErrorMessage("开始游戏失败，请稍后再试。");
     } finally {
       setIsStarting(false);
+    }
+  }
+
+  async function handleCopyInviteLink() {
+    setShareMessage(undefined);
+
+    try {
+      await navigator.clipboard.writeText(inviteUrl);
+      setShareMessage("房间链接已复制");
+    } catch {
+      setShareMessage("复制失败，请手动复制链接");
+    }
+  }
+
+  async function handleShareInviteLink() {
+    setShareMessage(undefined);
+
+    if (!("share" in navigator)) {
+      await handleCopyInviteLink();
+      return;
+    }
+
+    try {
+      await navigator.share({
+        text: `加入 mah-score 房间 ${roomId}`,
+        title: "mah-score 房间邀请",
+        url: inviteUrl,
+      });
+      setShareMessage("已打开系统分享");
+    } catch {
+      setShareMessage("分享已取消");
     }
   }
 
@@ -679,6 +739,54 @@ export function RoomPage({ roomId }: RoomPageProps) {
               <p className="text-xs font-medium text-stone-500">本局胡牌</p>
               <p className="mt-2 text-xl font-semibold">{currentRoundWinnerCount}/3</p>
             </div>
+          </section>
+        ) : null}
+
+        {room !== undefined ? (
+          <section className="grid gap-3 rounded-md border border-stone-200 bg-white p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <h2 className="text-lg font-semibold tracking-normal">邀请加入</h2>
+                <p className="mt-1 text-sm font-medium text-stone-500">房间号 {roomId}</p>
+              </div>
+              {qrCodeDataUrl !== undefined ? (
+                <img
+                  alt={`房间 ${roomId} 邀请二维码`}
+                  className="h-24 w-24 shrink-0 rounded-md border border-stone-200"
+                  src={qrCodeDataUrl}
+                />
+              ) : (
+                <div className="grid h-24 w-24 shrink-0 place-items-center rounded-md border border-stone-200 text-xs font-medium text-stone-400">
+                  生成中
+                </div>
+              )}
+            </div>
+            <p className="break-all rounded-md bg-stone-50 px-3 py-2 text-xs leading-5 text-stone-500">
+              {inviteUrl}
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                className="h-11 rounded-md bg-emerald-700 px-3 text-sm font-semibold text-white"
+                onClick={() => {
+                  void handleShareInviteLink();
+                }}
+                type="button"
+              >
+                分享房间
+              </button>
+              <button
+                className="h-11 rounded-md border border-stone-300 bg-white px-3 text-sm font-semibold text-stone-900"
+                onClick={() => {
+                  void handleCopyInviteLink();
+                }}
+                type="button"
+              >
+                复制链接
+              </button>
+            </div>
+            {shareMessage !== undefined ? (
+              <p className="text-sm font-medium text-stone-500">{shareMessage}</p>
+            ) : null}
           </section>
         ) : null}
 
