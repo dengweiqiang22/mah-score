@@ -6,7 +6,6 @@ import { HomeActionButton } from "../components/HomeActionButton";
 export function HomePage() {
   const [isCreatingRoom, setIsCreatingRoom] = useState(false);
   const [isJoiningRoom, setIsJoiningRoom] = useState(false);
-  const [isJoinFormOpen, setIsJoinFormOpen] = useState(false);
   const [createNickname, setCreateNickname] = useState("");
   const [joinNickname, setJoinNickname] = useState("");
   const [joinRoomId, setJoinRoomId] = useState("");
@@ -18,7 +17,6 @@ export function HomePage() {
 
     if (invitedRoomId?.length === 3) {
       setJoinRoomId(invitedRoomId);
-      setIsJoinFormOpen(true);
     }
   }, []);
 
@@ -86,6 +84,45 @@ export function HomePage() {
             </p>
           ) : null}
           <div className="grid gap-3 rounded-md border border-stone-200 bg-white p-4">
+            <div>
+              <h2 className="text-lg font-semibold tracking-normal">加入房间</h2>
+              <p className="mt-1 text-sm text-stone-500">输入房间号和昵称</p>
+            </div>
+            <input
+              className="h-12 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-emerald-700"
+              inputMode="numeric"
+              maxLength={3}
+              onChange={(event) => {
+                handleJoinRoomIdChange(event.target.value);
+              }}
+              placeholder="房间号"
+              value={joinRoomId}
+            />
+            <input
+              className="h-12 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-emerald-700"
+              maxLength={12}
+              onChange={(event) => {
+                setJoinNickname(event.target.value);
+              }}
+              placeholder="昵称"
+              value={joinNickname}
+            />
+            <HomeActionButton
+              disabled={
+                isJoiningRoom || joinRoomId.length !== 3 || joinNickname.trim().length === 0
+              }
+              onClick={handleJoinRoom}
+              variant="primary"
+            >
+              {isJoiningRoom ? "加入中..." : "加入房间"}
+            </HomeActionButton>
+          </div>
+
+          <div className="grid gap-3 rounded-md border border-stone-200 bg-white p-4">
+            <div>
+              <h2 className="text-lg font-semibold tracking-normal">创建房间</h2>
+              <p className="mt-1 text-sm text-stone-500">没有房间号时使用</p>
+            </div>
             <input
               className="h-12 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-emerald-700"
               maxLength={12}
@@ -98,51 +135,11 @@ export function HomePage() {
             <HomeActionButton
               disabled={isCreatingRoom || createNickname.trim().length === 0}
               onClick={handleCreateRoom}
-              variant="primary"
+              variant="secondary"
             >
               {isCreatingRoom ? "创建中..." : "创建房间"}
             </HomeActionButton>
           </div>
-          {isJoinFormOpen ? (
-            <div className="grid gap-3 rounded-md border border-stone-200 bg-white p-4">
-              <input
-                className="h-12 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-emerald-700"
-                inputMode="numeric"
-                maxLength={3}
-                onChange={(event) => {
-                  handleJoinRoomIdChange(event.target.value);
-                }}
-                placeholder="房间号"
-                value={joinRoomId}
-              />
-              <input
-                className="h-12 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-emerald-700"
-                maxLength={12}
-                onChange={(event) => {
-                  setJoinNickname(event.target.value);
-                }}
-                placeholder="昵称"
-                value={joinNickname}
-              />
-              <HomeActionButton
-                disabled={isJoiningRoom}
-                onClick={handleJoinRoom}
-                variant="secondary"
-              >
-                {isJoiningRoom ? "加入中..." : "确认加入"}
-              </HomeActionButton>
-            </div>
-          ) : (
-            <HomeActionButton
-              onClick={() => {
-                setIsJoinFormOpen(true);
-                setErrorMessage(undefined);
-              }}
-              variant="secondary"
-            >
-              加入房间
-            </HomeActionButton>
-          )}
         </div>
       </section>
     </main>
