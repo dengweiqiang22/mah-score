@@ -7,6 +7,7 @@ import type {
   JoinRoomResponse,
   RemovePlayerRequest,
   RenamePlayerRequest,
+  ScoreEventRequest,
   StartRoomRequest,
   SyncRoomEventsResponse,
   UndoRoomEventRequest,
@@ -80,6 +81,21 @@ export async function removePlayer(request: RemovePlayerRequest): Promise<ApiRes
 
 export async function startRoom(request: StartRoomRequest): Promise<ApiResponse<EmptyResponse>> {
   const response = await fetch("/api/room/start", {
+    body: JSON.stringify(request),
+    headers: {
+      "Content-Type": "application/json",
+    },
+    method: "POST",
+  });
+  const data = (await response.json()) as ApiResponse<EmptyResponse>;
+
+  return data;
+}
+
+export async function recordScoreEvent(
+  request: ScoreEventRequest,
+): Promise<ApiResponse<EmptyResponse>> {
+  const response = await fetch("/api/room/score", {
     body: JSON.stringify(request),
     headers: {
       "Content-Type": "application/json",

@@ -6,6 +6,7 @@ import { replayRoomEvents } from "@mah-score/shared";
 import {
   getRoom,
   getRoomEvents,
+  recordScoreEvent,
   removePlayer,
   renamePlayer,
   startRoom,
@@ -65,11 +66,14 @@ export function RoomPage({ roomId }: RoomPageProps) {
   const [editingPlayerId, setEditingPlayerId] = useState<string | undefined>();
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
   const [isLoading, setIsLoading] = useState(true);
+  const [isScoring, setIsScoring] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
   const [isUndoing, setIsUndoing] = useState(false);
   const [nicknameInput, setNicknameInput] = useState("");
   const [events, setEvents] = useState<readonly RoomEvent[]>([]);
   const [room, setRoom] = useState<RoomRecord | undefined>();
+  const [selectedDiscarderId, setSelectedDiscarderId] = useState<string | undefined>();
+  const [selectedWinnerId, setSelectedWinnerId] = useState<string | undefined>();
   const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "error">("idle");
 
   async function loadRoom() {
@@ -159,6 +163,8 @@ export function RoomPage({ roomId }: RoomPageProps) {
         return;
       }
 
+      setSelectedDiscarderId(undefined);
+      setSelectedWinnerId(undefined);
       setEditingPlayerId(undefined);
       setNicknameInput("");
       await loadRoom();
@@ -181,6 +187,8 @@ export function RoomPage({ roomId }: RoomPageProps) {
         return;
       }
 
+      setSelectedDiscarderId(undefined);
+      setSelectedWinnerId(undefined);
       await loadRoom();
     } catch {
       setErrorMessage("删除玩家失败，请稍后再试。");
@@ -201,6 +209,8 @@ export function RoomPage({ roomId }: RoomPageProps) {
         return;
       }
 
+      setSelectedDiscarderId(undefined);
+      setSelectedWinnerId(undefined);
       setEditingPlayerId(undefined);
       setNicknameInput("");
       await loadRoom();
@@ -226,6 +236,8 @@ export function RoomPage({ roomId }: RoomPageProps) {
         return;
       }
 
+      setSelectedDiscarderId(undefined);
+      setSelectedWinnerId(undefined);
       await loadRoom();
     } catch {
       setErrorMessage("撤销失败，请稍后再试。");
@@ -234,7 +246,125 @@ export function RoomPage({ roomId }: RoomPageProps) {
     }
   }
 
+  function handleSelectScorePlayer(playerId: string) {
+    if (room?.status !== "PLAYING" || isScoring) {
+      return;
+    }
+
+    setErrorMessage(undefined);
+
+    if (selectedWinnerId === undefined) {
+      setSelectedWinnerId(playerId);
+      return;
+    }
+
+    if (selectedWinnerId === playerId) {
+      setSelectedWinnerId(undefined);
+      setSelectedDiscarderId(undefined);
+      return;
+    }
+
+    if (selectedDiscarderId === playerId) {
+      setSelectedDiscarderId(undefined);
+      return;
+    }
+
+    setSelectedDiscarderId(playerId);
+  }
+
+  async function handleRecordSelfDraw() {
+    if (selectedWinnerId === undefined) {
+      setErrorMessage("请先选择自摸玩家。");
+      return;
+    }
+
+    setIsScoring(true);
+    setErrorMessage(undefined);
+
+    try {
+      const response = await recordScoreEvent({
+        roomId,
+        action: "SELF_DRAW",
+        operator: "room",
+        winnerId: selectedWinnerId,
+      });
+
+      if (!response.success) {
+        setErrorMessage(response.message);
+        return;
+      }
+
+      setSelectedDiscarderId(undefined);
+      setSelectedWinnerId(undefined);
+      await loadRoom();
+    } catch {
+      setErrorMessage("记录自摸失败，请稍后再试。");
+    } finally {
+      setIsScoring(false);
+    }
+  }
+
+  async function handleRecordDiscardWin() {
+    if (selectedWinnerId === undefined || selectedDiscarderId === undefined) {
+      setErrorMessage("请先选择赢家和点炮玩家。");
+      return;
+    }
+
+    setIsScoring(true);
+    setErrorMessage(undefined);
+
+    try {
+      const response = await recordScoreEvent({
+        roomId,
+        action: "DISCARD_WIN",
+        operator: "room",
+        winnerId: selectedWinnerId,
+        discarderId: selectedDiscarderId,
+      });
+
+      if (!response.success) {
+        setErrorMessage(response.message);
+        return;
+      }
+
+      setSelectedDiscarderId(undefined);
+      setSelectedWinnerId(undefined);
+      await loadRoom();
+    } catch {
+      setErrorMessage("记录点炮失败，请稍后再试。");
+    } finally {
+      setIsScoring(false);
+    }
+  }
+
+  async function handleRecordDrawGame() {
+    setIsScoring(true);
+    setErrorMessage(undefined);
+
+    try {
+      const response = await recordScoreEvent({
+        roomId,
+        action: "DRAW_GAME",
+        operator: "room",
+      });
+
+      if (!response.success) {
+        setErrorMessage(response.message);
+        return;
+      }
+
+      setSelectedDiscarderId(undefined);
+      setSelectedWinnerId(undefined);
+      await loadRoom();
+    } catch {
+      setErrorMessage("记录流局失败，请稍后再试。");
+    } finally {
+      setIsScoring(false);
+    }
+  }
+
   const isWaiting = room?.status === "WAITING";
+  const isPlaying = room?.status === "PLAYING";
   const canStart = isWaiting && room.players.length >= 2 && room.players.length <= 4;
   const replayState: RoomState | undefined =
     room === undefined
@@ -260,6 +390,9 @@ export function RoomPage({ roomId }: RoomPageProps) {
   }
 
   const canUndo = (replayState?.rounds.length ?? 0) > 0;
+  const canRecordSelfDraw = isPlaying && selectedWinnerId !== undefined && !isScoring;
+  const canRecordDiscardWin =
+    isPlaying && selectedWinnerId !== undefined && selectedDiscarderId !== undefined && !isScoring;
   const recentRounds = [...(replayState?.rounds ?? [])]
     .sort((left, right) => right.version - left.version)
     .slice(0, 5);
@@ -332,8 +465,25 @@ export function RoomPage({ roomId }: RoomPageProps) {
 
           {room?.players.map((player) => (
             <div
-              className="grid gap-3 rounded-md border border-stone-200 bg-white p-4"
+              className={`grid gap-3 rounded-md border p-4 ${
+                selectedWinnerId === player.id
+                  ? "border-emerald-600 bg-emerald-50"
+                  : selectedDiscarderId === player.id
+                    ? "border-red-300 bg-red-50"
+                    : "border-stone-200 bg-white"
+              } ${isPlaying ? "cursor-pointer" : ""}`}
               key={player.id}
+              onClick={() => {
+                handleSelectScorePlayer(player.id);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  handleSelectScorePlayer(player.id);
+                }
+              }}
+              role={isPlaying ? "button" : undefined}
+              tabIndex={isPlaying ? 0 : undefined}
             >
               {editingPlayerId === player.id ? (
                 <div className="grid gap-3">
@@ -372,7 +522,13 @@ export function RoomPage({ roomId }: RoomPageProps) {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-lg font-semibold">{player.nickname}</p>
                     <p className="mt-1 text-sm text-stone-500">
-                      {isWaiting ? "等待开始" : `${replayState?.rounds.length ?? 0} 局后分数`}
+                      {selectedWinnerId === player.id
+                        ? "赢家"
+                        : selectedDiscarderId === player.id
+                          ? "点炮"
+                          : isWaiting
+                            ? "等待开始"
+                            : `${replayState?.rounds.length ?? 0} 局后分数`}
                     </p>
                   </div>
                   <p className="shrink-0 text-2xl font-semibold tabular-nums">
@@ -382,7 +538,8 @@ export function RoomPage({ roomId }: RoomPageProps) {
                     <div className="flex shrink-0 gap-2">
                       <button
                         className="h-10 rounded-md border border-stone-300 bg-white px-3 text-sm font-medium text-stone-900"
-                        onClick={() => {
+                        onClick={(event) => {
+                          event.stopPropagation();
                           setEditingPlayerId(player.id);
                           setNicknameInput(player.nickname);
                         }}
@@ -392,7 +549,8 @@ export function RoomPage({ roomId }: RoomPageProps) {
                       </button>
                       <button
                         className="h-10 rounded-md border border-red-200 bg-red-50 px-3 text-sm font-medium text-red-700"
-                        onClick={() => {
+                        onClick={(event) => {
+                          event.stopPropagation();
                           void handleRemovePlayer(player.id);
                         }}
                         type="button"
@@ -449,27 +607,72 @@ export function RoomPage({ roomId }: RoomPageProps) {
             {isWaiting && room.players.length < 2 ? (
               <p className="text-sm leading-6 text-stone-500">至少 2 名玩家才能开始游戏</p>
             ) : null}
-            <button
-              className="h-14 rounded-md bg-emerald-700 px-4 text-base font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={!canStart || isStarting}
-              onClick={() => {
-                void handleStartRoom();
-              }}
-              type="button"
-            >
-              {room.status === "PLAYING" ? "游戏已开始" : isStarting ? "开始中..." : "开始游戏"}
-            </button>
-            {room.status === "PLAYING" ? (
+            {room.status === "WAITING" ? (
               <button
-                className="h-12 rounded-md border border-red-200 bg-red-50 px-4 text-base font-semibold text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={!canUndo || isUndoing}
+                className="h-14 rounded-md bg-emerald-700 px-4 text-base font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={!canStart || isStarting}
                 onClick={() => {
-                  void handleUndoRoomEvent();
+                  void handleStartRoom();
                 }}
                 type="button"
               >
-                {isUndoing ? "撤销中..." : "撤销上一局"}
+                {isStarting ? "开始中..." : "开始游戏"}
               </button>
+            ) : null}
+            {room.status === "PLAYING" ? (
+              <div className="grid gap-3">
+                <p className="text-sm leading-6 text-stone-500">
+                  {selectedWinnerId === undefined
+                    ? "点击玩家选择赢家"
+                    : selectedDiscarderId === undefined
+                      ? "可直接记录自摸，或继续点击点炮玩家"
+                      : "可记录点炮胡牌"}
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    className="h-14 rounded-md bg-emerald-700 px-4 text-base font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={!canRecordSelfDraw}
+                    onClick={() => {
+                      void handleRecordSelfDraw();
+                    }}
+                    type="button"
+                  >
+                    {isScoring ? "记录中..." : "记录自摸"}
+                  </button>
+                  <button
+                    className="h-14 rounded-md bg-stone-900 px-4 text-base font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={!canRecordDiscardWin}
+                    onClick={() => {
+                      void handleRecordDiscardWin();
+                    }}
+                    type="button"
+                  >
+                    {isScoring ? "记录中..." : "记录点炮"}
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    className="h-12 rounded-md border border-stone-300 bg-white px-4 text-base font-semibold text-stone-900 disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={isScoring}
+                    onClick={() => {
+                      void handleRecordDrawGame();
+                    }}
+                    type="button"
+                  >
+                    记录流局
+                  </button>
+                  <button
+                    className="h-12 rounded-md border border-red-200 bg-red-50 px-4 text-base font-semibold text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={!canUndo || isUndoing || isScoring}
+                    onClick={() => {
+                      void handleUndoRoomEvent();
+                    }}
+                    type="button"
+                  >
+                    {isUndoing ? "撤销中..." : "撤销上一局"}
+                  </button>
+                </div>
+              </div>
             ) : null}
           </div>
         ) : null}
