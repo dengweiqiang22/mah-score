@@ -3,7 +3,14 @@ import type { RoomEvent, RoomRecord, RoomState } from "@mah-score/shared";
 import { useEffect, useState } from "react";
 import { replayRoomEvents } from "@mah-score/shared";
 
-import { getRoom, getRoomEvents, removePlayer, renamePlayer, startRoom } from "../api/roomApi";
+import {
+  getRoom,
+  getRoomEvents,
+  removePlayer,
+  renamePlayer,
+  startRoom,
+  undoRoomEvent,
+} from "../api/roomApi";
 
 interface RoomPageProps {
   readonly roomId: string;
@@ -14,6 +21,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
   const [isLoading, setIsLoading] = useState(true);
   const [isStarting, setIsStarting] = useState(false);
+  const [isUndoing, setIsUndoing] = useState(false);
   const [nicknameInput, setNicknameInput] = useState("");
   const [events, setEvents] = useState<readonly RoomEvent[]>([]);
   const [room, setRoom] = useState<RoomRecord | undefined>();
@@ -115,6 +123,29 @@ export function RoomPage({ roomId }: RoomPageProps) {
     }
   }
 
+  async function handleUndoRoomEvent() {
+    setIsUndoing(true);
+    setErrorMessage(undefined);
+
+    try {
+      const response = await undoRoomEvent({
+        roomId,
+        operator: "room",
+      });
+
+      if (!response.success) {
+        setErrorMessage(response.message);
+        return;
+      }
+
+      await loadRoom();
+    } catch {
+      setErrorMessage("撤销失败，请稍后再试。");
+    } finally {
+      setIsUndoing(false);
+    }
+  }
+
   const isWaiting = room?.status === "WAITING";
   const canStart = isWaiting && room.players.length >= 2 && room.players.length <= 4;
   const replayState: RoomState | undefined =
@@ -139,6 +170,8 @@ export function RoomPage({ roomId }: RoomPageProps) {
   function getPlayerScore(playerId: string): number {
     return replayState?.scores.find((score) => score.playerId === playerId)?.total ?? 0;
   }
+
+  const canUndo = (replayState?.rounds.length ?? 0) > 0;
 
   return (
     <main className="min-h-screen bg-stone-50 px-5 py-6 text-stone-950">
@@ -273,6 +306,18 @@ export function RoomPage({ roomId }: RoomPageProps) {
             >
               {room.status === "PLAYING" ? "游戏已开始" : isStarting ? "开始中..." : "开始游戏"}
             </button>
+            {room.status === "PLAYING" ? (
+              <button
+                className="h-12 rounded-md border border-red-200 bg-red-50 px-4 text-base font-semibold text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={!canUndo || isUndoing}
+                onClick={() => {
+                  void handleUndoRoomEvent();
+                }}
+                type="button"
+              >
+                {isUndoing ? "撤销中..." : "撤销上一局"}
+              </button>
+            ) : null}
           </div>
         ) : null}
       </section>

@@ -8,6 +8,7 @@ import type {
   RemovePlayerRequest,
   RenamePlayerRequest,
   StartRoomRequest,
+  UndoRoomEventRequest,
 } from "@mah-score/shared";
 
 type EmptyResponse = Record<string, never>;
@@ -78,6 +79,21 @@ export async function removePlayer(request: RemovePlayerRequest): Promise<ApiRes
 
 export async function startRoom(request: StartRoomRequest): Promise<ApiResponse<EmptyResponse>> {
   const response = await fetch("/api/room/start", {
+    body: JSON.stringify(request),
+    headers: {
+      "Content-Type": "application/json",
+    },
+    method: "POST",
+  });
+  const data = (await response.json()) as ApiResponse<EmptyResponse>;
+
+  return data;
+}
+
+export async function undoRoomEvent(
+  request: UndoRoomEventRequest,
+): Promise<ApiResponse<EmptyResponse>> {
+  const response = await fetch("/api/room/undo", {
     body: JSON.stringify(request),
     headers: {
       "Content-Type": "application/json",

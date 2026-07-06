@@ -93,3 +93,39 @@ export async function readRoomEvents(roomId: string): Promise<readonly RoomEvent
     return event === undefined ? [] : [event];
   });
 }
+
+function getUndoTargetEventId(event: RoomEvent): string | undefined {
+  const value = event.payload.targetEventId;
+
+  return typeof value === "string" ? value : undefined;
+}
+
+export function getLastUndoableEvent(
+  events: readonly RoomEvent[],
+  targetEventId?: string,
+): RoomEvent | undefined {
+  const undoneEventIds = new Set<string>();
+
+  for (const event of events) {
+    if (event.type === "UNDO") {
+      const undoTargetEventId = getUndoTargetEventId(event);
+
+      if (undoTargetEventId !== undefined) {
+        undoneEventIds.add(undoTargetEventId);
+      }
+    }
+  }
+
+  const undoableEvents = events.filter(
+    (event) =>
+      event.type !== "UNDO" &&
+      (event.type === "DISCARD_WIN" || event.type === "SELF_DRAW" || event.type === "DRAW_GAME") &&
+      !undoneEventIds.has(event.id),
+  );
+
+  if (targetEventId !== undefined) {
+    return undoableEvents.find((event) => event.id === targetEventId);
+  }
+
+  return undoableEvents.at(-1);
+}

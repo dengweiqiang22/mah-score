@@ -35,3 +35,9 @@ export interface AppendRoomEventResponse {
 export interface GetRoomEventsResponse {
   readonly events: readonly RoomEvent[];
 }
+
+export interface UndoRoomEventRequest {
+  readonly roomId: string;
+  readonly operator: string;
+  readonly targetEventId?: string;
+}
