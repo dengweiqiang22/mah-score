@@ -1,4 +1,10 @@
-import type { AppendRoomEventResponse, RoomEvent, RoomRecord, ScoreEventRequest, ScoreFan } from "@mah-score/shared";
+import type {
+  AppendRoomEventResponse,
+  RoomEvent,
+  RoomRecord,
+  ScoreEventRequest,
+  ScoreFan,
+} from "@mah-score/shared";
 
 import { replayRoomEvents } from "@mah-score/shared";
 import { jsonFailure, jsonSuccess } from "../../services/apiResponse";
@@ -16,6 +22,31 @@ import {
   roomHasPlayer,
 } from "../../services/scoreValidation";
 
+interface ParseScoreEventRequestFailure {
+  readonly code: string;
+  readonly message: string;
+}
+
+type ParseScoreEventRequestResult =
+  | {
+      readonly request: ScoreEventRequest;
+    }
+  | {
+      readonly failure: ParseScoreEventRequestFailure;
+    };
+
+function parseFailure(
+  message = "请求格式不正确。",
+  code = "INVALID_REQUEST",
+): ParseScoreEventRequestResult {
+  return {
+    failure: {
+      code,
+      message,
+    },
+  };
+}
+
 function getOptionalScoreFan(value: object): ScoreFan | undefined {
   if (!("fan" in value)) {
     return undefined;
@@ -28,7 +59,7 @@ function hasInvalidScoreFan(value: object): boolean {
   return "fan" in value && !isScoreFan(value.fan);
 }
 
-function parseScoreEventRequest(value: unknown): ScoreEventRequest | undefined {
+function parseScoreEventRequest(value: unknown): ParseScoreEventRequestResult {
   if (
     typeof value !== "object" ||
     value === null ||
@@ -40,7 +71,7 @@ function parseScoreEventRequest(value: unknown): ScoreEventRequest | undefined {
     typeof value.operator !== "string" ||
     !isScoreAction(value.action)
   ) {
-    return undefined;
+    return parseFailure();
   }
 
   if (value.action === "DISCARD_WIN") {
@@ -51,30 +82,46 @@ function parseScoreEventRequest(value: unknown): ScoreEventRequest | undefined {
       typeof value.discarderId !== "string" ||
       hasInvalidScoreFan(value)
     ) {
-      return undefined;
+      if (hasInvalidScoreFan(value)) {
+        return parseFailure("番数必须是 1 到 4 之间的整数。", "INVALID_SCORE_FAN");
+      }
+
+      return parseFailure();
     }
 
+    const fan = getOptionalScoreFan(value);
+
     return {
-      roomId: value.roomId.trim(),
-      action: value.action,
-      operator: value.operator.trim(),
-      winnerId: value.winnerId.trim(),
-      discarderId: value.discarderId.trim(),
-      ...(getOptionalScoreFan(value) === undefined ? {} : { fan: getOptionalScoreFan(value) }),
+      request: {
+        roomId: value.roomId.trim(),
+        action: value.action,
+        operator: value.operator.trim(),
+        winnerId: value.winnerId.trim(),
+        discarderId: value.discarderId.trim(),
+        ...(fan === undefined ? {} : { fan }),
+      },
     };
   }
 
   if (value.action === "SELF_DRAW") {
     if (!("winnerId" in value) || typeof value.winnerId !== "string" || hasInvalidScoreFan(value)) {
-      return undefined;
+      if (hasInvalidScoreFan(value)) {
+        return parseFailure("番数必须是 1 到 4 之间的整数。", "INVALID_SCORE_FAN");
+      }
+
+      return parseFailure();
     }
 
+    const fan = getOptionalScoreFan(value);
+
     return {
-      roomId: value.roomId.trim(),
-      action: value.action,
-      operator: value.operator.trim(),
-      winnerId: value.winnerId.trim(),
-      ...(getOptionalScoreFan(value) === undefined ? {} : { fan: getOptionalScoreFan(value) }),
+      request: {
+        roomId: value.roomId.trim(),
+        action: value.action,
+        operator: value.operator.trim(),
+        winnerId: value.winnerId.trim(),
+        ...(fan === undefined ? {} : { fan }),
+      },
     };
   }
 
@@ -86,37 +133,51 @@ function parseScoreEventRequest(value: unknown): ScoreEventRequest | undefined {
       typeof value.kongType !== "string" ||
       !isKongType(value.kongType)
     ) {
-      return undefined;
+      if (
+        "kongType" in value &&
+        typeof value.kongType === "string" &&
+        !isKongType(value.kongType)
+      ) {
+        return parseFailure("杠牌类型不正确。", "INVALID_KONG_TYPE");
+      }
+
+      return parseFailure();
     }
 
     if (value.kongType === "DISCARD_KONG") {
       if (!("fromPlayerId" in value) || typeof value.fromPlayerId !== "string") {
-        return undefined;
+        return parseFailure("直杠必须提供引杠玩家。", "INVALID_KONG_FROM_PLAYER");
       }
 
       return {
+        request: {
+          roomId: value.roomId.trim(),
+          action: value.action,
+          operator: value.operator.trim(),
+          playerId: value.playerId.trim(),
+          kongType: value.kongType,
+          fromPlayerId: value.fromPlayerId.trim(),
+        },
+      };
+    }
+
+    return {
+      request: {
         roomId: value.roomId.trim(),
         action: value.action,
         operator: value.operator.trim(),
         playerId: value.playerId.trim(),
         kongType: value.kongType,
-        fromPlayerId: value.fromPlayerId.trim(),
-      };
-    }
-
-    return {
-      roomId: value.roomId.trim(),
-      action: value.action,
-      operator: value.operator.trim(),
-      playerId: value.playerId.trim(),
-      kongType: value.kongType,
+      },
     };
   }
 
   return {
-    roomId: value.roomId.trim(),
-    action: value.action,
-    operator: value.operator.trim(),
+    request: {
+      roomId: value.roomId.trim(),
+      action: value.action,
+      operator: value.operator.trim(),
+    },
   };
 }
 
@@ -159,13 +220,15 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const requestBody = await readJsonBody(request);
-  const parsedRequest = parseScoreEventRequest(requestBody);
+  const parseResult = parseScoreEventRequest(requestBody);
 
-  if (parsedRequest === undefined) {
-    return jsonFailure("请求格式不正确。", "INVALID_REQUEST", {
+  if ("failure" in parseResult) {
+    return jsonFailure(parseResult.failure.message, parseResult.failure.code, {
       status: 400,
     });
   }
+
+  const parsedRequest = parseResult.request;
 
   if (!isValidRoomId(parsedRequest.roomId)) {
     return jsonFailure("房间号必须是三位数字。", "INVALID_ROOM_ID", {
@@ -231,14 +294,35 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const winnerId = getScoreWinnerId(parsedRequest);
+  const shouldValidateCurrentRound = winnerId !== undefined || parsedRequest.action === "KONG";
 
-  if (winnerId !== undefined) {
-    const roomState = replayRoomEvents([...createPlayerJoinedEvents(room), ...(await readRoomEvents(room.roomId))]);
+  if (shouldValidateCurrentRound) {
+    const roomState = replayRoomEvents([
+      ...createPlayerJoinedEvents(room),
+      ...(await readRoomEvents(room.roomId)),
+    ]);
 
-    if (roomState.currentRound.winnerIds.includes(winnerId)) {
+    if (winnerId !== undefined && roomState.currentRound.winnerIds.includes(winnerId)) {
       return jsonFailure("该玩家本局已经胡牌。", "ROUND_WINNER_ALREADY_EXISTS", {
         status: 409,
       });
+    }
+
+    if (parsedRequest.action === "KONG") {
+      if (roomState.currentRound.winnerIds.includes(parsedRequest.playerId)) {
+        return jsonFailure("已胡牌玩家本局不能再记录杠牌。", "KONG_PLAYER_ALREADY_WON", {
+          status: 409,
+        });
+      }
+
+      if (
+        parsedRequest.kongType === "DISCARD_KONG" &&
+        roomState.currentRound.winnerIds.includes(parsedRequest.fromPlayerId)
+      ) {
+        return jsonFailure("已胡牌玩家本局不能作为引杠玩家。", "KONG_FROM_PLAYER_ALREADY_WON", {
+          status: 409,
+        });
+      }
     }
   }
 
