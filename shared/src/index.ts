@@ -10,6 +10,13 @@ export type {
 } from "./types/event.js";
 export type { RoomState, RoundState, ScoreState } from "./types/roomState.js";
 export type {
+  DiscardWinScoreRequest,
+  DrawGameScoreRequest,
+  ScoreActionType,
+  ScoreEventRequest,
+  SelfDrawScoreRequest,
+} from "./types/score.js";
+export type {
   CreateRoomResponse,
   GetRoomResponse,
   JoinRoomRequest,

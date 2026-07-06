@@ -6,6 +6,7 @@ import createRoomFunction from "../backend/api/room/create";
 import roomEventFunction from "../backend/api/room/event";
 import roomEventsFunction from "../backend/api/room/events";
 import joinRoomFunction from "../backend/api/room/join";
+import scoreFunction from "../backend/api/room/score";
 import startRoomFunction from "../backend/api/room/start";
 import removePlayerFunction from "../backend/api/room/player/remove";
 import renamePlayerFunction from "../backend/api/room/player/rename";
@@ -126,6 +127,17 @@ function localApiPlugin(): Plugin {
 
         const apiRequest = await createRequestFromIncomingMessage(request, "/api/room/event");
         const apiResponse = await roomEventFunction.fetch(apiRequest);
+
+        await sendApiResponse(response, apiResponse);
+      });
+      server.middlewares.use("/api/room/score", async (request, response, next) => {
+        if (request.method !== "POST") {
+          next();
+          return;
+        }
+
+        const apiRequest = await createRequestFromIncomingMessage(request, "/api/room/score");
+        const apiResponse = await scoreFunction.fetch(apiRequest);
 
         await sendApiResponse(response, apiResponse);
       });
