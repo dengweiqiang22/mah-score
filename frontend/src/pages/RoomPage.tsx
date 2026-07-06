@@ -352,6 +352,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
   const [selectedPrimaryPlayerId, setSelectedPrimaryPlayerId] = useState<string | undefined>();
   const [selectedRelatedPlayerId, setSelectedRelatedPlayerId] = useState<string | undefined>();
   const [selectedFan, setSelectedFan] = useState<ScoreFan | undefined>();
+  const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
   const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "error">("idle");
 
   function resetQuickScoreSelection() {
@@ -886,7 +887,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
     replayState?.players ?? [],
     selectedPrimaryPlayerId,
   );
-  const visibleScoreHistory = scoreHistory.slice(0, 20);
+  const visibleScoreHistory = scoreHistory.slice(0, 8);
 
   return (
     <main className="min-h-screen bg-stone-50 px-5 py-6 text-stone-950">
@@ -1194,66 +1195,79 @@ export function RoomPage({ roomId }: RoomPageProps) {
           </section>
         ) : null}
 
-        <section className="grid gap-4">
-          <div className="border-b border-stone-200 pb-3">
-            <h2 className="text-xl font-semibold tracking-normal">历史记录</h2>
-            <p className="mt-1 text-sm text-stone-500">
-              {visibleScoreHistory.length === 0
-                ? "暂无计分事件"
-                : `显示最近 ${visibleScoreHistory.length} 条计分事件`}
+        <section className="grid gap-4 rounded-md border border-stone-200 bg-white p-4">
+          <button
+            className="flex items-center justify-between gap-3 text-left"
+            onClick={() => {
+              setIsHistoryExpanded((currentValue) => !currentValue);
+            }}
+            type="button"
+          >
+            <div>
+              <h2 className="text-xl font-semibold tracking-normal">历史记录</h2>
+              <p className="mt-1 text-sm text-stone-500">
+                {visibleScoreHistory.length === 0
+                  ? "暂无计分事件"
+                  : `最近 ${visibleScoreHistory.length} 条计分事件`}
+              </p>
+            </div>
+            <p className="shrink-0 text-sm font-medium text-stone-400">
+              {isHistoryExpanded ? "收起" : "展开"}
             </p>
-          </div>
+          </button>
 
-          {visibleScoreHistory.length === 0 ? (
-            <p className="rounded-md border border-stone-200 bg-white p-4 text-base text-stone-600">
-              游戏开始后，计分事件会显示在这里
-            </p>
-          ) : (
-            <div className="grid gap-3">
-              {visibleScoreHistory.map((item) => (
-                <div
-                  className={`grid gap-3 rounded-md border p-4 ${
-                    item.isUndone
-                      ? "border-stone-200 bg-stone-100 text-stone-500"
-                      : "border-stone-200 bg-white"
-                  }`}
-                  key={item.event.id}
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0">
-                      <p className="truncate text-base font-semibold">
-                        第 {item.roundNumber} 局 ·{" "}
-                        {formatRoundTitle(item.round, replayState?.players ?? [])}
-                      </p>
-                      <p className="mt-1 text-sm text-stone-500">
-                        {formatRoundDetail(item.round, replayState?.players ?? [])}
+          {isHistoryExpanded ? (
+            visibleScoreHistory.length === 0 ? (
+              <p className="rounded-md border border-stone-200 bg-stone-50 p-4 text-base text-stone-600">
+                游戏开始后，计分事件会显示在这里
+              </p>
+            ) : (
+              <div className="grid gap-3">
+                {visibleScoreHistory.map((item) => (
+                  <div
+                    className={`grid gap-3 rounded-md border p-4 ${
+                      item.isUndone
+                        ? "border-stone-200 bg-stone-100 text-stone-500"
+                        : "border-stone-200 bg-white"
+                    }`}
+                    key={item.event.id}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <p className="truncate text-base font-semibold">
+                          第 {item.roundNumber} 局 ·{" "}
+                          {formatRoundTitle(item.round, replayState?.players ?? [])}
+                        </p>
+                        <p className="mt-1 text-sm text-stone-500">
+                          {formatRoundDetail(item.round, replayState?.players ?? [])}
+                        </p>
+                      </div>
+                      <p className="shrink-0 text-sm font-medium text-stone-400">
+                        #{item.event.version}
                       </p>
                     </div>
-                    <p className="shrink-0 text-sm font-medium text-stone-400">
-                      #{item.event.version}
-                    </p>
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs font-medium text-stone-400">
+                        {item.isUndone ? "已撤销" : "有效记录"}
+                      </p>
+                      {!item.isUndone && isPlaying ? (
+                        <button
+                          className="h-9 rounded-md border border-red-200 bg-red-50 px-3 text-sm font-semibold text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                          disabled={isUndoing || isScoring}
+                          onClick={() => {
+                            void handleUndoRoomEvent(item.event.id);
+                          }}
+                          type="button"
+                        >
+                          撤销
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-xs font-medium text-stone-400">
-                      {item.isUndone ? "已撤销" : "有效记录"}
-                    </p>
-                    {!item.isUndone && isPlaying ? (
-                      <button
-                        className="h-9 rounded-md border border-red-200 bg-red-50 px-3 text-sm font-semibold text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
-                        disabled={isUndoing || isScoring}
-                        onClick={() => {
-                          void handleUndoRoomEvent(item.event.id);
-                        }}
-                        type="button"
-                      >
-                        撤销
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )
+          ) : null}
         </section>
 
         {room !== undefined ? (
