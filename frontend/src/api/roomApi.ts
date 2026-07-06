@@ -1,6 +1,7 @@
 import type {
   ApiResponse,
   CreateRoomResponse,
+  GetRoomEventsResponse,
   GetRoomResponse,
   JoinRoomRequest,
   JoinRoomResponse,
@@ -38,6 +39,13 @@ export async function joinRoom(request: JoinRoomRequest): Promise<ApiResponse<Jo
 export async function getRoom(roomId: string): Promise<ApiResponse<GetRoomResponse>> {
   const response = await fetch(`/api/room?roomId=${encodeURIComponent(roomId)}`);
   const data = (await response.json()) as ApiResponse<GetRoomResponse>;
+
+  return data;
+}
+
+export async function getRoomEvents(roomId: string): Promise<ApiResponse<GetRoomEventsResponse>> {
+  const response = await fetch(`/api/room/events?roomId=${encodeURIComponent(roomId)}`);
+  const data = (await response.json()) as ApiResponse<GetRoomEventsResponse>;
 
   return data;
 }

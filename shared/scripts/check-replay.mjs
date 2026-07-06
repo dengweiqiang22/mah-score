@@ -49,19 +49,36 @@ const events = [
   {
     ...baseEvent,
     id: "event_5",
-    type: "DRAW_GAME",
+    type: "DISCARD_WIN",
     version: 5,
     payload: {
-      round: 1,
+      winnerId: "player_1",
+      discarderId: "player_2",
     },
   },
   {
     ...baseEvent,
     id: "event_6",
-    type: "UNDO",
+    type: "SELF_DRAW",
     version: 6,
     payload: {
-      targetEventId: "event_5",
+      winnerId: "player_2",
+    },
+  },
+  {
+    ...baseEvent,
+    id: "event_7",
+    type: "DRAW_GAME",
+    version: 7,
+    payload: {},
+  },
+  {
+    ...baseEvent,
+    id: "event_8",
+    type: "UNDO",
+    version: 8,
+    payload: {
+      targetEventId: "event_6",
     },
   },
 ];
@@ -69,7 +86,7 @@ const events = [
 const state = replayRoomEvents(events);
 
 assert.equal(state.roomId, "123");
-assert.equal(state.version, 4);
+assert.equal(state.version, 7);
 assert.equal(state.status, "PLAYING");
 assert.deepEqual(state.players, [
   {
@@ -84,15 +101,18 @@ assert.deepEqual(state.players, [
 assert.deepEqual(state.scores, [
   {
     playerId: "player_1",
-    total: 0,
+    total: 1,
   },
   {
     playerId: "player_2",
-    total: 0,
+    total: -1,
   },
 ]);
-assert.deepEqual(state.rounds, []);
+assert.deepEqual(
+  state.rounds.map((round) => round.eventId),
+  ["event_5", "event_7"],
+);
 assert.deepEqual(
   state.events.map((event) => event.id),
-  ["event_1", "event_2", "event_3", "event_4"],
+  ["event_1", "event_2", "event_3", "event_4", "event_5", "event_7"],
 );

@@ -1,8 +1,9 @@
-import type { RoomRecord } from "@mah-score/shared";
+import type { RoomEvent, RoomRecord, RoomState } from "@mah-score/shared";
 
 import { useEffect, useState } from "react";
+import { replayRoomEvents } from "@mah-score/shared";
 
-import { getRoom, removePlayer, renamePlayer, startRoom } from "../api/roomApi";
+import { getRoom, getRoomEvents, removePlayer, renamePlayer, startRoom } from "../api/roomApi";
 
 interface RoomPageProps {
   readonly roomId: string;
@@ -14,6 +15,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [isStarting, setIsStarting] = useState(false);
   const [nicknameInput, setNicknameInput] = useState("");
+  const [events, setEvents] = useState<readonly RoomEvent[]>([]);
   const [room, setRoom] = useState<RoomRecord | undefined>();
 
   async function loadRoom() {
@@ -21,14 +23,20 @@ export function RoomPage({ roomId }: RoomPageProps) {
     setErrorMessage(undefined);
 
     try {
-      const response = await getRoom(roomId);
+      const [roomResponse, eventsResponse] = await Promise.all([getRoom(roomId), getRoomEvents(roomId)]);
 
-      if (!response.success) {
-        setErrorMessage(response.message);
+      if (!roomResponse.success) {
+        setErrorMessage(roomResponse.message);
         return;
       }
 
-      setRoom(response.data.room);
+      if (!eventsResponse.success) {
+        setErrorMessage(eventsResponse.message);
+        return;
+      }
+
+      setRoom(roomResponse.data.room);
+      setEvents(eventsResponse.data.events);
     } catch {
       setErrorMessage("读取房间失败，请稍后再试。");
     } finally {
@@ -109,6 +117,28 @@ export function RoomPage({ roomId }: RoomPageProps) {
 
   const isWaiting = room?.status === "WAITING";
   const canStart = isWaiting && room.players.length >= 2 && room.players.length <= 4;
+  const replayState: RoomState | undefined =
+    room === undefined
+      ? undefined
+      : replayRoomEvents([
+          ...room.players.map((player, index) => ({
+            id: `room_${room.roomId}_player_${player.id}`,
+            roomId,
+            type: "PLAYER_JOINED" as const,
+            version: index - room.players.length,
+            operator: "room",
+            timestamp: room.createdAt,
+            payload: {
+              playerId: player.id,
+              nickname: player.nickname,
+            },
+          })),
+          ...events,
+        ]);
+
+  function getPlayerScore(playerId: string): number {
+    return replayState?.scores.find((score) => score.playerId === playerId)?.total ?? 0;
+  }
 
   return (
     <main className="min-h-screen bg-stone-50 px-5 py-6 text-stone-950">
@@ -132,7 +162,9 @@ export function RoomPage({ roomId }: RoomPageProps) {
             <div>
               <h2 className="text-xl font-semibold tracking-normal">玩家</h2>
               <p className="mt-1 text-sm text-stone-500">
-                {room === undefined ? "读取中" : `${room.players.length}/4 人`}
+                {room === undefined
+                  ? "读取中"
+                  : `${room.players.length}/4 人 · ${replayState?.rounds.length ?? 0} 局`}
               </p>
             </div>
             <button
@@ -193,7 +225,10 @@ export function RoomPage({ roomId }: RoomPageProps) {
                 </div>
               ) : (
                 <div className="flex items-center justify-between gap-3">
-                  <p className="min-w-0 flex-1 truncate text-lg font-semibold">{player.nickname}</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-lg font-semibold">{player.nickname}</p>
+                    <p className="mt-1 text-sm text-stone-500">总分 {getPlayerScore(player.id)}</p>
+                  </div>
                   {isWaiting ? (
                     <div className="flex shrink-0 gap-2">
                       <button

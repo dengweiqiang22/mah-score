@@ -22,6 +22,10 @@ function getStringPayloadValue(event: RoomEvent, key: string): string | undefine
   return isString(value) ? value : undefined;
 }
 
+function getScoreTotal(scores: readonly ScoreState[], playerId: string): number {
+  return scores.find((score) => score.playerId === playerId)?.total ?? 0;
+}
+
 function getUndoTargetEventId(event: RoomEvent): string | undefined {
   return getStringPayloadValue(event, "targetEventId");
 }
@@ -70,6 +74,19 @@ function upsertScore(scores: ScoreState[], playerId: string): ScoreState[] {
 
 function removeScore(scores: ScoreState[], playerId: string): ScoreState[] {
   return scores.filter((score) => score.playerId !== playerId);
+}
+
+function addScore(scores: ScoreState[], playerId: string, delta: number): ScoreState[] {
+  const nextScores = upsertScore(scores, playerId);
+
+  return nextScores.map((score) =>
+    score.playerId === playerId
+      ? {
+          ...score,
+          total: score.total + delta,
+        }
+      : score,
+  );
 }
 
 function applyPlayerJoined(state: MutableReplayState, event: RoomEvent): MutableReplayState {
@@ -147,6 +164,55 @@ function applyRoundEvent(state: MutableReplayState, event: RoomEvent): MutableRe
   };
 }
 
+function applyDiscardWinScore(state: MutableReplayState, event: RoomEvent): MutableReplayState {
+  const winnerId = getStringPayloadValue(event, "winnerId");
+  const discarderId = getStringPayloadValue(event, "discarderId");
+
+  if (winnerId === undefined || discarderId === undefined || winnerId === discarderId) {
+    return state;
+  }
+
+  const winnerExists = state.players.some((player) => player.id === winnerId);
+  const discarderExists = state.players.some((player) => player.id === discarderId);
+
+  if (!winnerExists || !discarderExists) {
+    return state;
+  }
+
+  return {
+    ...state,
+    scores: addScore(addScore(state.scores, winnerId, 1), discarderId, -1),
+  };
+}
+
+function applySelfDrawScore(state: MutableReplayState, event: RoomEvent): MutableReplayState {
+  const winnerId = getStringPayloadValue(event, "winnerId");
+
+  if (winnerId === undefined || !state.players.some((player) => player.id === winnerId)) {
+    return state;
+  }
+
+  return {
+    ...state,
+    scores: state.players.reduce(
+      (scores, player) => addScore(scores, player.id, player.id === winnerId ? state.players.length - 1 : -1),
+      state.scores,
+    ),
+  };
+}
+
+function applyScoreEvent(state: MutableReplayState, event: RoomEvent): MutableReplayState {
+  if (event.type === "DISCARD_WIN") {
+    return applyDiscardWinScore(state, event);
+  }
+
+  if (event.type === "SELF_DRAW") {
+    return applySelfDrawScore(state, event);
+  }
+
+  return state;
+}
+
 function applyEvent(state: MutableReplayState, event: RoomEvent): MutableReplayState {
   const nextState: MutableReplayState = {
     ...state,
@@ -175,7 +241,7 @@ function applyEvent(state: MutableReplayState, event: RoomEvent): MutableReplayS
   }
 
   if (event.type === "DISCARD_WIN" || event.type === "SELF_DRAW" || event.type === "DRAW_GAME") {
-    return applyRoundEvent(nextState, event);
+    return applyScoreEvent(applyRoundEvent(nextState, event), event);
   }
 
   return nextState;
@@ -195,7 +261,10 @@ export function replayRoomEvents(events: readonly RoomEvent[]): RoomState {
     version: finalState.version,
     status: finalState.status,
     players: finalState.players,
-    scores: finalState.scores,
+    scores: finalState.players.map((player) => ({
+      playerId: player.id,
+      total: getScoreTotal(finalState.scores, player.id),
+    })),
     rounds: finalState.rounds,
     events: finalState.events,
   };
