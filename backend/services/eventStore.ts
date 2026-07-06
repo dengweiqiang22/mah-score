@@ -94,6 +94,15 @@ export async function readRoomEvents(roomId: string): Promise<readonly RoomEvent
   });
 }
 
+export async function readRoomEventsAfterVersion(
+  roomId: string,
+  version: number,
+): Promise<readonly RoomEvent[]> {
+  const events = await readRoomEvents(roomId);
+
+  return events.filter((event) => event.version > version);
+}
+
 function getUndoTargetEventId(event: RoomEvent): string | undefined {
   const value = event.payload.targetEventId;
 

@@ -36,6 +36,11 @@ export interface GetRoomEventsResponse {
   readonly events: readonly RoomEvent[];
 }
 
+export interface SyncRoomEventsResponse {
+  readonly events: readonly RoomEvent[];
+  readonly version: number;
+}
+
 export interface UndoRoomEventRequest {
   readonly roomId: string;
   readonly operator: string;

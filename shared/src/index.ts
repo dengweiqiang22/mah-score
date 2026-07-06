@@ -7,6 +7,7 @@ export type {
   RoomEvent,
   RoomEventPayload,
   RoomEventType,
+  SyncRoomEventsResponse,
   UndoRoomEventRequest,
 } from "./types/event.js";
 export type { RoomState, RoundState, ScoreState } from "./types/roomState.js";

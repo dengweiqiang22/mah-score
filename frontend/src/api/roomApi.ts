@@ -8,6 +8,7 @@ import type {
   RemovePlayerRequest,
   RenamePlayerRequest,
   StartRoomRequest,
+  SyncRoomEventsResponse,
   UndoRoomEventRequest,
 } from "@mah-score/shared";
 
@@ -101,6 +102,18 @@ export async function undoRoomEvent(
     method: "POST",
   });
   const data = (await response.json()) as ApiResponse<EmptyResponse>;
+
+  return data;
+}
+
+export async function syncRoomEvents(
+  roomId: string,
+  version: number,
+): Promise<ApiResponse<SyncRoomEventsResponse>> {
+  const response = await fetch(
+    `/api/room/sync?roomId=${encodeURIComponent(roomId)}&version=${encodeURIComponent(version.toString())}`,
+  );
+  const data = (await response.json()) as ApiResponse<SyncRoomEventsResponse>;
 
   return data;
 }

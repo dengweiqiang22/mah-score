@@ -9,6 +9,7 @@ import {
   removePlayer,
   renamePlayer,
   startRoom,
+  syncRoomEvents,
   undoRoomEvent,
 } from "../api/roomApi";
 
@@ -25,6 +26,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
   const [nicknameInput, setNicknameInput] = useState("");
   const [events, setEvents] = useState<readonly RoomEvent[]>([]);
   const [room, setRoom] = useState<RoomRecord | undefined>();
+  const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "error">("idle");
 
   async function loadRoom() {
     setIsLoading(true);
@@ -54,6 +56,48 @@ export function RoomPage({ roomId }: RoomPageProps) {
 
   useEffect(() => {
     void loadRoom();
+  }, [roomId]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setEvents((currentEvents) => {
+        const currentVersion = currentEvents.reduce(
+          (version, event) => Math.max(version, event.version),
+          0,
+        );
+
+        void syncRoomEvents(roomId, currentVersion)
+          .then((response) => {
+            if (!response.success) {
+              setSyncStatus("error");
+              return;
+            }
+
+            if (response.data.events.length === 0) {
+              setSyncStatus("idle");
+              return;
+            }
+
+            setEvents((latestEvents) => {
+              const existingEventIds = new Set(latestEvents.map((event) => event.id));
+              const newEvents = response.data.events.filter((event) => !existingEventIds.has(event.id));
+
+              return [...latestEvents, ...newEvents].sort((left, right) => left.version - right.version);
+            });
+            setSyncStatus("idle");
+          })
+          .catch(() => {
+            setSyncStatus("error");
+          });
+
+        setSyncStatus("syncing");
+        return currentEvents;
+      });
+    }, 3000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
   }, [roomId]);
 
   async function handleRenamePlayer(playerId: string) {
@@ -181,6 +225,9 @@ export function RoomPage({ roomId }: RoomPageProps) {
           <h1 className="mt-3 text-4xl font-semibold tracking-normal">{roomId}</h1>
           <p className="mt-3 text-sm font-medium text-stone-500">
             {room === undefined ? "读取中" : room.status === "WAITING" ? "等待开始" : "游戏中"}
+          </p>
+          <p className="mt-2 text-xs font-medium text-stone-400">
+            {syncStatus === "syncing" ? "同步中" : syncStatus === "error" ? "同步失败" : "已同步"}
           </p>
         </div>
 
