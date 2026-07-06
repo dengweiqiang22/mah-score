@@ -37,6 +37,13 @@ interface QuickScoreModeOption {
   readonly label: string;
 }
 
+interface ScoreHistoryItem {
+  readonly event: RoomEvent;
+  readonly round: RoundState;
+  readonly roundNumber: number;
+  readonly isUndone: boolean;
+}
+
 const quickScoreModes: readonly QuickScoreModeOption[] = [
   {
     mode: "DISCARD_WIN",
@@ -76,6 +83,19 @@ function getPayloadNumber(payload: RoomEvent["payload"], key: string): number | 
   const value = payload[key];
 
   return typeof value === "number" ? value : undefined;
+}
+
+function getUndoTargetEventId(event: RoomEvent): string | undefined {
+  return getPayloadString(event.payload, "targetEventId");
+}
+
+function isScoreHistoryEvent(event: RoomEvent): boolean {
+  return (
+    event.type === "DISCARD_WIN" ||
+    event.type === "SELF_DRAW" ||
+    event.type === "KONG" ||
+    event.type === "DRAW_GAME"
+  );
 }
 
 function getFanScore(fan: number | undefined): number {
@@ -224,6 +244,69 @@ function getKongType(mode: QuickScoreMode): KongType | undefined {
   }
 
   return undefined;
+}
+
+function createRoundFromEvent(event: RoomEvent): RoundState {
+  return {
+    eventId: event.id,
+    type: event.type,
+    version: event.version,
+    payload: event.payload,
+  };
+}
+
+function createScoreHistory(events: readonly RoomEvent[]): readonly ScoreHistoryItem[] {
+  const undoneEventIds = new Set(
+    events.flatMap((event) => {
+      if (event.type !== "UNDO") {
+        return [];
+      }
+
+      const targetEventId = getUndoTargetEventId(event);
+
+      return targetEventId === undefined ? [] : [targetEventId];
+    }),
+  );
+  const winnerIds = new Set<string>();
+  let roundNumber = 1;
+
+  return [...events]
+    .sort((left, right) => left.version - right.version)
+    .flatMap((event) => {
+      if (!isScoreHistoryEvent(event)) {
+        return [];
+      }
+
+      const historyItem: ScoreHistoryItem = {
+        event,
+        round: createRoundFromEvent(event),
+        roundNumber,
+        isUndone: undoneEventIds.has(event.id),
+      };
+
+      if (!historyItem.isUndone) {
+        if (event.type === "DISCARD_WIN" || event.type === "SELF_DRAW") {
+          const winnerId = getPayloadString(event.payload, "winnerId");
+
+          if (winnerId !== undefined && !winnerIds.has(winnerId)) {
+            winnerIds.add(winnerId);
+          }
+
+          if (winnerIds.size >= 3) {
+            roundNumber += 1;
+            winnerIds.clear();
+          }
+        }
+
+        if (event.type === "DRAW_GAME") {
+          roundNumber += 1;
+          winnerIds.clear();
+        }
+      }
+
+      return [historyItem];
+    })
+    .sort((left, right) => right.event.version - left.event.version);
 }
 
 export function RoomPage({ roomId }: RoomPageProps) {
@@ -466,7 +549,15 @@ export function RoomPage({ roomId }: RoomPageProps) {
     }
   }
 
-  async function handleUndoRoomEvent() {
+  async function handleUndoRoomEvent(targetEventId?: string) {
+    const shouldUndo = window.confirm(
+      targetEventId === undefined ? "确认撤销上一条计分记录？" : "确认撤销这条计分记录？",
+    );
+
+    if (!shouldUndo) {
+      return;
+    }
+
     setIsUndoing(true);
     setErrorMessage(undefined);
 
@@ -474,6 +565,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
       const response = await undoRoomEvent({
         roomId,
         operator: "room",
+        targetEventId,
       });
 
       if (!response.success) {
@@ -701,7 +793,8 @@ export function RoomPage({ roomId }: RoomPageProps) {
     return replayState?.scores.find((score) => score.playerId === playerId)?.total ?? 0;
   }
 
-  const canUndo = (replayState?.rounds.length ?? 0) > 0;
+  const scoreHistory = createScoreHistory(events);
+  const canUndo = scoreHistory.some((item) => !item.isUndone);
   const canRecordQuickScore = isPlaying && getQuickScoreRequest() !== undefined && !isScoring;
   const quickScoreMissingMessage = getQuickScoreMissingMessage();
   const selectedPrimaryPlayerName = getPlayerNickname(
@@ -712,9 +805,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
     replayState?.players ?? [],
     selectedRelatedPlayerId,
   );
-  const recentRounds = [...(replayState?.rounds ?? [])]
-    .sort((left, right) => right.version - left.version)
-    .slice(0, 5);
+  const visibleScoreHistory = scoreHistory.slice(0, 20);
 
   return (
     <main className="min-h-screen bg-stone-50 px-5 py-6 text-stone-950">
@@ -944,34 +1035,60 @@ export function RoomPage({ roomId }: RoomPageProps) {
 
         <section className="grid gap-4">
           <div className="border-b border-stone-200 pb-3">
-            <h2 className="text-xl font-semibold tracking-normal">最近事件</h2>
+            <h2 className="text-xl font-semibold tracking-normal">历史记录</h2>
             <p className="mt-1 text-sm text-stone-500">
-              {recentRounds.length === 0
+              {visibleScoreHistory.length === 0
                 ? "暂无计分事件"
-                : `最近 ${recentRounds.length} 条计分事件`}
+                : `显示最近 ${visibleScoreHistory.length} 条计分事件`}
             </p>
           </div>
 
-          {recentRounds.length === 0 ? (
+          {visibleScoreHistory.length === 0 ? (
             <p className="rounded-md border border-stone-200 bg-white p-4 text-base text-stone-600">
               游戏开始后，计分事件会显示在这里
             </p>
           ) : (
             <div className="grid gap-3">
-              {recentRounds.map((round) => (
+              {visibleScoreHistory.map((item) => (
                 <div
-                  className="flex items-center justify-between gap-4 rounded-md border border-stone-200 bg-white p-4"
-                  key={round.eventId}
+                  className={`grid gap-3 rounded-md border p-4 ${
+                    item.isUndone
+                      ? "border-stone-200 bg-stone-100 text-stone-500"
+                      : "border-stone-200 bg-white"
+                  }`}
+                  key={item.event.id}
                 >
-                  <div className="min-w-0">
-                    <p className="truncate text-base font-semibold">
-                      {formatRoundTitle(round, replayState?.players ?? [])}
-                    </p>
-                    <p className="mt-1 text-sm text-stone-500">
-                      {formatRoundDetail(round, replayState?.players ?? [])}
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="truncate text-base font-semibold">
+                        第 {item.roundNumber} 局 ·{" "}
+                        {formatRoundTitle(item.round, replayState?.players ?? [])}
+                      </p>
+                      <p className="mt-1 text-sm text-stone-500">
+                        {formatRoundDetail(item.round, replayState?.players ?? [])}
+                      </p>
+                    </div>
+                    <p className="shrink-0 text-sm font-medium text-stone-400">
+                      #{item.event.version}
                     </p>
                   </div>
-                  <p className="shrink-0 text-sm font-medium text-stone-400">#{round.version}</p>
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs font-medium text-stone-400">
+                      {item.isUndone ? "已撤销" : "有效记录"}
+                    </p>
+                    {!item.isUndone && isPlaying ? (
+                      <button
+                        className="h-9 rounded-md border border-red-200 bg-red-50 px-3 text-sm font-semibold text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={isUndoing || isScoring}
+                        onClick={() => {
+                          void handleUndoRoomEvent(item.event.id);
+                        }}
+                        type="button"
+                      >
+                        撤销
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
               ))}
             </div>
