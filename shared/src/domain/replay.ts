@@ -274,6 +274,10 @@ function applyScoreEvent(state: MutableReplayState, event: RoomEvent): MutableRe
     return winnerId === undefined ? scoredState : recordRoundWinner(scoredState, winnerId);
   }
 
+  if (event.type === "DRAW_GAME") {
+    return startNextRound(ensureActiveRound(state));
+  }
+
   return state;
 }
 

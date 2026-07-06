@@ -155,3 +155,23 @@ assert.deepEqual(
   state.events.map((event) => event.id),
   ["event_1", "event_2", "event_3", "event_4", "event_5", "event_6", "event_8", "event_9", "event_11"],
 );
+
+const drawGameState = replayRoomEvents([
+  ...events.slice(0, 6),
+  {
+    ...baseEvent,
+    id: "event_draw",
+    type: "DRAW_GAME",
+    version: 7,
+    payload: {},
+  },
+]);
+
+assert.deepEqual(drawGameState.currentRound, {
+  number: 2,
+  winnerIds: [],
+});
+assert.deepEqual(
+  drawGameState.rounds.map((round) => round.eventId),
+  ["event_6", "event_draw"],
+);

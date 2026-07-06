@@ -82,6 +82,12 @@ export async function POST(request: Request): Promise<Response> {
     });
   }
 
+  if (parsedRequest.type !== "GAME_FINISHED") {
+    return jsonFailure("当前接口只允许记录结束游戏事件。", "EVENT_TYPE_NOT_ALLOWED", {
+      status: 400,
+    });
+  }
+
   if (parsedRequest.type === "GAME_FINISHED") {
     const room = await getRoom(parsedRequest.roomId);
 

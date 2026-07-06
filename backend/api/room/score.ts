@@ -1,7 +1,8 @@
-import type { AppendRoomEventResponse, ScoreEventRequest } from "@mah-score/shared";
+import type { AppendRoomEventResponse, RoomEvent, RoomRecord, ScoreEventRequest } from "@mah-score/shared";
 
+import { replayRoomEvents } from "@mah-score/shared";
 import { jsonFailure, jsonSuccess } from "../../services/apiResponse";
-import { appendRoomEvent } from "../../services/eventStore";
+import { appendRoomEvent, readRoomEvents } from "../../services/eventStore";
 import { isValidEventOperator } from "../../services/eventValidation";
 import { readJsonBody } from "../../services/requestBody";
 import { getRedisConfigurationError } from "../../services/redis";
@@ -69,6 +70,29 @@ function getInvalidPlayerResponse(): Response {
   });
 }
 
+function createPlayerJoinedEvents(room: RoomRecord): readonly RoomEvent[] {
+  return room.players.map((player) => ({
+    id: `room_${room.roomId}_player_${player.id}`,
+    roomId: room.roomId,
+    type: "PLAYER_JOINED",
+    version: 0,
+    operator: "room",
+    timestamp: room.createdAt,
+    payload: {
+      playerId: player.id,
+      nickname: player.nickname,
+    },
+  }));
+}
+
+function getScoreWinnerId(request: ScoreEventRequest): string | undefined {
+  if (request.action === "DISCARD_WIN" || request.action === "SELF_DRAW") {
+    return request.winnerId;
+  }
+
+  return undefined;
+}
+
 export async function POST(request: Request): Promise<Response> {
   const redisConfigurationError = getRedisConfigurationError();
 
@@ -130,6 +154,18 @@ export async function POST(request: Request): Promise<Response> {
 
   if (parsedRequest.action === "SELF_DRAW" && !roomHasPlayer(room, parsedRequest.winnerId)) {
     return getInvalidPlayerResponse();
+  }
+
+  const winnerId = getScoreWinnerId(parsedRequest);
+
+  if (winnerId !== undefined) {
+    const roomState = replayRoomEvents([...createPlayerJoinedEvents(room), ...(await readRoomEvents(room.roomId))]);
+
+    if (roomState.currentRound.winnerIds.includes(winnerId)) {
+      return jsonFailure("该玩家本局已经胡牌。", "ROUND_WINNER_ALREADY_EXISTS", {
+        status: 409,
+      });
+    }
   }
 
   try {
