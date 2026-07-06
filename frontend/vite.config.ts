@@ -1,6 +1,7 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig, loadEnv, type Plugin } from "vite";
 
+import healthFunction from "../backend/api/health";
 import roomFunction from "../backend/api/room";
 import createRoomFunction from "../backend/api/room/create";
 import roomEventFunction from "../backend/api/room/event";
@@ -61,6 +62,16 @@ function localApiPlugin(): Plugin {
   return {
     name: "mah-score-local-api",
     configureServer(server) {
+      server.middlewares.use("/api/health", async (request, response, next) => {
+        if (request.method !== "GET") {
+          next();
+          return;
+        }
+
+        const apiResponse = await healthFunction.fetch();
+
+        await sendApiResponse(response, apiResponse);
+      });
       server.middlewares.use("/api/room/player/rename", async (request, response, next) => {
         if (request.method !== "POST") {
           next();
@@ -95,7 +106,8 @@ function localApiPlugin(): Plugin {
           return;
         }
 
-        const apiResponse = await createRoomFunction.fetch();
+        const apiRequest = await createRequestFromIncomingMessage(request, "/api/room/create");
+        const apiResponse = await createRoomFunction.fetch(apiRequest);
 
         await sendApiResponse(response, apiResponse);
       });
