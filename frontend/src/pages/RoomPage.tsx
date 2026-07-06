@@ -85,6 +85,30 @@ function getPayloadNumber(payload: RoomEvent["payload"], key: string): number | 
   return typeof value === "number" ? value : undefined;
 }
 
+async function copyTextToClipboard(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const textarea = document.createElement("textarea");
+
+    textarea.value = text;
+    textarea.setAttribute("readonly", "true");
+    textarea.style.left = "-9999px";
+    textarea.style.position = "fixed";
+    textarea.style.top = "0";
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+
+    try {
+      return document.execCommand("copy");
+    } finally {
+      document.body.removeChild(textarea);
+    }
+  }
+}
+
 function getUndoTargetEventId(event: RoomEvent): string | undefined {
   return getPayloadString(event.payload, "targetEventId");
 }
@@ -510,12 +534,12 @@ export function RoomPage({ roomId }: RoomPageProps) {
   async function handleCopyInviteLink() {
     setShareMessage(undefined);
 
-    try {
-      await navigator.clipboard.writeText(inviteUrl);
+    if (await copyTextToClipboard(inviteUrl)) {
       setShareMessage("房间链接已复制");
-    } catch {
-      setShareMessage("复制失败，请手动复制链接");
+      return;
     }
+
+    setShareMessage("复制失败，请手动复制链接");
   }
 
   async function handleShareInviteLink() {
@@ -541,12 +565,12 @@ export function RoomPage({ roomId }: RoomPageProps) {
   async function handleCopySettlementText(settlementText: string) {
     setSettlementCopyMessage(undefined);
 
-    try {
-      await navigator.clipboard.writeText(settlementText);
+    if (await copyTextToClipboard(settlementText)) {
       setSettlementCopyMessage("结算文本已复制");
-    } catch {
-      setSettlementCopyMessage("复制失败，请手动复制结算文本");
+      return;
     }
+
+    setSettlementCopyMessage("复制失败，请手动复制结算文本");
   }
 
   async function handleUndoRoomEvent(targetEventId?: string) {
@@ -583,7 +607,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
   }
 
   function handleSelectQuickScorePlayer(playerId: string) {
-    if (room?.status !== "PLAYING" || isScoring) {
+    if (room?.status !== "PLAYING" || isScoring || isCurrentRoundFinished) {
       return;
     }
 
@@ -779,6 +803,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
         ]);
   const currentRoundNumber = replayState?.currentRound.number ?? 0;
   const currentRoundWinnerCount = replayState?.currentRound.winnerIds.length ?? 0;
+  const isCurrentRoundFinished = currentRoundWinnerCount >= 3;
   const settlement =
     replayState === undefined
       ? undefined
@@ -795,7 +820,8 @@ export function RoomPage({ roomId }: RoomPageProps) {
 
   const scoreHistory = createScoreHistory(events);
   const canUndo = scoreHistory.some((item) => !item.isUndone);
-  const canRecordQuickScore = isPlaying && getQuickScoreRequest() !== undefined && !isScoring;
+  const canRecordQuickScore =
+    isPlaying && !isCurrentRoundFinished && getQuickScoreRequest() !== undefined && !isScoring;
   const quickScoreMissingMessage = getQuickScoreMissingMessage();
   const selectedPrimaryPlayerName = getPlayerNickname(
     replayState?.players ?? [],
@@ -939,7 +965,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
                   : selectedRelatedPlayerId === player.id
                     ? "border-red-300 bg-red-50"
                     : "border-stone-200 bg-white"
-              } ${isPlaying && quickScoreMode !== "DRAW_GAME" ? "cursor-pointer" : ""}`}
+              } ${isPlaying && !isCurrentRoundFinished && quickScoreMode !== "DRAW_GAME" ? "cursor-pointer" : ""}`}
               key={player.id}
               onClick={() => {
                 handleSelectQuickScorePlayer(player.id);
@@ -950,8 +976,16 @@ export function RoomPage({ roomId }: RoomPageProps) {
                   handleSelectQuickScorePlayer(player.id);
                 }
               }}
-              role={isPlaying && quickScoreMode !== "DRAW_GAME" ? "button" : undefined}
-              tabIndex={isPlaying && quickScoreMode !== "DRAW_GAME" ? 0 : undefined}
+              role={
+                isPlaying && !isCurrentRoundFinished && quickScoreMode !== "DRAW_GAME"
+                  ? "button"
+                  : undefined
+              }
+              tabIndex={
+                isPlaying && !isCurrentRoundFinished && quickScoreMode !== "DRAW_GAME"
+                  ? 0
+                  : undefined
+              }
             >
               {editingPlayerId === player.id ? (
                 <div className="grid gap-3">
@@ -1165,6 +1199,11 @@ export function RoomPage({ roomId }: RoomPageProps) {
             ) : null}
             {room.status === "PLAYING" ? (
               <div className="grid gap-3">
+                {isCurrentRoundFinished ? (
+                  <p className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium leading-6 text-amber-800">
+                    本局已有 3 家胡牌，当前局已结束。
+                  </p>
+                ) : null}
                 <div className="grid grid-cols-3 gap-2">
                   {quickScoreModes.map((option) => (
                     <button

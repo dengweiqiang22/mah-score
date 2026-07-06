@@ -170,10 +170,6 @@ function recordRoundWinner(state: MutableReplayState, winnerId: string): Mutable
     },
   };
 
-  if (winnerIds.size >= 3) {
-    return startNextRound(nextState);
-  }
-
   return nextState;
 }
 
@@ -273,7 +269,11 @@ function applyDiscardWinScore(state: MutableReplayState, event: RoomEvent): Muta
     return state;
   }
 
-  if (!playerExists(state, winnerId) || !playerExists(state, discarderId) || hasWonCurrentRound(state, winnerId)) {
+  if (
+    !playerExists(state, winnerId) ||
+    !playerExists(state, discarderId) ||
+    hasWonCurrentRound(state, winnerId)
+  ) {
     return state;
   }
 
@@ -288,7 +288,11 @@ function applyDiscardWinScore(state: MutableReplayState, event: RoomEvent): Muta
 function applySelfDrawScore(state: MutableReplayState, event: RoomEvent): MutableReplayState {
   const winnerId = getStringPayloadValue(event, "winnerId");
 
-  if (winnerId === undefined || !playerExists(state, winnerId) || hasWonCurrentRound(state, winnerId)) {
+  if (
+    winnerId === undefined ||
+    !playerExists(state, winnerId) ||
+    hasWonCurrentRound(state, winnerId)
+  ) {
     return state;
   }
 
@@ -299,13 +303,21 @@ function applySelfDrawScore(state: MutableReplayState, event: RoomEvent): Mutabl
     ...state,
     scores: activePlayers.reduce(
       (scores, player) =>
-        addScore(scores, player.id, player.id === winnerId ? score * (activePlayers.length - 1) : -score),
+        addScore(
+          scores,
+          player.id,
+          player.id === winnerId ? score * (activePlayers.length - 1) : -score,
+        ),
       state.scores,
     ),
   };
 }
 
-function applyDiscardKongScore(state: MutableReplayState, event: RoomEvent, playerId: string): MutableReplayState {
+function applyDiscardKongScore(
+  state: MutableReplayState,
+  event: RoomEvent,
+  playerId: string,
+): MutableReplayState {
   const fromPlayerId = getStringPayloadValue(event, "fromPlayerId");
 
   if (
@@ -348,7 +360,11 @@ function applyKongScore(state: MutableReplayState, event: RoomEvent): MutableRep
   const playerId = getStringPayloadValue(event, "playerId");
   const kongType = getStringPayloadValue(event, "kongType");
 
-  if (playerId === undefined || !playerExists(state, playerId) || hasWonCurrentRound(state, playerId)) {
+  if (
+    playerId === undefined ||
+    !playerExists(state, playerId) ||
+    hasWonCurrentRound(state, playerId)
+  ) {
     return state;
   }
 
@@ -446,7 +462,9 @@ function applyEvent(state: MutableReplayState, event: RoomEvent): MutableReplayS
 export function replayRoomEvents(events: readonly RoomEvent[]): RoomState {
   const firstEvent = events[0];
   const initialRoomId = firstEvent?.roomId ?? "";
-  const effectiveEvents = getEffectiveEvents([...events].sort((left, right) => left.version - right.version));
+  const effectiveEvents = getEffectiveEvents(
+    [...events].sort((left, right) => left.version - right.version),
+  );
   const finalState = effectiveEvents.reduce<MutableReplayState>(
     (state, event) => applyEvent(state, event),
     createInitialState(initialRoomId),

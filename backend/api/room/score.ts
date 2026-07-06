@@ -302,6 +302,12 @@ export async function POST(request: Request): Promise<Response> {
       ...(await readRoomEvents(room.roomId)),
     ]);
 
+    if (roomState.currentRound.winnerIds.length >= 3) {
+      return jsonFailure("本局已经结束，请进入下一局后再计分。", "ROUND_ALREADY_FINISHED", {
+        status: 409,
+      });
+    }
+
     if (winnerId !== undefined && roomState.currentRound.winnerIds.includes(winnerId)) {
       return jsonFailure("该玩家本局已经胡牌。", "ROUND_WINNER_ALREADY_EXISTS", {
         status: 409,

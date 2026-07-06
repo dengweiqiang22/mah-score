@@ -116,8 +116,8 @@ assert.equal(state.roomId, "123");
 assert.equal(state.version, 11);
 assert.equal(state.status, "FINISHED");
 assert.deepEqual(state.currentRound, {
-  number: 2,
-  winnerIds: [],
+  number: 1,
+  winnerIds: ["player_1", "player_2", "player_3"],
 });
 assert.deepEqual(state.players, [
   {
