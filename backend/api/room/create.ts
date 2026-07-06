@@ -1,10 +1,27 @@
-import type { CreateRoomResponse } from "@mah-score/shared";
+import type { CreateRoomRequest, CreateRoomResponse } from "@mah-score/shared";
 
 import { jsonFailure, jsonSuccess } from "../../services/apiResponse";
+import { readJsonBody } from "../../services/requestBody";
 import { getRedisConfigurationError } from "../../services/redis";
 import { createRoom } from "../../services/roomService";
+import { isValidNickname } from "../../services/roomValidation";
 
-export async function POST(): Promise<Response> {
+function parseCreateRoomRequest(value: unknown): CreateRoomRequest | undefined {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    !("nickname" in value) ||
+    typeof value.nickname !== "string"
+  ) {
+    return undefined;
+  }
+
+  return {
+    nickname: value.nickname.trim(),
+  };
+}
+
+export async function POST(request: Request): Promise<Response> {
   const redisConfigurationError = getRedisConfigurationError();
 
   if (redisConfigurationError !== undefined) {
@@ -13,8 +30,23 @@ export async function POST(): Promise<Response> {
     });
   }
 
+  const requestBody = await readJsonBody(request);
+  const parsedRequest = parseCreateRoomRequest(requestBody);
+
+  if (parsedRequest === undefined) {
+    return jsonFailure("请求格式不正确。", "INVALID_REQUEST", {
+      status: 400,
+    });
+  }
+
+  if (!isValidNickname(parsedRequest.nickname)) {
+    return jsonFailure("昵称长度必须为 1 到 12 个字符。", "INVALID_NICKNAME", {
+      status: 400,
+    });
+  }
+
   try {
-    const room = await createRoom();
+    const room = await createRoom(parsedRequest.nickname);
     const data: CreateRoomResponse = {
       roomId: room.roomId,
     };
@@ -32,8 +64,8 @@ export async function POST(): Promise<Response> {
 }
 
 const createRoomFunction = {
-  async fetch(): Promise<Response> {
-    return POST();
+  async fetch(request: Request): Promise<Response> {
+    return POST(request);
   },
 };
 

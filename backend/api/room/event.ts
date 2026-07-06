@@ -9,6 +9,7 @@ import {
 } from "../../services/eventValidation";
 import { readJsonBody } from "../../services/requestBody";
 import { getRedisConfigurationError } from "../../services/redis";
+import { getRoom } from "../../services/roomService";
 import { isValidRoomId } from "../../services/roomValidation";
 
 function parseAppendRoomEventRequest(value: unknown): AppendRoomEventRequest | undefined {
@@ -79,6 +80,22 @@ export async function POST(request: Request): Promise<Response> {
     return jsonFailure("操作者不能为空。", "INVALID_OPERATOR", {
       status: 400,
     });
+  }
+
+  if (parsedRequest.type === "GAME_FINISHED") {
+    const room = await getRoom(parsedRequest.roomId);
+
+    if (room === undefined) {
+      return jsonFailure("房间不存在。", "ROOM_NOT_FOUND", {
+        status: 404,
+      });
+    }
+
+    if (room.status !== "PLAYING") {
+      return jsonFailure("当前房间不能结束游戏。", "ROOM_NOT_PLAYING", {
+        status: 409,
+      });
+    }
   }
 
   try {

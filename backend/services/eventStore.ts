@@ -78,6 +78,7 @@ export async function appendRoomEvent(input: AppendRoomEventInput): Promise<Room
 
   await redis.rpush(getRoomEventsKey(input.roomId), JSON.stringify(event));
   await redis.hset(getRoomKey(input.roomId), {
+    ...(input.type === "GAME_FINISHED" ? { status: "FINISHED" } : {}),
     updatedAt: timestamp,
   });
 

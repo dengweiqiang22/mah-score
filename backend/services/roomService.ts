@@ -84,13 +84,17 @@ async function createUnusedRoomId(): Promise<string> {
   throw new Error("Unable to allocate an unused room id.");
 }
 
-export async function createRoom(): Promise<RoomRecord> {
+export async function createRoom(nickname: string): Promise<RoomRecord> {
   const roomId = await createUnusedRoomId();
   const now = new Date().toISOString();
+  const player = {
+    id: createPlayerId(),
+    nickname,
+  };
   const room: RoomRecord = {
     roomId,
     version: 0,
-    players: [],
+    players: [player],
     status: "WAITING",
     createdAt: now,
     updatedAt: now,
@@ -146,8 +150,10 @@ export async function joinRoom(
   };
   const updatedPlayers = [...room.players, player];
   const now = new Date().toISOString();
+  const version = room.version + 1;
 
   await redis.hset(getRoomKey(roomId), {
+    version,
     players: JSON.stringify(updatedPlayers),
     updatedAt: now,
   });
@@ -191,8 +197,10 @@ export async function renamePlayer(
   );
   const renamedPlayer = updatedPlayers.find((player) => player.id === playerId);
   const now = new Date().toISOString();
+  const version = room.version + 1;
 
   await redis.hset(getRoomKey(roomId), {
+    version,
     players: JSON.stringify(updatedPlayers),
     updatedAt: now,
   });
@@ -222,8 +230,10 @@ export async function removePlayer(roomId: string, playerId: string): Promise<vo
   }
 
   const now = new Date().toISOString();
+  const version = room.version + 1;
 
   await redis.hset(getRoomKey(roomId), {
+    version,
     players: JSON.stringify(updatedPlayers),
     updatedAt: now,
   });
@@ -247,11 +257,13 @@ export async function startRoom(roomId: string): Promise<RoomRecord> {
   const now = new Date().toISOString();
   const startedRoom: RoomRecord = {
     ...room,
+    version: room.version + 1,
     status: "PLAYING",
     updatedAt: now,
   };
 
   await redis.hset(getRoomKey(roomId), {
+    version: startedRoom.version,
     status: startedRoom.status,
     updatedAt: startedRoom.updatedAt,
   });

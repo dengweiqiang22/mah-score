@@ -1,6 +1,6 @@
 import type { RoomEvent } from "../types/event.js";
 import type { RoomPlayer } from "../types/room.js";
-import type { RoomState, RoundState, ScoreState } from "../types/roomState.js";
+import type { CurrentRoundState, RoomState, RoundState, ScoreState } from "../types/roomState.js";
 
 interface MutableReplayState {
   roomId: string;
@@ -8,6 +8,7 @@ interface MutableReplayState {
   status: RoomState["status"];
   players: RoomPlayer[];
   scores: ScoreState[];
+  currentRound: CurrentRoundState;
   rounds: RoundState[];
   events: RoomEvent[];
 }
@@ -53,6 +54,10 @@ function createInitialState(roomId: string): MutableReplayState {
     status: "WAITING",
     players: [],
     scores: [],
+    currentRound: {
+      number: 0,
+      winnerIds: [],
+    },
     rounds: [],
     events: [],
   };
@@ -74,6 +79,59 @@ function upsertScore(scores: ScoreState[], playerId: string): ScoreState[] {
 
 function removeScore(scores: ScoreState[], playerId: string): ScoreState[] {
   return scores.filter((score) => score.playerId !== playerId);
+}
+
+function getCurrentRoundWinnerIds(currentRound: CurrentRoundState): Set<string> {
+  return new Set(currentRound.winnerIds);
+}
+
+function startNextRound(state: MutableReplayState): MutableReplayState {
+  return {
+    ...state,
+    currentRound: {
+      number: state.currentRound.number + 1,
+      winnerIds: [],
+    },
+  };
+}
+
+function ensureActiveRound(state: MutableReplayState): MutableReplayState {
+  if (state.currentRound.number > 0) {
+    return state;
+  }
+
+  return {
+    ...state,
+    currentRound: {
+      number: 1,
+      winnerIds: [],
+    },
+  };
+}
+
+function recordRoundWinner(state: MutableReplayState, winnerId: string): MutableReplayState {
+  const activeState = ensureActiveRound(state);
+  const winnerIds = getCurrentRoundWinnerIds(activeState.currentRound);
+
+  if (winnerIds.has(winnerId)) {
+    return activeState;
+  }
+
+  winnerIds.add(winnerId);
+
+  const nextState: MutableReplayState = {
+    ...activeState,
+    currentRound: {
+      ...activeState.currentRound,
+      winnerIds: [...winnerIds],
+    },
+  };
+
+  if (winnerIds.size >= 3) {
+    return startNextRound(nextState);
+  }
+
+  return nextState;
 }
 
 function addScore(scores: ScoreState[], playerId: string, delta: number): ScoreState[] {
@@ -203,11 +261,17 @@ function applySelfDrawScore(state: MutableReplayState, event: RoomEvent): Mutabl
 
 function applyScoreEvent(state: MutableReplayState, event: RoomEvent): MutableReplayState {
   if (event.type === "DISCARD_WIN") {
-    return applyDiscardWinScore(state, event);
+    const scoredState = applyDiscardWinScore(state, event);
+    const winnerId = getStringPayloadValue(event, "winnerId");
+
+    return winnerId === undefined ? scoredState : recordRoundWinner(scoredState, winnerId);
   }
 
   if (event.type === "SELF_DRAW") {
-    return applySelfDrawScore(state, event);
+    const scoredState = applySelfDrawScore(state, event);
+    const winnerId = getStringPayloadValue(event, "winnerId");
+
+    return winnerId === undefined ? scoredState : recordRoundWinner(scoredState, winnerId);
   }
 
   return state;
@@ -237,6 +301,17 @@ function applyEvent(state: MutableReplayState, event: RoomEvent): MutableReplayS
     return {
       ...nextState,
       status: "PLAYING",
+      currentRound: {
+        number: 1,
+        winnerIds: [],
+      },
+    };
+  }
+
+  if (event.type === "GAME_FINISHED") {
+    return {
+      ...nextState,
+      status: "FINISHED",
     };
   }
 
@@ -265,6 +340,7 @@ export function replayRoomEvents(events: readonly RoomEvent[]): RoomState {
       playerId: player.id,
       total: getScoreTotal(finalState.scores, player.id),
     })),
+    currentRound: finalState.currentRound,
     rounds: finalState.rounds,
     events: finalState.events,
   };

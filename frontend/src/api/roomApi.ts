@@ -1,6 +1,8 @@
 import type {
   ApiResponse,
+  AppendRoomEventRequest,
   CreateRoomResponse,
+  CreateRoomRequest,
   GetRoomEventsResponse,
   GetRoomResponse,
   JoinRoomRequest,
@@ -15,8 +17,12 @@ import type {
 
 type EmptyResponse = Record<string, never>;
 
-export async function createRoom(): Promise<ApiResponse<CreateRoomResponse>> {
+export async function createRoom(request: CreateRoomRequest): Promise<ApiResponse<CreateRoomResponse>> {
   const response = await fetch("/api/room/create", {
+    body: JSON.stringify(request),
+    headers: {
+      "Content-Type": "application/json",
+    },
     method: "POST",
   });
 
@@ -96,6 +102,21 @@ export async function recordScoreEvent(
   request: ScoreEventRequest,
 ): Promise<ApiResponse<EmptyResponse>> {
   const response = await fetch("/api/room/score", {
+    body: JSON.stringify(request),
+    headers: {
+      "Content-Type": "application/json",
+    },
+    method: "POST",
+  });
+  const data = (await response.json()) as ApiResponse<EmptyResponse>;
+
+  return data;
+}
+
+export async function recordRoomEvent(
+  request: AppendRoomEventRequest,
+): Promise<ApiResponse<EmptyResponse>> {
+  const response = await fetch("/api/room/event", {
     body: JSON.stringify(request),
     headers: {
       "Content-Type": "application/json",

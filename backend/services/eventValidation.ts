@@ -6,6 +6,7 @@ const roomEventTypes = [
   "PLAYER_RENAMED",
   "PLAYER_REMOVED",
   "GAME_STARTED",
+  "GAME_FINISHED",
   "DISCARD_WIN",
   "SELF_DRAW",
   "DRAW_GAME",

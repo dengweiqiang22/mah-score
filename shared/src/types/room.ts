@@ -14,6 +14,10 @@ export interface RoomRecord {
   readonly updatedAt: string;
 }
 
+export interface CreateRoomRequest {
+  readonly nickname: string;
+}
+
 export interface CreateRoomResponse {
   readonly roomId: string;
 }

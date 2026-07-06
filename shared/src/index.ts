@@ -10,7 +10,7 @@ export type {
   SyncRoomEventsResponse,
   UndoRoomEventRequest,
 } from "./types/event.js";
-export type { RoomState, RoundState, ScoreState } from "./types/roomState.js";
+export type { CurrentRoundState, RoomState, RoundState, ScoreState } from "./types/roomState.js";
 export type {
   DiscardWinScoreRequest,
   DrawGameScoreRequest,
@@ -20,6 +20,7 @@ export type {
 } from "./types/score.js";
 export type {
   CreateRoomResponse,
+  CreateRoomRequest,
   GetRoomResponse,
   JoinRoomRequest,
   JoinRoomResponse,

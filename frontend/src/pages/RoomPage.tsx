@@ -7,6 +7,7 @@ import {
   getRoom,
   getRoomEvents,
   recordScoreEvent,
+  recordRoomEvent,
   removePlayer,
   renamePlayer,
   startRoom,
@@ -67,11 +68,13 @@ export function RoomPage({ roomId }: RoomPageProps) {
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
   const [isLoading, setIsLoading] = useState(true);
   const [isScoring, setIsScoring] = useState(false);
+  const [isFinishing, setIsFinishing] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
   const [isUndoing, setIsUndoing] = useState(false);
   const [nicknameInput, setNicknameInput] = useState("");
   const [events, setEvents] = useState<readonly RoomEvent[]>([]);
   const [room, setRoom] = useState<RoomRecord | undefined>();
+  const [roomVersion, setRoomVersion] = useState(0);
   const [selectedDiscarderId, setSelectedDiscarderId] = useState<string | undefined>();
   const [selectedWinnerId, setSelectedWinnerId] = useState<string | undefined>();
   const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "error">("idle");
@@ -94,6 +97,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
       }
 
       setRoom(roomResponse.data.room);
+      setRoomVersion(roomResponse.data.room.version);
       setEvents(eventsResponse.data.events);
     } catch {
       setErrorMessage("读取房间失败，请稍后再试。");
@@ -109,10 +113,11 @@ export function RoomPage({ roomId }: RoomPageProps) {
   useEffect(() => {
     const intervalId = window.setInterval(() => {
       setEvents((currentEvents) => {
-        const currentVersion = currentEvents.reduce(
+        const currentEventVersion = currentEvents.reduce(
           (version, event) => Math.max(version, event.version),
           0,
         );
+        const currentVersion = Math.max(roomVersion, currentEventVersion);
 
         void syncRoomEvents(roomId, currentVersion)
           .then((response) => {
@@ -121,17 +126,16 @@ export function RoomPage({ roomId }: RoomPageProps) {
               return;
             }
 
-            if (response.data.events.length === 0) {
+            if (response.data.version !== currentVersion) {
+              void loadRoom();
               setSyncStatus("idle");
               return;
             }
 
-            setEvents((latestEvents) => {
-              const existingEventIds = new Set(latestEvents.map((event) => event.id));
-              const newEvents = response.data.events.filter((event) => !existingEventIds.has(event.id));
-
-              return [...latestEvents, ...newEvents].sort((left, right) => left.version - right.version);
-            });
+            if (response.data.events.length === 0) {
+              setSyncStatus("idle");
+              return;
+            }
             setSyncStatus("idle");
           })
           .catch(() => {
@@ -146,7 +150,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
     return () => {
       window.clearInterval(intervalId);
     };
-  }, [roomId]);
+  }, [roomId, roomVersion]);
 
   async function handleRenamePlayer(playerId: string) {
     setErrorMessage(undefined);
@@ -363,18 +367,46 @@ export function RoomPage({ roomId }: RoomPageProps) {
     }
   }
 
+  async function handleFinishRoom() {
+    setIsFinishing(true);
+    setErrorMessage(undefined);
+
+    try {
+      const response = await recordRoomEvent({
+        roomId,
+        type: "GAME_FINISHED",
+        operator: "room",
+        payload: {},
+      });
+
+      if (!response.success) {
+        setErrorMessage(response.message);
+        return;
+      }
+
+      setSelectedDiscarderId(undefined);
+      setSelectedWinnerId(undefined);
+      await loadRoom();
+    } catch {
+      setErrorMessage("结束游戏失败，请稍后再试。");
+    } finally {
+      setIsFinishing(false);
+    }
+  }
+
   const isWaiting = room?.status === "WAITING";
   const isPlaying = room?.status === "PLAYING";
+  const isFinished = room?.status === "FINISHED";
   const canStart = isWaiting && room.players.length >= 2 && room.players.length <= 4;
   const replayState: RoomState | undefined =
     room === undefined
       ? undefined
       : replayRoomEvents([
-          ...room.players.map((player, index) => ({
+          ...room.players.map((player) => ({
             id: `room_${room.roomId}_player_${player.id}`,
             roomId,
             type: "PLAYER_JOINED" as const,
-            version: index - room.players.length,
+            version: 0,
             operator: "room",
             timestamp: room.createdAt,
             payload: {
@@ -384,6 +416,8 @@ export function RoomPage({ roomId }: RoomPageProps) {
           })),
           ...events,
         ]);
+  const currentRoundNumber = replayState?.currentRound.number ?? 0;
+  const currentRoundWinnerCount = replayState?.currentRound.winnerIds.length ?? 0;
 
   function getPlayerScore(playerId: string): number {
     return replayState?.scores.find((score) => score.playerId === playerId)?.total ?? 0;
@@ -404,10 +438,20 @@ export function RoomPage({ roomId }: RoomPageProps) {
           <p className="text-sm font-semibold text-emerald-700">房间</p>
           <h1 className="mt-3 text-4xl font-semibold tracking-normal">{roomId}</h1>
           <p className="mt-3 text-sm font-medium text-stone-500">
-            {room === undefined ? "读取中" : room.status === "WAITING" ? "等待开始" : "游戏中"}
+            {room === undefined
+              ? "读取中"
+              : room.status === "WAITING"
+                ? "等待开始"
+                : room.status === "PLAYING"
+                  ? "游戏中"
+                  : "已结束"}
           </p>
           <p className="mt-2 text-xs font-medium text-stone-400">
-            {syncStatus === "syncing" ? "同步中" : syncStatus === "error" ? "同步失败" : "已同步"}
+            {syncStatus === "syncing"
+              ? "同步中"
+              : syncStatus === "error"
+                ? "同步失败"
+                : `已同步 · v${room?.version ?? roomVersion}`}
           </p>
         </div>
 
@@ -424,12 +468,12 @@ export function RoomPage({ roomId }: RoomPageProps) {
               <p className="mt-2 text-xl font-semibold">{room.players.length}/4</p>
             </div>
             <div className="rounded-md border border-stone-200 bg-white p-3">
-              <p className="text-xs font-medium text-stone-500">局数</p>
-              <p className="mt-2 text-xl font-semibold">{replayState?.rounds.length ?? 0}</p>
+              <p className="text-xs font-medium text-stone-500">当前局</p>
+              <p className="mt-2 text-xl font-semibold">第 {currentRoundNumber} 局</p>
             </div>
             <div className="rounded-md border border-stone-200 bg-white p-3">
-              <p className="text-xs font-medium text-stone-500">版本</p>
-              <p className="mt-2 text-xl font-semibold">{replayState?.version ?? room.version}</p>
+              <p className="text-xs font-medium text-stone-500">本局胡牌</p>
+              <p className="mt-2 text-xl font-semibold">{currentRoundWinnerCount}/3</p>
             </div>
           </section>
         ) : null}
@@ -441,7 +485,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
               <p className="mt-1 text-sm text-stone-500">
                 {room === undefined
                   ? "读取中"
-                  : `${room.players.length}/4 人 · ${replayState?.rounds.length ?? 0} 局`}
+                  : `${room.players.length}/4 人 · 第 ${currentRoundNumber} 局`}
               </p>
             </div>
             <button
@@ -528,7 +572,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
                           ? "点炮"
                           : isWaiting
                             ? "等待开始"
-                            : `${replayState?.rounds.length ?? 0} 局后分数`}
+                            : "累计分数"}
                     </p>
                   </div>
                   <p className="shrink-0 text-2xl font-semibold tabular-nums">
@@ -672,8 +716,19 @@ export function RoomPage({ roomId }: RoomPageProps) {
                     {isUndoing ? "撤销中..." : "撤销上一局"}
                   </button>
                 </div>
+                <button
+                  className="h-12 rounded-md border border-stone-300 bg-white px-4 text-base font-semibold text-stone-900 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={isScoring || isFinishing}
+                  onClick={() => {
+                    void handleFinishRoom();
+                  }}
+                  type="button"
+                >
+                  {isFinishing ? "结束中..." : "结束游戏"}
+                </button>
               </div>
             ) : null}
+            {isFinished ? <p className="text-sm leading-6 text-stone-500">本房间已经结束</p> : null}
           </div>
         ) : null}
       </section>

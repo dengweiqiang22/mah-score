@@ -7,6 +7,7 @@ export function HomePage() {
   const [isCreatingRoom, setIsCreatingRoom] = useState(false);
   const [isJoiningRoom, setIsJoiningRoom] = useState(false);
   const [isJoinFormOpen, setIsJoinFormOpen] = useState(false);
+  const [createNickname, setCreateNickname] = useState("");
   const [joinNickname, setJoinNickname] = useState("");
   const [joinRoomId, setJoinRoomId] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
@@ -16,7 +17,9 @@ export function HomePage() {
     setErrorMessage(undefined);
 
     try {
-      const response = await createRoom();
+      const response = await createRoom({
+        nickname: createNickname.trim(),
+      });
 
       if (!response.success) {
         setErrorMessage(response.message);
@@ -72,9 +75,24 @@ export function HomePage() {
               {errorMessage}
             </p>
           ) : null}
-          <HomeActionButton disabled={isCreatingRoom} onClick={handleCreateRoom} variant="primary">
-            {isCreatingRoom ? "创建中..." : "创建房间"}
-          </HomeActionButton>
+          <div className="grid gap-3 rounded-md border border-stone-200 bg-white p-4">
+            <input
+              className="h-12 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-emerald-700"
+              maxLength={12}
+              onChange={(event) => {
+                setCreateNickname(event.target.value);
+              }}
+              placeholder="房主昵称"
+              value={createNickname}
+            />
+            <HomeActionButton
+              disabled={isCreatingRoom || createNickname.trim().length === 0}
+              onClick={handleCreateRoom}
+              variant="primary"
+            >
+              {isCreatingRoom ? "创建中..." : "创建房间"}
+            </HomeActionButton>
+          </div>
           {isJoinFormOpen ? (
             <div className="grid gap-3 rounded-md border border-stone-200 bg-white p-4">
               <input

@@ -6,6 +6,11 @@ export interface ScoreState {
   readonly total: number;
 }
 
+export interface CurrentRoundState {
+  readonly number: number;
+  readonly winnerIds: readonly string[];
+}
+
 export interface RoundState {
   readonly eventId: string;
   readonly type: RoomEvent["type"];
@@ -19,6 +24,7 @@ export interface RoomState {
   readonly status: RoomStatus;
   readonly players: readonly RoomPlayer[];
   readonly scores: readonly ScoreState[];
+  readonly currentRound: CurrentRoundState;
   readonly rounds: readonly RoundState[];
   readonly events: readonly RoomEvent[];
 }
