@@ -348,15 +348,17 @@ export function RoomPage({ roomId }: RoomPageProps) {
   const [shareMessage, setShareMessage] = useState<string | undefined>();
   const [settlementCopyMessage, setSettlementCopyMessage] = useState<string | undefined>();
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string | undefined>();
-  const [quickScoreMode, setQuickScoreMode] = useState<QuickScoreMode>("DISCARD_WIN");
+  const [quickScoreMode, setQuickScoreMode] = useState<QuickScoreMode | undefined>();
   const [selectedPrimaryPlayerId, setSelectedPrimaryPlayerId] = useState<string | undefined>();
   const [selectedRelatedPlayerId, setSelectedRelatedPlayerId] = useState<string | undefined>();
-  const [selectedFan, setSelectedFan] = useState<ScoreFan>(1);
+  const [selectedFan, setSelectedFan] = useState<ScoreFan | undefined>();
   const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "error">("idle");
 
   function resetQuickScoreSelection() {
     setSelectedPrimaryPlayerId(undefined);
     setSelectedRelatedPlayerId(undefined);
+    setSelectedFan(undefined);
+    setQuickScoreMode(undefined);
   }
 
   const inviteUrl = new URL(`/?roomId=${roomId}`, window.location.origin).toString();
@@ -606,133 +608,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
     }
   }
 
-  function handleSelectQuickScorePlayer(playerId: string) {
-    if (room?.status !== "PLAYING" || isScoring || isCurrentRoundFinished) {
-      return;
-    }
-
-    setErrorMessage(undefined);
-
-    if (quickScoreMode === "DRAW_GAME") {
-      return;
-    }
-
-    if (selectedPrimaryPlayerId === undefined) {
-      setSelectedPrimaryPlayerId(playerId);
-      return;
-    }
-
-    if (selectedPrimaryPlayerId === playerId) {
-      resetQuickScoreSelection();
-      return;
-    }
-
-    if (!needsRelatedPlayer(quickScoreMode)) {
-      setSelectedPrimaryPlayerId(playerId);
-      setSelectedRelatedPlayerId(undefined);
-      return;
-    }
-
-    if (selectedRelatedPlayerId === playerId) {
-      setSelectedRelatedPlayerId(undefined);
-      return;
-    }
-
-    setSelectedRelatedPlayerId(playerId);
-  }
-
-  function getQuickScoreRequest(): ScoreEventRequest | undefined {
-    if (quickScoreMode === "DRAW_GAME") {
-      return {
-        roomId,
-        action: "DRAW_GAME",
-        operator: "room",
-      };
-    }
-
-    if (selectedPrimaryPlayerId === undefined) {
-      return undefined;
-    }
-
-    if (quickScoreMode === "SELF_DRAW") {
-      return {
-        roomId,
-        action: "SELF_DRAW",
-        operator: "room",
-        winnerId: selectedPrimaryPlayerId,
-        fan: selectedFan,
-      };
-    }
-
-    if (quickScoreMode === "DISCARD_WIN") {
-      if (selectedRelatedPlayerId === undefined) {
-        return undefined;
-      }
-
-      return {
-        roomId,
-        action: "DISCARD_WIN",
-        operator: "room",
-        winnerId: selectedPrimaryPlayerId,
-        discarderId: selectedRelatedPlayerId,
-        fan: selectedFan,
-      };
-    }
-
-    const kongType = getKongType(quickScoreMode);
-
-    if (kongType === undefined) {
-      return undefined;
-    }
-
-    if (kongType === "DISCARD_KONG") {
-      if (selectedRelatedPlayerId === undefined) {
-        return undefined;
-      }
-
-      return {
-        roomId,
-        action: "KONG",
-        operator: "room",
-        playerId: selectedPrimaryPlayerId,
-        kongType,
-        fromPlayerId: selectedRelatedPlayerId,
-      };
-    }
-
-    return {
-      roomId,
-      action: "KONG",
-      operator: "room",
-      playerId: selectedPrimaryPlayerId,
-      kongType,
-    };
-  }
-
-  function getQuickScoreMissingMessage(): string {
-    if (quickScoreMode === "DRAW_GAME") {
-      return "";
-    }
-
-    if (selectedPrimaryPlayerId === undefined) {
-      return `请选择${getModePrimaryPlayerLabel(quickScoreMode)}。`;
-    }
-
-    if (needsRelatedPlayer(quickScoreMode) && selectedRelatedPlayerId === undefined) {
-      return `请选择${getModeRelatedPlayerLabel(quickScoreMode)}。`;
-    }
-
-    return "";
-  }
-
-  async function handleRecordQuickScore() {
-    const scoreRequest = getQuickScoreRequest();
-
-    if (scoreRequest === undefined) {
-      setErrorMessage(getQuickScoreMissingMessage());
-      return;
-    }
-
+  async function submitScoreRequest(scoreRequest: ScoreEventRequest) {
     setIsScoring(true);
     setErrorMessage(undefined);
 
@@ -751,6 +627,191 @@ export function RoomPage({ roomId }: RoomPageProps) {
     } finally {
       setIsScoring(false);
     }
+  }
+
+  function handleSelectPrimaryPlayer(playerId: string) {
+    if (room?.status !== "PLAYING" || isScoring || isCurrentRoundFinished) {
+      return;
+    }
+
+    setErrorMessage(undefined);
+    setSelectedPrimaryPlayerId(playerId);
+    setSelectedRelatedPlayerId(undefined);
+    setSelectedFan(undefined);
+  }
+
+  function getQuickScoreRequest(input?: {
+    readonly mode?: QuickScoreMode;
+    readonly fan?: ScoreFan;
+    readonly relatedPlayerId?: string;
+  }): ScoreEventRequest | undefined {
+    const mode = input?.mode ?? quickScoreMode;
+    const fan = input?.fan ?? selectedFan;
+    const relatedPlayerId = input?.relatedPlayerId ?? selectedRelatedPlayerId;
+
+    if (mode === undefined) {
+      return undefined;
+    }
+
+    if (mode === "DRAW_GAME") {
+      return {
+        roomId,
+        action: "DRAW_GAME",
+        operator: "room",
+      };
+    }
+
+    if (selectedPrimaryPlayerId === undefined) {
+      return undefined;
+    }
+
+    if (mode === "SELF_DRAW") {
+      if (fan === undefined) {
+        return undefined;
+      }
+
+      return {
+        roomId,
+        action: "SELF_DRAW",
+        operator: "room",
+        winnerId: selectedPrimaryPlayerId,
+        fan,
+      };
+    }
+
+    if (mode === "DISCARD_WIN") {
+      if (relatedPlayerId === undefined || fan === undefined) {
+        return undefined;
+      }
+
+      return {
+        roomId,
+        action: "DISCARD_WIN",
+        operator: "room",
+        winnerId: selectedPrimaryPlayerId,
+        discarderId: relatedPlayerId,
+        fan,
+      };
+    }
+
+    const kongType = getKongType(mode);
+
+    if (kongType === undefined) {
+      return undefined;
+    }
+
+    if (kongType === "DISCARD_KONG") {
+      if (relatedPlayerId === undefined) {
+        return undefined;
+      }
+
+      return {
+        roomId,
+        action: "KONG",
+        operator: "room",
+        playerId: selectedPrimaryPlayerId,
+        kongType,
+        fromPlayerId: relatedPlayerId,
+      };
+    }
+
+    return {
+      roomId,
+      action: "KONG",
+      operator: "room",
+      playerId: selectedPrimaryPlayerId,
+      kongType,
+    };
+  }
+
+  async function handleSelectQuickScoreMode(mode: QuickScoreMode) {
+    if (room?.status !== "PLAYING" || isScoring || isCurrentRoundFinished) {
+      return;
+    }
+
+    setErrorMessage(undefined);
+    setQuickScoreMode(mode);
+    setSelectedRelatedPlayerId(undefined);
+    setSelectedFan(undefined);
+
+    const scoreRequest = getQuickScoreRequest({
+      mode,
+      fan: undefined,
+      relatedPlayerId: undefined,
+    });
+
+    if (scoreRequest !== undefined) {
+      await submitScoreRequest(scoreRequest);
+      return;
+    }
+
+    if (mode !== "DRAW_GAME" && selectedPrimaryPlayerId === undefined) {
+      setErrorMessage("请先选择玩家。");
+    }
+  }
+
+  async function handleSelectRelatedPlayer(playerId: string) {
+    if (quickScoreMode === undefined || !needsRelatedPlayer(quickScoreMode)) {
+      return;
+    }
+
+    if (selectedPrimaryPlayerId === undefined) {
+      setErrorMessage("请先选择玩家。");
+      return;
+    }
+
+    if (selectedPrimaryPlayerId === playerId) {
+      setErrorMessage("相关玩家不能和主玩家相同。");
+      return;
+    }
+
+    setSelectedRelatedPlayerId(playerId);
+
+    const scoreRequest = getQuickScoreRequest({
+      relatedPlayerId: playerId,
+    });
+
+    if (scoreRequest !== undefined) {
+      await submitScoreRequest(scoreRequest);
+    }
+  }
+
+  function getQuickScoreMissingMessage(): string {
+    if (quickScoreMode === undefined) {
+      return selectedPrimaryPlayerId === undefined ? "请选择玩家。" : "请选择操作。";
+    }
+
+    if (quickScoreMode === "DRAW_GAME") {
+      return "";
+    }
+
+    if (selectedPrimaryPlayerId === undefined) {
+      return `请选择${getModePrimaryPlayerLabel(quickScoreMode)}。`;
+    }
+
+    if (needsRelatedPlayer(quickScoreMode) && selectedRelatedPlayerId === undefined) {
+      return `请选择${getModeRelatedPlayerLabel(quickScoreMode)}。`;
+    }
+
+    if (needsFan(quickScoreMode) && selectedFan === undefined) {
+      return "请选择番数。";
+    }
+
+    return "";
+  }
+
+  async function handleSelectFan(fan: ScoreFan) {
+    setSelectedFan(fan);
+
+    const scoreRequest = getQuickScoreRequest({
+      fan,
+    });
+
+    if (scoreRequest === undefined) {
+      return;
+    }
+
+    await submitScoreRequest(scoreRequest);
   }
 
   async function handleFinishRoom() {
@@ -820,16 +881,10 @@ export function RoomPage({ roomId }: RoomPageProps) {
 
   const scoreHistory = createScoreHistory(events);
   const canUndo = scoreHistory.some((item) => !item.isUndone);
-  const canRecordQuickScore =
-    isPlaying && !isCurrentRoundFinished && getQuickScoreRequest() !== undefined && !isScoring;
   const quickScoreMissingMessage = getQuickScoreMissingMessage();
   const selectedPrimaryPlayerName = getPlayerNickname(
     replayState?.players ?? [],
     selectedPrimaryPlayerId,
-  );
-  const selectedRelatedPlayerName = getPlayerNickname(
-    replayState?.players ?? [],
-    selectedRelatedPlayerId,
   );
   const visibleScoreHistory = scoreHistory.slice(0, 20);
 
@@ -881,178 +936,129 @@ export function RoomPage({ roomId }: RoomPageProps) {
         ) : null}
 
         {room !== undefined ? (
-          <section className="grid gap-3 rounded-md border border-stone-200 bg-white p-4">
-            <div className="flex items-start justify-between gap-4">
-              <div className="min-w-0">
-                <h2 className="text-lg font-semibold tracking-normal">邀请加入</h2>
-                <p className="mt-1 text-sm font-medium text-stone-500">房间号 {roomId}</p>
+          <section className="grid gap-4 rounded-md border border-stone-200 bg-white p-4">
+            <div className="flex items-center justify-between gap-3 border-b border-stone-200 pb-3">
+              <div>
+                <h2 className="text-xl font-semibold tracking-normal">
+                  {isWaiting ? "玩家" : "快速录入"}
+                </h2>
+                <p className="mt-1 text-sm text-stone-500">
+                  {isWaiting
+                    ? `${room.players.length}/4 人 · 等待开始`
+                    : selectedPrimaryPlayerId === undefined
+                      ? "先选玩家"
+                      : quickScoreMode === undefined
+                        ? `已选 ${selectedPrimaryPlayerName} · 选择操作`
+                        : quickScoreMissingMessage === ""
+                          ? "正在记录"
+                          : quickScoreMissingMessage}
+                </p>
               </div>
-              {qrCodeDataUrl !== undefined ? (
-                <img
-                  alt={`房间 ${roomId} 邀请二维码`}
-                  className="h-24 w-24 shrink-0 rounded-md border border-stone-200"
-                  src={qrCodeDataUrl}
-                />
-              ) : (
-                <div className="grid h-24 w-24 shrink-0 place-items-center rounded-md border border-stone-200 text-xs font-medium text-stone-400">
-                  生成中
-                </div>
-              )}
-            </div>
-            <p className="break-all rounded-md bg-stone-50 px-3 py-2 text-xs leading-5 text-stone-500">
-              {inviteUrl}
-            </p>
-            <div className="grid grid-cols-2 gap-3">
               <button
-                className="h-11 rounded-md bg-emerald-700 px-3 text-sm font-semibold text-white"
+                className="h-10 rounded-md border border-stone-300 bg-white px-3 text-sm font-medium text-stone-900"
                 onClick={() => {
-                  void handleShareInviteLink();
+                  void loadRoom();
                 }}
                 type="button"
               >
-                分享房间
-              </button>
-              <button
-                className="h-11 rounded-md border border-stone-300 bg-white px-3 text-sm font-semibold text-stone-900"
-                onClick={() => {
-                  void handleCopyInviteLink();
-                }}
-                type="button"
-              >
-                复制链接
+                刷新
               </button>
             </div>
-            {shareMessage !== undefined ? (
-              <p className="text-sm font-medium text-stone-500">{shareMessage}</p>
-            ) : null}
-          </section>
-        ) : null}
 
-        <section className="grid gap-4">
-          <div className="flex items-center justify-between border-b border-stone-200 pb-3">
-            <div>
-              <h2 className="text-xl font-semibold tracking-normal">玩家</h2>
-              <p className="mt-1 text-sm text-stone-500">
-                {room === undefined
-                  ? "读取中"
-                  : `${room.players.length}/4 人 · 第 ${currentRoundNumber} 局`}
+            {isLoading ? <p className="text-base text-stone-600">读取中...</p> : null}
+
+            {!isLoading && room.players.length === 0 ? (
+              <p className="rounded-md border border-stone-200 bg-stone-50 p-4 text-base text-stone-600">
+                等待玩家加入
               </p>
+            ) : null}
+
+            <div className="grid grid-cols-2 gap-2">
+              {room.players.map((player) => (
+                <button
+                  className={`min-h-16 rounded-md border px-3 py-2 text-left ${
+                    selectedPrimaryPlayerId === player.id
+                      ? "border-emerald-600 bg-emerald-50"
+                      : selectedRelatedPlayerId === player.id
+                        ? "border-red-300 bg-red-50"
+                        : "border-stone-200 bg-stone-50"
+                  } disabled:cursor-not-allowed disabled:opacity-60`}
+                  disabled={!isPlaying || isCurrentRoundFinished || isScoring}
+                  key={player.id}
+                  onClick={() => {
+                    handleSelectPrimaryPlayer(player.id);
+                  }}
+                  type="button"
+                >
+                  <span className="block truncate text-base font-semibold">{player.nickname}</span>
+                  <span className="mt-1 block text-sm font-medium text-stone-500">
+                    {selectedPrimaryPlayerId === player.id
+                      ? "当前玩家"
+                      : selectedRelatedPlayerId === player.id
+                        ? getModeRelatedPlayerLabel(quickScoreMode ?? "DISCARD_WIN")
+                        : `${getPlayerScore(player.id)} 分`}
+                  </span>
+                </button>
+              ))}
             </div>
-            <button
-              className="h-10 rounded-md border border-stone-300 bg-white px-3 text-sm font-medium text-stone-900"
-              onClick={() => {
-                void loadRoom();
-              }}
-              type="button"
-            >
-              刷新
-            </button>
-          </div>
 
-          {isLoading ? <p className="text-base text-stone-600">读取中...</p> : null}
+            {isWaiting && room.players.length < 2 ? (
+              <p className="text-sm leading-6 text-stone-500">至少 2 名玩家才能开始游戏</p>
+            ) : null}
 
-          {!isLoading && room !== undefined && room.players.length === 0 ? (
-            <p className="rounded-md border border-stone-200 bg-white p-4 text-base text-stone-600">
-              等待玩家加入
-            </p>
-          ) : null}
-
-          {room?.players.map((player) => (
-            <div
-              className={`grid gap-3 rounded-md border p-4 ${
-                selectedPrimaryPlayerId === player.id
-                  ? "border-emerald-600 bg-emerald-50"
-                  : selectedRelatedPlayerId === player.id
-                    ? "border-red-300 bg-red-50"
-                    : "border-stone-200 bg-white"
-              } ${isPlaying && !isCurrentRoundFinished && quickScoreMode !== "DRAW_GAME" ? "cursor-pointer" : ""}`}
-              key={player.id}
-              onClick={() => {
-                handleSelectQuickScorePlayer(player.id);
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  handleSelectQuickScorePlayer(player.id);
-                }
-              }}
-              role={
-                isPlaying && !isCurrentRoundFinished && quickScoreMode !== "DRAW_GAME"
-                  ? "button"
-                  : undefined
-              }
-              tabIndex={
-                isPlaying && !isCurrentRoundFinished && quickScoreMode !== "DRAW_GAME"
-                  ? 0
-                  : undefined
-              }
-            >
-              {editingPlayerId === player.id ? (
-                <div className="grid gap-3">
-                  <input
-                    className="h-12 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-emerald-700"
-                    maxLength={12}
-                    onChange={(event) => {
-                      setNicknameInput(event.target.value);
-                    }}
-                    value={nicknameInput}
-                  />
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      className="h-11 rounded-md bg-emerald-700 px-3 text-sm font-semibold text-white"
-                      onClick={() => {
-                        void handleRenamePlayer(player.id);
-                      }}
-                      type="button"
+            {isWaiting ? (
+              <div className="grid gap-3">
+                {room.players.map((player) =>
+                  editingPlayerId === player.id ? (
+                    <div
+                      className="grid gap-3 rounded-md border border-stone-200 bg-stone-50 p-3"
+                      key={player.id}
                     >
-                      保存
-                    </button>
-                    <button
-                      className="h-11 rounded-md border border-stone-300 bg-white px-3 text-sm font-semibold text-stone-900"
-                      onClick={() => {
-                        setEditingPlayerId(undefined);
-                        setNicknameInput("");
-                      }}
-                      type="button"
-                    >
-                      取消
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-lg font-semibold">{player.nickname}</p>
-                    <p className="mt-1 text-sm text-stone-500">
-                      {selectedPrimaryPlayerId === player.id
-                        ? getModePrimaryPlayerLabel(quickScoreMode)
-                        : selectedRelatedPlayerId === player.id
-                          ? getModeRelatedPlayerLabel(quickScoreMode)
-                          : isWaiting
-                            ? "等待开始"
-                            : "累计分数"}
-                    </p>
-                  </div>
-                  <p className="shrink-0 text-2xl font-semibold tabular-nums">
-                    {getPlayerScore(player.id)}
-                  </p>
-                  {isWaiting ? (
-                    <div className="flex shrink-0 gap-2">
+                      <input
+                        className="h-12 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-emerald-700"
+                        maxLength={12}
+                        onChange={(event) => {
+                          setNicknameInput(event.target.value);
+                        }}
+                        value={nicknameInput}
+                      />
+                      <div className="grid grid-cols-2 gap-3">
+                        <button
+                          className="h-11 rounded-md bg-emerald-700 px-3 text-sm font-semibold text-white"
+                          onClick={() => {
+                            void handleRenamePlayer(player.id);
+                          }}
+                          type="button"
+                        >
+                          保存
+                        </button>
+                        <button
+                          className="h-11 rounded-md border border-stone-300 bg-white px-3 text-sm font-semibold text-stone-900"
+                          onClick={() => {
+                            setEditingPlayerId(undefined);
+                            setNicknameInput("");
+                          }}
+                          type="button"
+                        >
+                          取消
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-3" key={player.id}>
                       <button
                         className="h-10 rounded-md border border-stone-300 bg-white px-3 text-sm font-medium text-stone-900"
-                        onClick={(event) => {
-                          event.stopPropagation();
+                        onClick={() => {
                           setEditingPlayerId(player.id);
                           setNicknameInput(player.nickname);
                         }}
                         type="button"
                       >
-                        改名
+                        {player.nickname} 改名
                       </button>
                       <button
                         className="h-10 rounded-md border border-red-200 bg-red-50 px-3 text-sm font-medium text-red-700"
-                        onClick={(event) => {
-                          event.stopPropagation();
+                        onClick={() => {
                           void handleRemovePlayer(player.id);
                         }}
                         type="button"
@@ -1060,12 +1066,133 @@ export function RoomPage({ roomId }: RoomPageProps) {
                         删除
                       </button>
                     </div>
-                  ) : null}
+                  ),
+                )}
+                <button
+                  className="h-14 rounded-md bg-emerald-700 px-4 text-base font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={!canStart || isStarting}
+                  onClick={() => {
+                    void handleStartRoom();
+                  }}
+                  type="button"
+                >
+                  {isStarting ? "开始中..." : "开始游戏"}
+                </button>
+              </div>
+            ) : null}
+
+            {isPlaying ? (
+              <div className="grid gap-3">
+                {isCurrentRoundFinished ? (
+                  <p className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium leading-6 text-amber-800">
+                    本局已有 3 家胡牌，当前局已结束。
+                  </p>
+                ) : null}
+
+                <div className="grid grid-cols-3 gap-2">
+                  {quickScoreModes.map((option) => (
+                    <button
+                      className={`h-11 rounded-md border px-2 text-sm font-semibold ${
+                        quickScoreMode === option.mode
+                          ? "border-emerald-700 bg-emerald-700 text-white"
+                          : "border-stone-300 bg-white text-stone-900"
+                      } disabled:cursor-not-allowed disabled:opacity-60`}
+                      disabled={isScoring || isCurrentRoundFinished}
+                      key={option.mode}
+                      onClick={() => {
+                        void handleSelectQuickScoreMode(option.mode);
+                      }}
+                      type="button"
+                    >
+                      {option.label}
+                    </button>
+                  ))}
                 </div>
-              )}
-            </div>
-          ))}
-        </section>
+
+                {quickScoreMode !== undefined &&
+                needsRelatedPlayer(quickScoreMode) &&
+                selectedPrimaryPlayerId !== undefined ? (
+                  <div className="grid gap-2">
+                    <p className="text-sm font-semibold text-stone-700">
+                      {getModeRelatedPlayerLabel(quickScoreMode)}
+                    </p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {room.players
+                        .filter((player) => player.id !== selectedPrimaryPlayerId)
+                        .map((player) => (
+                          <button
+                            className={`h-11 rounded-md border px-2 text-sm font-semibold ${
+                              selectedRelatedPlayerId === player.id
+                                ? "border-red-400 bg-red-50 text-red-800"
+                                : "border-stone-300 bg-white text-stone-900"
+                            }`}
+                            disabled={isScoring}
+                            key={player.id}
+                            onClick={() => {
+                              void handleSelectRelatedPlayer(player.id);
+                            }}
+                            type="button"
+                          >
+                            {player.nickname}
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {quickScoreMode !== undefined &&
+                needsFan(quickScoreMode) &&
+                selectedPrimaryPlayerId !== undefined ? (
+                  <div className="grid gap-2">
+                    <p className="text-sm font-semibold text-stone-700">番数</p>
+                    <div className="grid grid-cols-4 gap-2">
+                      {scoreFans.map((fan) => (
+                        <button
+                          className={`h-11 rounded-md border px-2 text-sm font-semibold ${
+                            selectedFan === fan
+                              ? "border-stone-900 bg-stone-900 text-white"
+                              : "border-stone-300 bg-white text-stone-900"
+                          }`}
+                          disabled={isScoring}
+                          key={fan}
+                          onClick={() => {
+                            void handleSelectFan(fan);
+                          }}
+                          type="button"
+                        >
+                          {fan} 番
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    className="h-12 rounded-md border border-red-200 bg-red-50 px-4 text-base font-semibold text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={!canUndo || isUndoing || isScoring}
+                    onClick={() => {
+                      void handleUndoRoomEvent();
+                    }}
+                    type="button"
+                  >
+                    {isUndoing ? "撤销中..." : "撤销上一条"}
+                  </button>
+                  <button
+                    className="h-12 rounded-md border border-stone-300 bg-white px-4 text-base font-semibold text-stone-900 disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={isScoring || isFinishing}
+                    onClick={() => {
+                      void handleFinishRoom();
+                    }}
+                    type="button"
+                  >
+                    {isFinishing ? "结束中..." : "结束游戏"}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </section>
+        ) : null}
 
         <section className="grid gap-4">
           <div className="border-b border-stone-200 pb-3">
@@ -1129,6 +1256,58 @@ export function RoomPage({ roomId }: RoomPageProps) {
           )}
         </section>
 
+        {room !== undefined ? (
+          <details className="rounded-md border border-stone-200 bg-white p-4">
+            <summary className="cursor-pointer text-base font-semibold tracking-normal text-stone-900">
+              邀请加入
+            </summary>
+            <div className="mt-4 grid gap-3">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-stone-500">房间号 {roomId}</p>
+                  <p className="mt-2 break-all rounded-md bg-stone-50 px-3 py-2 text-xs leading-5 text-stone-500">
+                    {inviteUrl}
+                  </p>
+                </div>
+                {qrCodeDataUrl !== undefined ? (
+                  <img
+                    alt={`房间 ${roomId} 邀请二维码`}
+                    className="h-24 w-24 shrink-0 rounded-md border border-stone-200"
+                    src={qrCodeDataUrl}
+                  />
+                ) : (
+                  <div className="grid h-24 w-24 shrink-0 place-items-center rounded-md border border-stone-200 text-xs font-medium text-stone-400">
+                    生成中
+                  </div>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  className="h-11 rounded-md bg-emerald-700 px-3 text-sm font-semibold text-white"
+                  onClick={() => {
+                    void handleShareInviteLink();
+                  }}
+                  type="button"
+                >
+                  分享房间
+                </button>
+                <button
+                  className="h-11 rounded-md border border-stone-300 bg-white px-3 text-sm font-semibold text-stone-900"
+                  onClick={() => {
+                    void handleCopyInviteLink();
+                  }}
+                  type="button"
+                >
+                  复制链接
+                </button>
+              </div>
+              {shareMessage !== undefined ? (
+                <p className="text-sm font-medium text-stone-500">{shareMessage}</p>
+              ) : null}
+            </div>
+          </details>
+        ) : null}
+
         {isFinished && settlement !== undefined ? (
           <section className="grid gap-4">
             <div className="flex items-center justify-between gap-3 border-b border-stone-200 pb-3">
@@ -1177,135 +1356,8 @@ export function RoomPage({ roomId }: RoomPageProps) {
           </section>
         ) : null}
 
-        {room !== undefined ? (
-          <div className="mt-auto grid gap-3 pb-3">
-            <div className="border-b border-stone-200 pb-3">
-              <h2 className="text-xl font-semibold tracking-normal">操作</h2>
-            </div>
-            {isWaiting && room.players.length < 2 ? (
-              <p className="text-sm leading-6 text-stone-500">至少 2 名玩家才能开始游戏</p>
-            ) : null}
-            {room.status === "WAITING" ? (
-              <button
-                className="h-14 rounded-md bg-emerald-700 px-4 text-base font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={!canStart || isStarting}
-                onClick={() => {
-                  void handleStartRoom();
-                }}
-                type="button"
-              >
-                {isStarting ? "开始中..." : "开始游戏"}
-              </button>
-            ) : null}
-            {room.status === "PLAYING" ? (
-              <div className="grid gap-3">
-                {isCurrentRoundFinished ? (
-                  <p className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium leading-6 text-amber-800">
-                    本局已有 3 家胡牌，当前局已结束。
-                  </p>
-                ) : null}
-                <div className="grid grid-cols-3 gap-2">
-                  {quickScoreModes.map((option) => (
-                    <button
-                      className={`h-11 rounded-md border px-2 text-sm font-semibold ${
-                        quickScoreMode === option.mode
-                          ? "border-emerald-700 bg-emerald-700 text-white"
-                          : "border-stone-300 bg-white text-stone-900"
-                      }`}
-                      key={option.mode}
-                      onClick={() => {
-                        setQuickScoreMode(option.mode);
-                        resetQuickScoreSelection();
-                        setErrorMessage(undefined);
-                      }}
-                      type="button"
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-
-                {needsFan(quickScoreMode) ? (
-                  <div className="grid grid-cols-4 gap-2">
-                    {scoreFans.map((fan) => (
-                      <button
-                        className={`h-11 rounded-md border px-2 text-sm font-semibold ${
-                          selectedFan === fan
-                            ? "border-stone-900 bg-stone-900 text-white"
-                            : "border-stone-300 bg-white text-stone-900"
-                        }`}
-                        key={fan}
-                        onClick={() => {
-                          setSelectedFan(fan);
-                        }}
-                        type="button"
-                      >
-                        {fan} 番
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-
-                <div className="rounded-md border border-stone-200 bg-white p-3">
-                  <p className="text-sm font-semibold text-stone-900">
-                    {quickScoreMode === "DRAW_GAME"
-                      ? "流局"
-                      : `${getModePrimaryPlayerLabel(quickScoreMode)}：${selectedPrimaryPlayerId === undefined ? "未选择" : selectedPrimaryPlayerName}`}
-                  </p>
-                  {needsRelatedPlayer(quickScoreMode) ? (
-                    <p className="mt-1 text-sm font-medium text-stone-500">
-                      {getModeRelatedPlayerLabel(quickScoreMode)}：
-                      {selectedRelatedPlayerId === undefined ? "未选择" : selectedRelatedPlayerName}
-                    </p>
-                  ) : null}
-                  {needsFan(quickScoreMode) ? (
-                    <p className="mt-1 text-sm font-medium text-stone-500">
-                      番数：{selectedFan} 番 · {getFanScore(selectedFan)} 分
-                    </p>
-                  ) : null}
-                  {quickScoreMissingMessage !== "" ? (
-                    <p className="mt-2 text-xs font-medium text-stone-400">
-                      {quickScoreMissingMessage}
-                    </p>
-                  ) : null}
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    className="h-14 rounded-md bg-emerald-700 px-4 text-base font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={!canRecordQuickScore}
-                    onClick={() => {
-                      void handleRecordQuickScore();
-                    }}
-                    type="button"
-                  >
-                    {isScoring ? "记录中..." : "确认记录"}
-                  </button>
-                  <button
-                    className="h-14 rounded-md border border-red-200 bg-red-50 px-4 text-base font-semibold text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={!canUndo || isUndoing || isScoring}
-                    onClick={() => {
-                      void handleUndoRoomEvent();
-                    }}
-                    type="button"
-                  >
-                    {isUndoing ? "撤销中..." : "撤销上一条"}
-                  </button>
-                </div>
-                <button
-                  className="h-12 rounded-md border border-stone-300 bg-white px-4 text-base font-semibold text-stone-900 disabled:cursor-not-allowed disabled:opacity-60"
-                  disabled={isScoring || isFinishing}
-                  onClick={() => {
-                    void handleFinishRoom();
-                  }}
-                  type="button"
-                >
-                  {isFinishing ? "结束中..." : "结束游戏"}
-                </button>
-              </div>
-            ) : null}
-            {isFinished ? <p className="text-sm leading-6 text-stone-500">本房间已经结束</p> : null}
-          </div>
+        {isFinished ? (
+          <p className="pb-3 text-sm leading-6 text-stone-500">本房间已经结束</p>
         ) : null}
       </section>
     </main>
