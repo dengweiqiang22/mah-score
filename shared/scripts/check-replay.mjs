@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { replayRoomEvents } from "../dist/index.js";
+import { createSettlement, replayRoomEvents } from "../dist/index.js";
 
 const baseEvent = {
   roomId: "123",
@@ -153,7 +153,17 @@ assert.deepEqual(
 );
 assert.deepEqual(
   state.events.map((event) => event.id),
-  ["event_1", "event_2", "event_3", "event_4", "event_5", "event_6", "event_8", "event_9", "event_11"],
+  [
+    "event_1",
+    "event_2",
+    "event_3",
+    "event_4",
+    "event_5",
+    "event_6",
+    "event_8",
+    "event_9",
+    "event_11",
+  ],
 );
 
 const drawGameState = replayRoomEvents([
@@ -381,3 +391,62 @@ assert.deepEqual(legacyFanState.scores, [
     total: 0,
   },
 ]);
+
+const settlement = createSettlement(
+  extendedScoreState.roomId,
+  extendedScoreState.players,
+  extendedScoreState.scores,
+  extendedScoreState.rounds,
+);
+
+assert.equal(settlement.roomId, "123");
+assert.equal(settlement.totalRounds, 2);
+assert.deepEqual(settlement.players, [
+  {
+    playerId: "player_3",
+    nickname: "王五",
+    rank: 1,
+    total: 16,
+    winCount: 1,
+    discardCount: 0,
+    kongCount: 1,
+  },
+  {
+    playerId: "player_1",
+    nickname: "张三",
+    rank: 2,
+    total: 4,
+    winCount: 1,
+    discardCount: 0,
+    kongCount: 0,
+  },
+  {
+    playerId: "player_4",
+    nickname: "赵六",
+    rank: 3,
+    total: -7,
+    winCount: 0,
+    discardCount: 0,
+    kongCount: 1,
+  },
+  {
+    playerId: "player_2",
+    nickname: "李四",
+    rank: 4,
+    total: -13,
+    winCount: 0,
+    discardCount: 1,
+    kongCount: 0,
+  },
+]);
+assert.equal(
+  settlement.text,
+  [
+    "mah-score 房间 123 结算",
+    "总局数：2",
+    "1. 王五 16 分 胡1 点炮0 杠1",
+    "2. 张三 4 分 胡1 点炮0 杠0",
+    "3. 赵六 -7 分 胡0 点炮0 杠1",
+    "4. 李四 -13 分 胡0 点炮1 杠0",
+  ].join("\n"),
+);

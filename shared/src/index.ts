@@ -1,4 +1,5 @@
 export type { ApiFailureResponse, ApiResponse, ApiSuccessResponse } from "./types/api.js";
+export { createSettlement } from "./domain/settlement.js";
 export { replayRoomEvents } from "./domain/replay.js";
 export type {
   AppendRoomEventRequest,
@@ -10,7 +11,14 @@ export type {
   SyncRoomEventsResponse,
   UndoRoomEventRequest,
 } from "./types/event.js";
-export type { CurrentRoundState, RoomState, RoundState, ScoreState } from "./types/roomState.js";
+export type {
+  CurrentRoundState,
+  RoomState,
+  RoundState,
+  ScoreState,
+  SettlementPlayerState,
+  SettlementState,
+} from "./types/roomState.js";
 export type {
   ConcealedKongScoreRequest,
   DiscardWinScoreRequest,

@@ -10,7 +10,7 @@ import type {
 } from "@mah-score/shared";
 
 import { useEffect, useState } from "react";
-import { replayRoomEvents } from "@mah-score/shared";
+import { createSettlement, replayRoomEvents } from "@mah-score/shared";
 import QRCode from "qrcode";
 
 import {
@@ -239,6 +239,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
   const [room, setRoom] = useState<RoomRecord | undefined>();
   const [roomVersion, setRoomVersion] = useState(0);
   const [shareMessage, setShareMessage] = useState<string | undefined>();
+  const [settlementCopyMessage, setSettlementCopyMessage] = useState<string | undefined>();
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string | undefined>();
   const [quickScoreMode, setQuickScoreMode] = useState<QuickScoreMode>("DISCARD_WIN");
   const [selectedPrimaryPlayerId, setSelectedPrimaryPlayerId] = useState<string | undefined>();
@@ -451,6 +452,17 @@ export function RoomPage({ roomId }: RoomPageProps) {
       setShareMessage("已打开系统分享");
     } catch {
       setShareMessage("分享已取消");
+    }
+  }
+
+  async function handleCopySettlementText(settlementText: string) {
+    setSettlementCopyMessage(undefined);
+
+    try {
+      await navigator.clipboard.writeText(settlementText);
+      setSettlementCopyMessage("结算文本已复制");
+    } catch {
+      setSettlementCopyMessage("复制失败，请手动复制结算文本");
     }
   }
 
@@ -675,6 +687,15 @@ export function RoomPage({ roomId }: RoomPageProps) {
         ]);
   const currentRoundNumber = replayState?.currentRound.number ?? 0;
   const currentRoundWinnerCount = replayState?.currentRound.winnerIds.length ?? 0;
+  const settlement =
+    replayState === undefined
+      ? undefined
+      : createSettlement(
+          replayState.roomId,
+          replayState.players,
+          replayState.scores,
+          replayState.rounds,
+        );
 
   function getPlayerScore(playerId: string): number {
     return replayState?.scores.find((score) => score.playerId === playerId)?.total ?? 0;
@@ -956,6 +977,54 @@ export function RoomPage({ roomId }: RoomPageProps) {
             </div>
           )}
         </section>
+
+        {isFinished && settlement !== undefined ? (
+          <section className="grid gap-4">
+            <div className="flex items-center justify-between gap-3 border-b border-stone-200 pb-3">
+              <div>
+                <h2 className="text-xl font-semibold tracking-normal">结算</h2>
+                <p className="mt-1 text-sm text-stone-500">共 {settlement.totalRounds} 局</p>
+              </div>
+              <button
+                className="h-10 rounded-md border border-stone-300 bg-white px-3 text-sm font-semibold text-stone-900"
+                onClick={() => {
+                  void handleCopySettlementText(settlement.text);
+                }}
+                type="button"
+              >
+                复制
+              </button>
+            </div>
+
+            <div className="grid gap-3">
+              {settlement.players.map((player) => (
+                <div
+                  className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-md border border-stone-200 bg-white p-4"
+                  key={player.playerId}
+                >
+                  <p className="grid h-9 w-9 place-items-center rounded-md bg-stone-100 text-sm font-semibold text-stone-700">
+                    {player.rank}
+                  </p>
+                  <div className="min-w-0">
+                    <p className="truncate text-base font-semibold">{player.nickname}</p>
+                    <p className="mt-1 text-xs font-medium text-stone-500">
+                      胡 {player.winCount} · 点炮 {player.discardCount} · 杠 {player.kongCount}
+                    </p>
+                  </div>
+                  <p className="text-2xl font-semibold tabular-nums">{player.total}</p>
+                </div>
+              ))}
+            </div>
+
+            <pre className="whitespace-pre-wrap rounded-md border border-stone-200 bg-white p-4 text-sm leading-6 text-stone-700">
+              {settlement.text}
+            </pre>
+
+            {settlementCopyMessage !== undefined ? (
+              <p className="text-sm font-medium text-stone-500">{settlementCopyMessage}</p>
+            ) : null}
+          </section>
+        ) : null}
 
         {room !== undefined ? (
           <div className="mt-auto grid gap-3 pb-3">

@@ -28,3 +28,20 @@ export interface RoomState {
   readonly rounds: readonly RoundState[];
   readonly events: readonly RoomEvent[];
 }
+
+export interface SettlementPlayerState {
+  readonly playerId: string;
+  readonly nickname: string;
+  readonly rank: number;
+  readonly total: number;
+  readonly winCount: number;
+  readonly discardCount: number;
+  readonly kongCount: number;
+}
+
+export interface SettlementState {
+  readonly roomId: string;
+  readonly totalRounds: number;
+  readonly players: readonly SettlementPlayerState[];
+  readonly text: string;
+}
