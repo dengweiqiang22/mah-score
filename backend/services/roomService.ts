@@ -1,6 +1,6 @@
-import type { RoomEvent, RoomRecord, RoomStatus } from "@mah-score/shared";
+import type { RoomEvent, RoomRecord, RoomSnapshot } from "@mah-score/shared";
 
-import { replayRoomEvents } from "@mah-score/shared";
+import { buildReplayEventsFromSnapshot, replayRoomEvents } from "@mah-score/shared";
 
 import { redis } from "./redis";
 import { appendRoomEvent, readRoomEvents } from "./eventStore";
@@ -42,14 +42,6 @@ function parsePlayers(value: unknown): RoomRecord["players"] {
   );
 }
 
-function parseRoomStatus(value: unknown): RoomStatus | undefined {
-  if (value === "WAITING" || value === "PLAYING" || value === "FINISHED") {
-    return value;
-  }
-
-  return undefined;
-}
-
 function parseRoom(
   roomId: string,
   value: Record<string, unknown>,
@@ -72,26 +64,24 @@ function parseRoom(
     return undefined;
   }
 
-  const cachedStatus = parseRoomStatus(value.status);
-
-  if (cachedStatus === undefined) {
+  if (value.status !== "WAITING" && value.status !== "PLAYING" && value.status !== "FINISHED") {
     return undefined;
   }
 
   const legacyPlayers = parsePlayers(value.players);
-  const replayState = events.length > 0 ? replayRoomEvents(events) : undefined;
-  const players =
-    replayState !== undefined && replayState.players.length > 0 ? replayState.players : legacyPlayers;
-  const status =
-    replayState === undefined || (replayState.status === "WAITING" && cachedStatus !== "WAITING")
-      ? cachedStatus
-      : replayState.status;
+  const snapshot: RoomSnapshot = {
+    roomId,
+    players: legacyPlayers,
+    status: value.status,
+    createdAt: value.createdAt,
+  };
+  const replayState = replayRoomEvents(buildReplayEventsFromSnapshot(snapshot, events));
 
   return {
     roomId,
     version,
-    players,
-    status,
+    players: replayState.players.length > 0 ? replayState.players : legacyPlayers,
+    status: replayState.status,
     createdAt: value.createdAt,
     updatedAt: value.updatedAt,
   };

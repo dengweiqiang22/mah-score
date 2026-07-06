@@ -1,5 +1,5 @@
 import type { RoomEvent } from "../types/event.js";
-import type { RoomPlayer } from "../types/room.js";
+import type { RoomPlayer, RoomSnapshot } from "../types/room.js";
 import type { CurrentRoundState, RoomState, RoundState, ScoreState } from "../types/roomState.js";
 
 interface MutableReplayState {
@@ -69,6 +69,87 @@ function getEffectiveEvents(events: readonly RoomEvent[]): readonly RoomEvent[] 
   }
 
   return events.filter((event) => event.type !== "UNDO" && !undoneEventIds.has(event.id));
+}
+
+function createSyntheticRoomCreatedEvent(snapshot: RoomSnapshot): RoomEvent {
+  return {
+    id: `room_${snapshot.roomId}_created`,
+    roomId: snapshot.roomId,
+    type: "ROOM_CREATED",
+    version: 0,
+    operator: "room",
+    timestamp: snapshot.createdAt,
+    payload: {},
+  };
+}
+
+function createSyntheticPlayerJoinedEvents(snapshot: RoomSnapshot): readonly RoomEvent[] {
+  return snapshot.players.map((player) => ({
+    id: `room_${snapshot.roomId}_player_${player.id}`,
+    roomId: snapshot.roomId,
+    type: "PLAYER_JOINED",
+    version: 0,
+    operator: "room",
+    timestamp: snapshot.createdAt,
+    payload: {
+      playerId: player.id,
+      nickname: player.nickname,
+    },
+  }));
+}
+
+function createSyntheticGameStartedEvent(snapshot: RoomSnapshot): RoomEvent {
+  return {
+    id: `room_${snapshot.roomId}_started`,
+    roomId: snapshot.roomId,
+    type: "GAME_STARTED",
+    version: 0,
+    operator: "room",
+    timestamp: snapshot.createdAt,
+    payload: {},
+  };
+}
+
+function createSyntheticGameFinishedEvent(snapshot: RoomSnapshot): RoomEvent {
+  return {
+    id: `room_${snapshot.roomId}_finished`,
+    roomId: snapshot.roomId,
+    type: "GAME_FINISHED",
+    version: 0,
+    operator: "room",
+    timestamp: snapshot.createdAt,
+    payload: {},
+  };
+}
+
+export function buildReplayEventsFromSnapshot(
+  snapshot: RoomSnapshot,
+  events: readonly RoomEvent[],
+): readonly RoomEvent[] {
+  const hasRoomCreatedEvent = events.some((event) => event.type === "ROOM_CREATED");
+  const hasPlayerJoinedEvent = events.some((event) => event.type === "PLAYER_JOINED");
+  const hasGameStartedEvent = events.some((event) => event.type === "GAME_STARTED");
+  const hasGameFinishedEvent = events.some((event) => event.type === "GAME_FINISHED");
+
+  const syntheticEvents: RoomEvent[] = [];
+
+  if (!hasRoomCreatedEvent) {
+    syntheticEvents.push(createSyntheticRoomCreatedEvent(snapshot));
+  }
+
+  if (!hasPlayerJoinedEvent) {
+    syntheticEvents.push(...createSyntheticPlayerJoinedEvents(snapshot));
+  }
+
+  if ((snapshot.status === "PLAYING" || snapshot.status === "FINISHED") && !hasGameStartedEvent) {
+    syntheticEvents.push(createSyntheticGameStartedEvent(snapshot));
+  }
+
+  if (snapshot.status === "FINISHED" && !hasGameFinishedEvent) {
+    syntheticEvents.push(createSyntheticGameFinishedEvent(snapshot));
+  }
+
+  return [...syntheticEvents, ...events];
 }
 
 function createInitialState(roomId: string): MutableReplayState {
@@ -427,6 +508,10 @@ function applyEvent(state: MutableReplayState, event: RoomEvent): MutableReplayS
 
   if (event.type === "PLAYER_REMOVED") {
     return applyPlayerRemoved(nextState, event);
+  }
+
+  if (event.type === "ROOM_CREATED") {
+    return nextState;
   }
 
   if (event.type === "GAME_STARTED") {

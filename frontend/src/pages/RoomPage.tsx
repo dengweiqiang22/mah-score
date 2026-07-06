@@ -10,7 +10,7 @@ import type {
 } from "@mah-score/shared";
 
 import { useEffect, useState } from "react";
-import { createSettlement, replayRoomEvents } from "@mah-score/shared";
+import { buildReplayEventsFromSnapshot, createSettlement, replayRoomEvents } from "@mah-score/shared";
 import QRCode from "qrcode";
 
 import {
@@ -849,23 +849,15 @@ export function RoomPage({ roomId }: RoomPageProps) {
     room === undefined
       ? undefined
       : replayRoomEvents(
-          events.some((event) => event.type === "PLAYER_JOINED")
-            ? events
-            : [
-                ...room.players.map((player) => ({
-                  id: `room_${room.roomId}_player_${player.id}`,
-                  roomId,
-                  type: "PLAYER_JOINED" as const,
-                  version: 0,
-                  operator: "room",
-                  timestamp: room.createdAt,
-                  payload: {
-                    playerId: player.id,
-                    nickname: player.nickname,
-                  },
-                })),
-                ...events,
-              ],
+          buildReplayEventsFromSnapshot(
+            {
+              roomId: room.roomId,
+              players: room.players,
+              status: room.status,
+              createdAt: room.createdAt,
+            },
+            events,
+          ),
         );
   const currentRoundNumber = replayState?.currentRound.number ?? 0;
   const currentRoundWinnerCount = replayState?.currentRound.winnerIds.length ?? 0;

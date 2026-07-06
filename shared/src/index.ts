@@ -1,6 +1,6 @@
 export type { ApiFailureResponse, ApiResponse, ApiSuccessResponse } from "./types/api.js";
 export { createSettlement } from "./domain/settlement.js";
-export { replayRoomEvents } from "./domain/replay.js";
+export { buildReplayEventsFromSnapshot, replayRoomEvents } from "./domain/replay.js";
 export type {
   AppendRoomEventRequest,
   AppendRoomEventResponse,
@@ -42,6 +42,7 @@ export type {
   RenamePlayerRequest,
   RoomPlayer,
   RoomRecord,
+  RoomSnapshot,
   RoomStatus,
   StartRoomRequest,
 } from "./types/room.js";

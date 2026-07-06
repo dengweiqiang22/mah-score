@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createSettlement, replayRoomEvents } from "../dist/index.js";
+import { buildReplayEventsFromSnapshot, createSettlement, replayRoomEvents } from "../dist/index.js";
 
 const baseEvent = {
   roomId: "123",
@@ -71,6 +71,58 @@ assert.deepEqual(roomCreatedState.players, [
     nickname: "赵六",
   },
 ]);
+
+const legacySnapshot = {
+  roomId: "456",
+  createdAt: "2026-07-06T00:00:00.000Z",
+  status: "PLAYING",
+  players: [
+    {
+      id: "legacy_player_1",
+      nickname: "老张",
+    },
+    {
+      id: "legacy_player_2",
+      nickname: "老李",
+    },
+  ],
+};
+
+const legacyReplayState = replayRoomEvents(
+  buildReplayEventsFromSnapshot(legacySnapshot, [
+    {
+      ...baseEvent,
+      roomId: "456",
+      id: "legacy_score",
+      type: "DISCARD_WIN",
+      version: 1,
+      payload: {
+        winnerId: "legacy_player_1",
+        discarderId: "legacy_player_2",
+      },
+    },
+  ]),
+);
+
+assert.equal(legacyReplayState.roomId, "456");
+assert.equal(legacyReplayState.status, "PLAYING");
+assert.deepEqual(
+  legacyReplayState.players.map((player) => player.id),
+  ["legacy_player_1", "legacy_player_2"],
+);
+assert.deepEqual(
+  legacyReplayState.scores,
+  [
+    {
+      playerId: "legacy_player_1",
+      total: 1,
+    },
+    {
+      playerId: "legacy_player_2",
+      total: -1,
+    },
+  ],
+);
 
 const events = [
   {

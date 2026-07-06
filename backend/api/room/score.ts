@@ -1,12 +1,10 @@
 import type {
   AppendRoomEventResponse,
-  RoomEvent,
-  RoomRecord,
   ScoreEventRequest,
   ScoreFan,
 } from "@mah-score/shared";
 
-import { replayRoomEvents } from "@mah-score/shared";
+import { buildReplayEventsFromSnapshot, replayRoomEvents } from "@mah-score/shared";
 import { jsonFailure, jsonSuccess } from "../../services/apiResponse";
 import { appendRoomEvent, readRoomEvents } from "../../services/eventStore";
 import { isValidEventOperator } from "../../services/eventValidation";
@@ -187,21 +185,6 @@ function getInvalidPlayerResponse(): Response {
   });
 }
 
-function createPlayerJoinedEvents(room: RoomRecord): readonly RoomEvent[] {
-  return room.players.map((player) => ({
-    id: `room_${room.roomId}_player_${player.id}`,
-    roomId: room.roomId,
-    type: "PLAYER_JOINED",
-    version: 0,
-    operator: "room",
-    timestamp: room.createdAt,
-    payload: {
-      playerId: player.id,
-      nickname: player.nickname,
-    },
-  }));
-}
-
 function getScoreWinnerId(request: ScoreEventRequest): string | undefined {
   if (request.action === "DISCARD_WIN" || request.action === "SELF_DRAW") {
     return request.winnerId;
@@ -298,11 +281,17 @@ export async function POST(request: Request): Promise<Response> {
 
   if (shouldValidateCurrentRound) {
     const roomEvents = await readRoomEvents(room.roomId);
-    const replayEvents =
-      roomEvents.some((event) => event.type === "PLAYER_JOINED")
-        ? roomEvents
-        : [...createPlayerJoinedEvents(room), ...roomEvents];
-    const roomState = replayRoomEvents(replayEvents);
+    const roomState = replayRoomEvents(
+      buildReplayEventsFromSnapshot(
+        {
+          roomId: room.roomId,
+          players: room.players,
+          status: room.status,
+          createdAt: room.createdAt,
+        },
+        roomEvents,
+      ),
+    );
 
     if (roomState.currentRound.winnerIds.length >= 3) {
       return jsonFailure("本局已经结束，请进入下一局后再计分。", "ROUND_ALREADY_FINISHED", {
