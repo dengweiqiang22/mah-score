@@ -8,6 +8,70 @@ const baseEvent = {
   timestamp: "2026-07-06T00:00:00.000Z",
 };
 
+const roomCreatedState = replayRoomEvents([
+  {
+    ...baseEvent,
+    id: "room_created",
+    type: "ROOM_CREATED",
+    version: 1,
+    payload: {},
+  },
+  {
+    ...baseEvent,
+    id: "room_player_1",
+    type: "PLAYER_JOINED",
+    version: 2,
+    payload: {
+      playerId: "player_1",
+      nickname: "张三",
+    },
+  },
+  {
+    ...baseEvent,
+    id: "room_player_2",
+    type: "PLAYER_JOINED",
+    version: 3,
+    payload: {
+      playerId: "player_2",
+      nickname: "李四",
+    },
+  },
+  {
+    ...baseEvent,
+    id: "room_player_3",
+    type: "PLAYER_JOINED",
+    version: 4,
+    payload: {
+      playerId: "player_3",
+      nickname: "赵六",
+    },
+  },
+  {
+    ...baseEvent,
+    id: "room_started",
+    type: "GAME_STARTED",
+    version: 5,
+    payload: {},
+  },
+]);
+
+assert.equal(roomCreatedState.roomId, "123");
+assert.equal(roomCreatedState.version, 5);
+assert.deepEqual(roomCreatedState.players, [
+  {
+    id: "player_1",
+    nickname: "张三",
+  },
+  {
+    id: "player_2",
+    nickname: "李四",
+  },
+  {
+    id: "player_3",
+    nickname: "赵六",
+  },
+]);
+
 const events = [
   {
     ...baseEvent,

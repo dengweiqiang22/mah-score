@@ -297,10 +297,12 @@ export async function POST(request: Request): Promise<Response> {
   const shouldValidateCurrentRound = winnerId !== undefined || parsedRequest.action === "KONG";
 
   if (shouldValidateCurrentRound) {
-    const roomState = replayRoomEvents([
-      ...createPlayerJoinedEvents(room),
-      ...(await readRoomEvents(room.roomId)),
-    ]);
+    const roomEvents = await readRoomEvents(room.roomId);
+    const replayEvents =
+      roomEvents.some((event) => event.type === "PLAYER_JOINED")
+        ? roomEvents
+        : [...createPlayerJoinedEvents(room), ...roomEvents];
+    const roomState = replayRoomEvents(replayEvents);
 
     if (roomState.currentRound.winnerIds.length >= 3) {
       return jsonFailure("本局已经结束，请进入下一局后再计分。", "ROUND_ALREADY_FINISHED", {

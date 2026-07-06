@@ -1,6 +1,9 @@
-import type { RoomRecord } from "@mah-score/shared";
+import type { RoomEvent, RoomRecord, RoomStatus } from "@mah-score/shared";
+
+import { replayRoomEvents } from "@mah-score/shared";
 
 import { redis } from "./redis";
+import { appendRoomEvent, readRoomEvents } from "./eventStore";
 import { createCandidateRoomId } from "./roomId";
 
 const maxRoomIdAttempts = 20;
@@ -39,7 +42,19 @@ function parsePlayers(value: unknown): RoomRecord["players"] {
   );
 }
 
-function parseRoom(roomId: string, value: Record<string, unknown>): RoomRecord | undefined {
+function parseRoomStatus(value: unknown): RoomStatus | undefined {
+  if (value === "WAITING" || value === "PLAYING" || value === "FINISHED") {
+    return value;
+  }
+
+  return undefined;
+}
+
+function parseRoom(
+  roomId: string,
+  value: Record<string, unknown>,
+  events: readonly RoomEvent[],
+): RoomRecord | undefined {
   const version =
     typeof value.version === "number"
       ? value.version
@@ -50,22 +65,33 @@ function parseRoom(roomId: string, value: Record<string, unknown>): RoomRecord |
   if (
     version === undefined ||
     Number.isNaN(version) ||
-    typeof value.status !== "string" ||
+    typeof value.status === "undefined" ||
     typeof value.createdAt !== "string" ||
     typeof value.updatedAt !== "string"
   ) {
     return undefined;
   }
 
-  if (value.status !== "WAITING" && value.status !== "PLAYING" && value.status !== "FINISHED") {
+  const cachedStatus = parseRoomStatus(value.status);
+
+  if (cachedStatus === undefined) {
     return undefined;
   }
+
+  const legacyPlayers = parsePlayers(value.players);
+  const replayState = events.length > 0 ? replayRoomEvents(events) : undefined;
+  const players =
+    replayState !== undefined && replayState.players.length > 0 ? replayState.players : legacyPlayers;
+  const status =
+    replayState === undefined || (replayState.status === "WAITING" && cachedStatus !== "WAITING")
+      ? cachedStatus
+      : replayState.status;
 
   return {
     roomId,
     version,
-    players: parsePlayers(value.players),
-    status: value.status,
+    players,
+    status,
     createdAt: value.createdAt,
     updatedAt: value.updatedAt,
   };
@@ -102,23 +128,48 @@ export async function createRoom(nickname: string): Promise<RoomRecord> {
 
   await redis.hset(getRoomKey(roomId), {
     version: room.version,
-    players: JSON.stringify(room.players),
     status: room.status,
     createdAt: room.createdAt,
     updatedAt: room.updatedAt,
   });
 
-  return room;
+  await appendRoomEvent({
+    roomId,
+    type: "ROOM_CREATED",
+    operator: "room",
+    payload: {},
+  });
+
+  await appendRoomEvent({
+    roomId,
+    type: "PLAYER_JOINED",
+    operator: "room",
+    payload: {
+      playerId: player.id,
+      nickname: player.nickname,
+    },
+  });
+
+  const createdRoom = await getRoom(roomId);
+
+  if (createdRoom === undefined) {
+    throw new Error("ROOM_NOT_FOUND");
+  }
+
+  return createdRoom;
 }
 
 export async function getRoom(roomId: string): Promise<RoomRecord | undefined> {
-  const roomValue = await redis.hgetall(getRoomKey(roomId));
+  const [roomValue, events] = await Promise.all([
+    redis.hgetall(getRoomKey(roomId)),
+    readRoomEvents(roomId),
+  ]);
 
   if (roomValue === null) {
     return undefined;
   }
 
-  return parseRoom(roomId, roomValue);
+  return parseRoom(roomId, roomValue, events);
 }
 
 export async function joinRoom(
@@ -148,14 +199,15 @@ export async function joinRoom(
     id: createPlayerId(),
     nickname: normalizedNickname,
   };
-  const updatedPlayers = [...room.players, player];
-  const now = new Date().toISOString();
-  const version = room.version + 1;
 
-  await redis.hset(getRoomKey(roomId), {
-    version,
-    players: JSON.stringify(updatedPlayers),
-    updatedAt: now,
+  await appendRoomEvent({
+    roomId,
+    type: "PLAYER_JOINED",
+    operator: "room",
+    payload: {
+      playerId: player.id,
+      nickname: player.nickname,
+    },
   });
 
   return player;
@@ -196,13 +248,15 @@ export async function renamePlayer(
       : player,
   );
   const renamedPlayer = updatedPlayers.find((player) => player.id === playerId);
-  const now = new Date().toISOString();
-  const version = room.version + 1;
 
-  await redis.hset(getRoomKey(roomId), {
-    version,
-    players: JSON.stringify(updatedPlayers),
-    updatedAt: now,
+  await appendRoomEvent({
+    roomId,
+    type: "PLAYER_RENAMED",
+    operator: "room",
+    payload: {
+      playerId,
+      nickname: normalizedNickname,
+    },
   });
 
   if (renamedPlayer === undefined) {
@@ -229,13 +283,13 @@ export async function removePlayer(roomId: string, playerId: string): Promise<vo
     throw new Error("PLAYER_NOT_FOUND");
   }
 
-  const now = new Date().toISOString();
-  const version = room.version + 1;
-
-  await redis.hset(getRoomKey(roomId), {
-    version,
-    players: JSON.stringify(updatedPlayers),
-    updatedAt: now,
+  await appendRoomEvent({
+    roomId,
+    type: "PLAYER_REMOVED",
+    operator: "room",
+    payload: {
+      playerId,
+    },
   });
 }
 
@@ -254,19 +308,18 @@ export async function startRoom(roomId: string): Promise<RoomRecord> {
     throw new Error("INVALID_PLAYER_COUNT");
   }
 
-  const now = new Date().toISOString();
-  const startedRoom: RoomRecord = {
-    ...room,
-    version: room.version + 1,
-    status: "PLAYING",
-    updatedAt: now,
-  };
-
-  await redis.hset(getRoomKey(roomId), {
-    version: startedRoom.version,
-    status: startedRoom.status,
-    updatedAt: startedRoom.updatedAt,
+  await appendRoomEvent({
+    roomId,
+    type: "GAME_STARTED",
+    operator: "room",
+    payload: {},
   });
+
+  const startedRoom = await getRoom(roomId);
+
+  if (startedRoom === undefined) {
+    throw new Error("ROOM_NOT_FOUND");
+  }
 
   return startedRoom;
 }

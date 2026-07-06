@@ -1,7 +1,6 @@
 import type { RoomEvent, RoomEventPayload, RoomEventType } from "@mah-score/shared";
 
 import { redis } from "./redis";
-import { getRoom } from "./roomService";
 
 interface AppendRoomEventInput {
   readonly roomId: string;
@@ -58,9 +57,9 @@ function parseRoomEvent(value: unknown): RoomEvent | undefined {
 }
 
 export async function appendRoomEvent(input: AppendRoomEventInput): Promise<RoomEvent> {
-  const room = await getRoom(input.roomId);
+  const roomExists = await redis.exists(getRoomKey(input.roomId));
 
-  if (room === undefined) {
+  if (roomExists === 0) {
     throw new Error("ROOM_NOT_FOUND");
   }
 
@@ -78,6 +77,7 @@ export async function appendRoomEvent(input: AppendRoomEventInput): Promise<Room
 
   await redis.rpush(getRoomEventsKey(input.roomId), JSON.stringify(event));
   await redis.hset(getRoomKey(input.roomId), {
+    ...(input.type === "GAME_STARTED" ? { status: "PLAYING" } : {}),
     ...(input.type === "GAME_FINISHED" ? { status: "FINISHED" } : {}),
     updatedAt: timestamp,
   });
