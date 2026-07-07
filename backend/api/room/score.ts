@@ -10,7 +10,7 @@ import { appendRoomEvent, readRoomEvents } from "../../services/eventStore";
 import { isValidEventOperator } from "../../services/eventValidation";
 import { readJsonBody } from "../../services/requestBody";
 import { getRedisConfigurationError } from "../../services/redis";
-import { getRoom } from "../../services/roomService";
+import { getRoom, withRoomLock } from "../../services/roomService";
 import { isValidRoomId } from "../../services/roomValidation";
 import {
   getScoreEventPayload,
@@ -276,68 +276,95 @@ export async function POST(request: Request): Promise<Response> {
     }
   }
 
-  const winnerId = getScoreWinnerId(parsedRequest);
-  const shouldValidateCurrentRound = winnerId !== undefined || parsedRequest.action === "KONG";
-
-  if (shouldValidateCurrentRound) {
-    const roomEvents = await readRoomEvents(room.roomId);
-    const roomState = replayRoomEvents(
-      buildReplayEventsFromSnapshot(
-        {
-          roomId: room.roomId,
-          players: room.players,
-          status: room.status,
-          createdAt: room.createdAt,
-        },
-        roomEvents,
-      ),
-    );
-
-    if (roomState.currentRound.winnerIds.length >= 3) {
-      return jsonFailure("本局已经结束，请进入下一局后再计分。", "ROUND_ALREADY_FINISHED", {
-        status: 409,
-      });
-    }
-
-    if (winnerId !== undefined && roomState.currentRound.winnerIds.includes(winnerId)) {
-      return jsonFailure("该玩家本局已经胡牌。", "ROUND_WINNER_ALREADY_EXISTS", {
-        status: 409,
-      });
-    }
-
-    if (parsedRequest.action === "KONG") {
-      if (roomState.currentRound.winnerIds.includes(parsedRequest.playerId)) {
-        return jsonFailure("已胡牌玩家本局不能再记录杠牌。", "KONG_PLAYER_ALREADY_WON", {
-          status: 409,
-        });
-      }
-
-      if (
-        parsedRequest.kongType === "DISCARD_KONG" &&
-        roomState.currentRound.winnerIds.includes(parsedRequest.fromPlayerId)
-      ) {
-        return jsonFailure("已胡牌玩家本局不能作为引杠玩家。", "KONG_FROM_PLAYER_ALREADY_WON", {
-          status: 409,
-        });
-      }
-    }
-  }
-
   try {
-    const event = await appendRoomEvent({
-      roomId: parsedRequest.roomId,
-      type: parsedRequest.action,
-      operator: parsedRequest.operator,
-      payload: getScoreEventPayload(parsedRequest),
+    const data = await withRoomLock(parsedRequest.roomId, async (): Promise<AppendRoomEventResponse | Response> => {
+      const lockedRoom = await getRoom(parsedRequest.roomId);
+
+      if (lockedRoom === undefined) {
+        return jsonFailure("房间不存在。", "ROOM_NOT_FOUND", {
+          status: 404,
+        });
+      }
+
+      if (lockedRoom.status !== "PLAYING") {
+        return jsonFailure("游戏开始后才能计分。", "ROOM_NOT_PLAYING", {
+          status: 409,
+        });
+      }
+
+      const winnerId = getScoreWinnerId(parsedRequest);
+      const shouldValidateCurrentRound = winnerId !== undefined || parsedRequest.action === "KONG";
+
+      if (shouldValidateCurrentRound) {
+        const roomEvents = await readRoomEvents(lockedRoom.roomId);
+        const roomState = replayRoomEvents(
+          buildReplayEventsFromSnapshot(
+            {
+              roomId: lockedRoom.roomId,
+              players: lockedRoom.players,
+              status: lockedRoom.status,
+              createdAt: lockedRoom.createdAt,
+            },
+            roomEvents,
+          ),
+        );
+
+        if (roomState.currentRound.winnerIds.length >= 3) {
+          return jsonFailure("本局已经结束，请进入下一局后再计分。", "ROUND_ALREADY_FINISHED", {
+            status: 409,
+          });
+        }
+
+        if (winnerId !== undefined && roomState.currentRound.winnerIds.includes(winnerId)) {
+          return jsonFailure("该玩家本局已经胡牌。", "ROUND_WINNER_ALREADY_EXISTS", {
+            status: 409,
+          });
+        }
+
+        if (parsedRequest.action === "KONG") {
+          if (roomState.currentRound.winnerIds.includes(parsedRequest.playerId)) {
+            return jsonFailure("已胡牌玩家本局不能再记录杠牌。", "KONG_PLAYER_ALREADY_WON", {
+              status: 409,
+            });
+          }
+
+          if (
+            parsedRequest.kongType === "DISCARD_KONG" &&
+            roomState.currentRound.winnerIds.includes(parsedRequest.fromPlayerId)
+          ) {
+            return jsonFailure("已胡牌玩家本局不能作为引杠玩家。", "KONG_FROM_PLAYER_ALREADY_WON", {
+              status: 409,
+            });
+          }
+        }
+      }
+
+      const event = await appendRoomEvent({
+        roomId: parsedRequest.roomId,
+        type: parsedRequest.action,
+        operator: parsedRequest.operator,
+        payload: getScoreEventPayload(parsedRequest),
+      });
+
+      return {
+        event,
+      };
     });
-    const data: AppendRoomEventResponse = {
-      event,
-    };
+
+    if (data instanceof Response) {
+      return data;
+    }
 
     return jsonSuccess(data, {
       status: 201,
     });
   } catch (error) {
+    if (error instanceof Error && error.message === "ROOM_BUSY") {
+      return jsonFailure("当前房间正在处理其他操作，请稍后再试。", "ROOM_BUSY", {
+        status: 409,
+      });
+    }
+
     console.error("Failed to append score event.", error);
 
     return jsonFailure("记录计分事件失败，请稍后再试。", "SCORE_EVENT_APPEND_FAILED", {

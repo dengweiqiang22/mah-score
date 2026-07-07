@@ -135,7 +135,7 @@ async function releaseRoomLock(roomId: string, lockToken: string): Promise<void>
   }
 }
 
-async function withRoomLock<T>(roomId: string, operation: () => Promise<T>): Promise<T> {
+export async function withRoomLock<T>(roomId: string, operation: () => Promise<T>): Promise<T> {
   const lockToken = await acquireRoomLock(roomId);
 
   if (lockToken === undefined) {

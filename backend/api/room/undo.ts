@@ -5,7 +5,7 @@ import { appendRoomEvent, getLastUndoableEvent, readRoomEvents } from "../../ser
 import { isValidEventOperator } from "../../services/eventValidation";
 import { readJsonBody } from "../../services/requestBody";
 import { getRedisConfigurationError } from "../../services/redis";
-import { getRoom } from "../../services/roomService";
+import { getRoom, withRoomLock } from "../../services/roomService";
 import { isValidRoomId } from "../../services/roomValidation";
 
 function parseUndoRoomEventRequest(value: unknown): UndoRoomEventRequest | undefined {
@@ -72,32 +72,53 @@ export async function POST(request: Request): Promise<Response> {
     });
   }
 
-  const events = await readRoomEvents(parsedRequest.roomId);
-  const targetEvent = getLastUndoableEvent(events, parsedRequest.targetEventId);
-
-  if (targetEvent === undefined) {
-    return jsonFailure("没有可以撤销的记录。", "NO_UNDOABLE_EVENT", {
-      status: 409,
-    });
-  }
-
   try {
-    const event = await appendRoomEvent({
-      roomId: parsedRequest.roomId,
-      type: "UNDO",
-      operator: parsedRequest.operator,
-      payload: {
-        targetEventId: targetEvent.id,
-      },
+    const data = await withRoomLock(parsedRequest.roomId, async (): Promise<AppendRoomEventResponse | Response> => {
+      const lockedRoom = await getRoom(parsedRequest.roomId);
+
+      if (lockedRoom === undefined) {
+        return jsonFailure("房间不存在。", "ROOM_NOT_FOUND", {
+          status: 404,
+        });
+      }
+
+      const events = await readRoomEvents(parsedRequest.roomId);
+      const targetEvent = getLastUndoableEvent(events, parsedRequest.targetEventId);
+
+      if (targetEvent === undefined) {
+        return jsonFailure("没有可以撤销的记录。", "NO_UNDOABLE_EVENT", {
+          status: 409,
+        });
+      }
+
+      const event = await appendRoomEvent({
+        roomId: parsedRequest.roomId,
+        type: "UNDO",
+        operator: parsedRequest.operator,
+        payload: {
+          targetEventId: targetEvent.id,
+        },
+      });
+
+      return {
+        event,
+      };
     });
-    const data: AppendRoomEventResponse = {
-      event,
-    };
+
+    if (data instanceof Response) {
+      return data;
+    }
 
     return jsonSuccess(data, {
       status: 201,
     });
   } catch (error) {
+    if (error instanceof Error && error.message === "ROOM_BUSY") {
+      return jsonFailure("当前房间正在处理其他操作，请稍后再试。", "ROOM_BUSY", {
+        status: 409,
+      });
+    }
+
     console.error("Failed to append undo event.", error);
 
     return jsonFailure("撤销失败，请稍后再试。", "UNDO_EVENT_APPEND_FAILED", {
