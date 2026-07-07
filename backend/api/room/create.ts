@@ -2,6 +2,7 @@ import type { CreateRoomRequest, CreateRoomResponse } from "@mah-score/shared";
 
 import { jsonFailure, jsonSuccess } from "../../services/apiResponse";
 import { readJsonBody } from "../../services/requestBody";
+import { jsonUnexpectedRoomFailure } from "../../services/roomFailure";
 import { getRedisConfigurationError } from "../../services/redis";
 import { createRoom } from "../../services/roomService";
 import { isValidNickname } from "../../services/roomValidation";
@@ -57,7 +58,7 @@ export async function POST(request: Request): Promise<Response> {
   } catch (error) {
     console.error("Failed to create room.", error);
 
-    return jsonFailure("Failed to create room.", "ROOM_CREATE_FAILED", {
+    return jsonUnexpectedRoomFailure("创建房间失败，请稍后再试。", "ROOM_CREATE_FAILED", {
       status: 500,
     });
   }

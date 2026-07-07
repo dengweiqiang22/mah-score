@@ -9,6 +9,7 @@ import { jsonFailure, jsonSuccess } from "../../services/apiResponse";
 import { appendRoomEvent, readRoomEvents } from "../../services/eventStore";
 import { isValidEventOperator } from "../../services/eventValidation";
 import { readJsonBody } from "../../services/requestBody";
+import { jsonRoomBusyFailure } from "../../services/roomFailure";
 import { getRedisConfigurationError } from "../../services/redis";
 import { getRoom, withRoomLock } from "../../services/roomService";
 import { isValidRoomId } from "../../services/roomValidation";
@@ -360,9 +361,7 @@ export async function POST(request: Request): Promise<Response> {
     });
   } catch (error) {
     if (error instanceof Error && error.message === "ROOM_BUSY") {
-      return jsonFailure("当前房间正在处理其他操作，请稍后再试。", "ROOM_BUSY", {
-        status: 409,
-      });
+      return jsonRoomBusyFailure();
     }
 
     console.error("Failed to append score event.", error);

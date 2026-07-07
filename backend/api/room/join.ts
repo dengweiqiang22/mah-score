@@ -2,6 +2,7 @@ import type { JoinRoomRequest, JoinRoomResponse } from "@mah-score/shared";
 
 import { jsonFailure, jsonSuccess } from "../../services/apiResponse";
 import { readJsonBody } from "../../services/requestBody";
+import { jsonRoomBusyFailure } from "../../services/roomFailure";
 import { getRedisConfigurationError } from "../../services/redis";
 import { joinRoom } from "../../services/roomService";
 
@@ -47,9 +48,7 @@ function getJoinRoomFailure(error: unknown): Response {
   }
 
   if (error.message === "ROOM_BUSY") {
-    return jsonFailure("当前房间正在处理其他操作，请稍后再试。", "ROOM_BUSY", {
-      status: 409,
-    });
+    return jsonRoomBusyFailure();
   }
 
   if (error.message === "ROOM_FULL") {

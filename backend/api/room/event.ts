@@ -8,6 +8,7 @@ import {
   isValidEventOperator,
 } from "../../services/eventValidation";
 import { readJsonBody } from "../../services/requestBody";
+import { jsonUnexpectedRoomFailure } from "../../services/roomFailure";
 import { getRedisConfigurationError } from "../../services/redis";
 import { getRoom } from "../../services/roomService";
 import { isValidRoomId } from "../../services/roomValidation";
@@ -38,18 +39,6 @@ function parseAppendRoomEventRequest(value: unknown): AppendRoomEventRequest | u
     operator: value.operator.trim(),
     payload: value.payload,
   };
-}
-
-function getAppendEventFailure(error: unknown): Response {
-  if (error instanceof Error && error.message === "ROOM_NOT_FOUND") {
-    return jsonFailure("房间不存在。", "ROOM_NOT_FOUND", {
-      status: 404,
-    });
-  }
-
-  return jsonFailure("记录事件失败，请稍后再试。", "EVENT_APPEND_FAILED", {
-    status: 500,
-  });
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -118,7 +107,15 @@ export async function POST(request: Request): Promise<Response> {
       console.error("Failed to append room event.", error);
     }
 
-    return getAppendEventFailure(error);
+    if (error instanceof Error && error.message === "ROOM_NOT_FOUND") {
+      return jsonFailure("房间不存在。", "ROOM_NOT_FOUND", {
+        status: 404,
+      });
+    }
+
+    return jsonUnexpectedRoomFailure("记录结束游戏事件失败，请稍后再试。", "EVENT_APPEND_FAILED", {
+      status: 500,
+    });
   }
 }
 
