@@ -9,9 +9,14 @@ import { createCandidateRoomId } from "./roomId";
 const maxRoomIdAttempts = 20;
 const minPlayersToStart = 2;
 const maxPlayers = 4;
+const roomLockTtlMilliseconds = 5000;
 
 function getRoomKey(roomId: string): string {
   return `room:${roomId}`;
+}
+
+function getRoomLockKey(roomId: string): string {
+  return `room:${roomId}:lock`;
 }
 
 function createPlayerId(): string {
@@ -100,6 +105,50 @@ async function createUnusedRoomId(): Promise<string> {
   throw new Error("Unable to allocate an unused room id.");
 }
 
+async function acquireRoomLock(roomId: string): Promise<string | undefined> {
+  const lockToken = crypto.randomUUID();
+  const locked = await redis.set(getRoomLockKey(roomId), lockToken, {
+    nx: true,
+    px: roomLockTtlMilliseconds,
+  });
+
+  if (locked === null) {
+    return undefined;
+  }
+
+  return lockToken;
+}
+
+async function releaseRoomLock(roomId: string, lockToken: string): Promise<void> {
+  const releaseScript = `
+    if redis.call("GET", KEYS[1]) == ARGV[1] then
+      return redis.call("DEL", KEYS[1])
+    end
+
+    return 0
+  `;
+
+  try {
+    await redis.eval(releaseScript, [getRoomLockKey(roomId)], [lockToken]);
+  } catch (error) {
+    console.error("Failed to release room lock.", error);
+  }
+}
+
+async function withRoomLock<T>(roomId: string, operation: () => Promise<T>): Promise<T> {
+  const lockToken = await acquireRoomLock(roomId);
+
+  if (lockToken === undefined) {
+    throw new Error("ROOM_BUSY");
+  }
+
+  try {
+    return await operation();
+  } finally {
+    await releaseRoomLock(roomId, lockToken);
+  }
+}
+
 export async function createRoom(nickname: string): Promise<RoomRecord> {
   const roomId = await createUnusedRoomId();
   const now = new Date().toISOString();
@@ -166,41 +215,43 @@ export async function joinRoom(
   roomId: string,
   nickname: string,
 ): Promise<RoomRecord["players"][number]> {
-  const room = await getRoom(roomId);
-  const normalizedNickname = nickname.trim();
+  return withRoomLock(roomId, async () => {
+    const room = await getRoom(roomId);
+    const normalizedNickname = nickname.trim();
 
-  if (room === undefined) {
-    throw new Error("ROOM_NOT_FOUND");
-  }
+    if (room === undefined) {
+      throw new Error("ROOM_NOT_FOUND");
+    }
 
-  if (room.status !== "WAITING") {
-    throw new Error("ROOM_NOT_JOINABLE");
-  }
+    if (room.status !== "WAITING") {
+      throw new Error("ROOM_NOT_JOINABLE");
+    }
 
-  if (room.players.length >= maxPlayers) {
-    throw new Error("ROOM_FULL");
-  }
+    if (room.players.length >= maxPlayers) {
+      throw new Error("ROOM_FULL");
+    }
 
-  if (room.players.some((player) => player.nickname === normalizedNickname)) {
-    throw new Error("PLAYER_NICKNAME_EXISTS");
-  }
+    if (room.players.some((player) => player.nickname === normalizedNickname)) {
+      throw new Error("PLAYER_NICKNAME_EXISTS");
+    }
 
-  const player = {
-    id: createPlayerId(),
-    nickname: normalizedNickname,
-  };
+    const player = {
+      id: createPlayerId(),
+      nickname: normalizedNickname,
+    };
 
-  await appendRoomEvent({
-    roomId,
-    type: "PLAYER_JOINED",
-    operator: "room",
-    payload: {
-      playerId: player.id,
-      nickname: player.nickname,
-    },
+    await appendRoomEvent({
+      roomId,
+      type: "PLAYER_JOINED",
+      operator: "room",
+      payload: {
+        playerId: player.id,
+        nickname: player.nickname,
+      },
+    });
+
+    return player;
   });
-
-  return player;
 }
 
 export async function renamePlayer(
@@ -284,32 +335,34 @@ export async function removePlayer(roomId: string, playerId: string): Promise<vo
 }
 
 export async function startRoom(roomId: string): Promise<RoomRecord> {
-  const room = await getRoom(roomId);
+  return withRoomLock(roomId, async () => {
+    const room = await getRoom(roomId);
 
-  if (room === undefined) {
-    throw new Error("ROOM_NOT_FOUND");
-  }
+    if (room === undefined) {
+      throw new Error("ROOM_NOT_FOUND");
+    }
 
-  if (room.status !== "WAITING") {
-    throw new Error("ROOM_NOT_STARTABLE");
-  }
+    if (room.status !== "WAITING") {
+      throw new Error("ROOM_NOT_STARTABLE");
+    }
 
-  if (room.players.length < minPlayersToStart || room.players.length > maxPlayers) {
-    throw new Error("INVALID_PLAYER_COUNT");
-  }
+    if (room.players.length < minPlayersToStart || room.players.length > maxPlayers) {
+      throw new Error("INVALID_PLAYER_COUNT");
+    }
 
-  await appendRoomEvent({
-    roomId,
-    type: "GAME_STARTED",
-    operator: "room",
-    payload: {},
+    await appendRoomEvent({
+      roomId,
+      type: "GAME_STARTED",
+      operator: "room",
+      payload: {},
+    });
+
+    const startedRoom = await getRoom(roomId);
+
+    if (startedRoom === undefined) {
+      throw new Error("ROOM_NOT_FOUND");
+    }
+
+    return startedRoom;
   });
-
-  const startedRoom = await getRoom(roomId);
-
-  if (startedRoom === undefined) {
-    throw new Error("ROOM_NOT_FOUND");
-  }
-
-  return startedRoom;
 }

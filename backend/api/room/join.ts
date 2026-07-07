@@ -46,6 +46,12 @@ function getJoinRoomFailure(error: unknown): Response {
     });
   }
 
+  if (error.message === "ROOM_BUSY") {
+    return jsonFailure("当前房间正在处理其他操作，请稍后再试。", "ROOM_BUSY", {
+      status: 409,
+    });
+  }
+
   if (error.message === "ROOM_FULL") {
     return jsonFailure("房间人数已满。", "ROOM_FULL", {
       status: 409,
@@ -68,6 +74,7 @@ function isExpectedJoinRoomError(error: unknown): boolean {
     error instanceof Error &&
     (error.message === "ROOM_NOT_FOUND" ||
       error.message === "ROOM_NOT_JOINABLE" ||
+      error.message === "ROOM_BUSY" ||
       error.message === "ROOM_FULL" ||
       error.message === "PLAYER_NICKNAME_EXISTS")
   );

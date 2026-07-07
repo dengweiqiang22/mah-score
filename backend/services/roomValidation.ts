@@ -10,6 +10,7 @@ export function isExpectedPlayerEditError(error: unknown): boolean {
   return (
     error instanceof Error &&
     (error.message === "ROOM_NOT_FOUND" ||
+      error.message === "ROOM_BUSY" ||
       error.message === "ROOM_NOT_EDITABLE" ||
       error.message === "ROOM_NOT_STARTABLE" ||
       error.message === "PLAYER_NOT_FOUND" ||

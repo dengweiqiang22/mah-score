@@ -26,6 +26,7 @@ function isExpectedStartRoomError(error: unknown): boolean {
     error instanceof Error &&
     (error.message === "ROOM_NOT_FOUND" ||
       error.message === "ROOM_NOT_STARTABLE" ||
+      error.message === "ROOM_BUSY" ||
       error.message === "INVALID_PLAYER_COUNT")
   );
 }
@@ -45,6 +46,12 @@ function getStartRoomFailure(error: unknown): Response {
 
   if (error.message === "ROOM_NOT_STARTABLE") {
     return jsonFailure("当前房间不能开始游戏。", "ROOM_NOT_STARTABLE", {
+      status: 409,
+    });
+  }
+
+  if (error.message === "ROOM_BUSY") {
+    return jsonFailure("当前房间正在处理其他操作，请稍后再试。", "ROOM_BUSY", {
       status: 409,
     });
   }
