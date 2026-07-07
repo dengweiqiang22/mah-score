@@ -16,6 +16,9 @@
     "test": "npm run test --workspaces --if-present",
     "format": "prettier --write .",
     "check": "npm run typecheck && npm run lint",
+    "check:replay": "npm run build -w shared && node shared/scripts/check-replay.mjs",
+    "check:room-lock": "node backend/scripts/check-room-lock.mjs",
+    "check:acceptance": "npm run build && npm run check:replay && npm run check:room-lock",
     "check:deploy": "npm run check && npm run test && npm run build"
   },
   "devDependencies": {
