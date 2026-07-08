@@ -548,6 +548,20 @@ export function RoomPage({ roomId }: RoomPageProps) {
     setSelectedFan(undefined);
   }
 
+  async function handleSelectPlayerCard(playerId: string) {
+    if (
+      quickScoreMode !== undefined &&
+      needsRelatedPlayer(quickScoreMode) &&
+      selectedPrimaryPlayerId !== undefined &&
+      selectedPrimaryPlayerId !== playerId
+    ) {
+      await handleSelectRelatedPlayer(playerId);
+      return;
+    }
+
+    handleSelectPrimaryPlayer(playerId);
+  }
+
   function getQuickScoreRequest(input?: {
     readonly mode?: QuickScoreMode;
     readonly fan?: ScoreFan;
@@ -986,12 +1000,20 @@ export function RoomPage({ roomId }: RoomPageProps) {
                     disabled={!isPlaying || isCurrentRoundFinished || isScoring}
                     key={player.id}
                     onClick={() => {
-                      handleSelectPrimaryPlayer(player.id);
+                      void handleSelectPlayerCard(player.id);
                     }}
                     type="button"
                   >
                     <span className="block truncate text-base font-semibold">{player.nickname}</span>
-                    <span className="mt-1 block text-sm font-medium text-stone-500">
+                    <span
+                      className={`mt-1 block text-sm font-medium ${
+                        selectedPrimaryPlayerId === player.id
+                          ? "text-emerald-700"
+                          : selectedRelatedPlayerId === player.id
+                            ? "text-red-700"
+                            : "text-stone-500"
+                      }`}
+                    >
                       {selectedPrimaryPlayerId === player.id
                         ? "当前玩家"
                         : selectedRelatedPlayerId === player.id
@@ -1017,7 +1039,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
                     >
                       <input
                         className="h-12 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-emerald-700"
-                        autoComplete="nickname"
+                        autoComplete="name"
                         id={`rename-nickname-${player.id}`}
                         maxLength={12}
                         name={`renameNickname-${player.id}`}
@@ -1179,41 +1201,6 @@ export function RoomPage({ roomId }: RoomPageProps) {
                       )}
                     </div>
                   </section>
-                ) : null}
-
-                {quickScoreMode !== undefined &&
-                needsRelatedPlayer(quickScoreMode) &&
-                selectedPrimaryPlayerId !== undefined ? (
-                  <div className="grid gap-2">
-                    <p className="text-sm font-semibold text-stone-700">
-                      {getModeRelatedPlayerLabel(quickScoreMode)}
-                    </p>
-                    <div className="grid grid-cols-3 gap-2">
-                      {room.players
-                        .filter(
-                          (player) =>
-                            player.id !== selectedPrimaryPlayerId &&
-                            !currentRoundWinnerIds.has(player.id),
-                        )
-                        .map((player) => (
-                          <button
-                            className={`h-11 rounded-md border px-2 text-sm font-semibold ${
-                              selectedRelatedPlayerId === player.id
-                                ? "border-red-400 bg-red-50 text-red-800"
-                                : "border-stone-300 bg-white text-stone-900"
-                            }`}
-                            disabled={isScoring}
-                            key={player.id}
-                            onClick={() => {
-                              void handleSelectRelatedPlayer(player.id);
-                            }}
-                            type="button"
-                          >
-                            {player.nickname}
-                          </button>
-                        ))}
-                    </div>
-                  </div>
                 ) : null}
 
                 <div className="grid grid-cols-3 gap-2">

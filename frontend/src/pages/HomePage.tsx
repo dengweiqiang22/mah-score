@@ -129,7 +129,7 @@ export function HomePage() {
             ) : null}
             <input
               className="h-12 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-emerald-700"
-              autoComplete="nickname"
+              autoComplete="name"
               id="join-nickname"
               maxLength={12}
               name="joinNickname"
@@ -160,7 +160,7 @@ export function HomePage() {
               </div>
               <input
                 className="h-12 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-emerald-700"
-                autoComplete="nickname"
+                autoComplete="name"
                 id="create-nickname"
                 maxLength={12}
                 name="createNickname"
