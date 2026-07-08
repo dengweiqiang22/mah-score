@@ -445,8 +445,10 @@ export function RoomPage({ roomId }: RoomPageProps) {
       return targetEventId === undefined ? "上一条计分记录" : "这条计分记录";
     }
 
+    const targetPrefix = `第 ${targetHistoryItem.roundNumber} 局 · 第 ${targetHistoryItem.roundActionNumber} 笔`;
+
     if (targetHistoryItem.round.type === "DRAW_GAME") {
-      return `第 ${targetHistoryItem.roundNumber} 局 流局`;
+      return `${targetPrefix} · 流局`;
     }
 
     if (targetHistoryItem.round.type === "DISCARD_WIN") {
@@ -459,7 +461,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
         getPayloadString(targetHistoryItem.event.payload, "discarderId"),
       );
 
-      return `第 ${targetHistoryItem.roundNumber} 局 ${winnerName} 胡牌，${discarderName} 点炮`;
+      return `${targetPrefix} · ${winnerName} 胡牌，${discarderName} 点炮`;
     }
 
     if (targetHistoryItem.round.type === "SELF_DRAW") {
@@ -468,7 +470,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
         getPayloadString(targetHistoryItem.event.payload, "winnerId"),
       );
 
-      return `第 ${targetHistoryItem.roundNumber} 局 ${winnerName} 自摸`;
+      return `${targetPrefix} · ${winnerName} 自摸`;
     }
 
     if (targetHistoryItem.round.type === "KONG") {
@@ -484,17 +486,17 @@ export function RoomPage({ roomId }: RoomPageProps) {
           getPayloadString(targetHistoryItem.event.payload, "fromPlayerId"),
         );
 
-        return `第 ${targetHistoryItem.roundNumber} 局 ${playerName} 直杠，${fromPlayerName} 引杠`;
+        return `${targetPrefix} · ${playerName} 直杠，${fromPlayerName} 引杠`;
       }
 
       if (kongType === "SUPPLEMENT_KONG") {
-        return `第 ${targetHistoryItem.roundNumber} 局 ${playerName} 补杠`;
+        return `${targetPrefix} · ${playerName} 补杠`;
       }
 
-      return `第 ${targetHistoryItem.roundNumber} 局 ${playerName} 暗杠`;
+      return `${targetPrefix} · ${playerName} 暗杠`;
     }
 
-    return `第 ${targetHistoryItem.roundNumber} 局`;
+    return targetPrefix;
   }
 
   async function handleUndoRoomEvent(targetEventId?: string) {
@@ -1306,15 +1308,29 @@ export function RoomPage({ roomId }: RoomPageProps) {
                                 {item.title}
                               </h4>
                             </div>
-                            {item.isUndone ? (
-                              <span className="shrink-0 rounded-md border border-stone-300 px-2 py-1 text-xs font-semibold text-stone-500">
-                                已撤销
-                              </span>
-                            ) : (
-                              <span className="shrink-0 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
-                                有效
-                              </span>
-                            )}
+                            <div className="flex shrink-0 items-center gap-2">
+                              {item.isUndone ? (
+                                <span className="rounded-md border border-stone-300 px-2 py-1 text-xs font-semibold text-stone-500">
+                                  已撤销
+                                </span>
+                              ) : (
+                                <>
+                                  <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
+                                    有效
+                                  </span>
+                                  <button
+                                    className="h-8 rounded-md border border-red-200 bg-red-50 px-3 text-xs font-semibold text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                    disabled={isUndoing || isScoring}
+                                    onClick={() => {
+                                      void handleUndoRoomEvent(item.event.id);
+                                    }}
+                                    type="button"
+                                  >
+                                    撤销
+                                  </button>
+                                </>
+                              )}
+                            </div>
                           </div>
                           <p className="text-sm leading-6 text-stone-600">{item.detail}</p>
                           <p
@@ -1322,6 +1338,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
                               item.isUndone ? "text-stone-500" : "text-stone-900"
                             }`}
                           >
+                            {item.isUndone ? "原变化：" : "分数变化："}
                             {formatScoreFlowSummary(item.flows)}
                           </p>
                         </article>
@@ -1454,27 +1471,13 @@ export function RoomPage({ roomId }: RoomPageProps) {
                               </p>
                               <p className="mt-1 truncate text-xs text-stone-500">{entry.detail}</p>
                             </div>
-                            <div className="flex shrink-0 items-center gap-3">
-                              <p
-                                className={`text-sm font-semibold tabular-nums ${
-                                  entry.delta > 0 ? "text-emerald-700" : "text-red-700"
-                                }`}
-                              >
-                                {getHistoryFlowLabel(entry.delta)}
-                              </p>
-                              {entry.isUndoable ? (
-                                <button
-                                  className="h-8 rounded-md border border-red-200 bg-red-50 px-3 text-xs font-semibold text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
-                                  disabled={isUndoing || isScoring}
-                                  onClick={() => {
-                                    void handleUndoRoomEvent(entry.eventId);
-                                  }}
-                                  type="button"
-                                >
-                                  撤销
-                                </button>
-                              ) : null}
-                            </div>
+                            <p
+                              className={`shrink-0 text-sm font-semibold tabular-nums ${
+                                entry.delta > 0 ? "text-emerald-700" : "text-red-700"
+                              }`}
+                            >
+                              {getHistoryFlowLabel(entry.delta)}
+                            </p>
                           </div>
                         ))
                       )}
