@@ -204,7 +204,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
   const [expandedHistoryAllLedgerRoundNumbers, setExpandedHistoryAllLedgerRoundNumbers] = useState<
     readonly number[]
   >([]);
-  const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
+  const [isPlayerLedgerExpanded, setIsPlayerLedgerExpanded] = useState(false);
   const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "error">("idle");
 
   function resetQuickScoreSelection() {
@@ -1779,24 +1779,24 @@ export function RoomPage({ roomId }: RoomPageProps) {
           <button
             className="flex items-center justify-between gap-3 text-left"
             onClick={() => {
-              setIsHistoryExpanded((currentValue) => !currentValue);
+              setIsPlayerLedgerExpanded((currentValue) => !currentValue);
             }}
             type="button"
           >
             <div>
-              <h2 className="text-xl font-semibold tracking-normal">历史记录</h2>
+              <h2 className="text-xl font-semibold tracking-normal">玩家总账</h2>
               <p className="mt-1 text-sm text-stone-500">
                 {playerLedger.length === 0
                   ? "暂无玩家收支"
-                  : "按玩家查看收入与支出"}
+                  : "展开后查看所有玩家累计收支"}
               </p>
             </div>
             <p className="shrink-0 text-sm font-medium text-stone-400">
-              {isHistoryExpanded ? "收起" : "展开"}
+              {isPlayerLedgerExpanded ? "收起" : "展开"}
             </p>
           </button>
 
-          {isHistoryExpanded ? (
+          {isPlayerLedgerExpanded ? (
             playerLedger.length === 0 ? (
               <p className="rounded-md border border-stone-200 bg-stone-50 p-4 text-base text-stone-600">
                 游戏开始后，玩家收支会显示在这里
@@ -1827,7 +1827,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
                       {player.entries.length === 0 ? (
                         <p className="text-sm font-medium text-stone-500">暂无收支记录</p>
                       ) : (
-                        player.entries.slice(0, 4).map((entry) => (
+                        player.entries.map((entry) => (
                           <div
                             className="flex items-center justify-between gap-3 rounded-md bg-stone-50 px-3 py-2"
                             key={`${player.playerId}-${entry.eventId}`}
