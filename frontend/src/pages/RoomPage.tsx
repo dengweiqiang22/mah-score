@@ -29,6 +29,7 @@ import {
   syncRoomEvents,
   undoRoomEvent,
 } from "../api/roomApi";
+import { readPlayerIdentity, type StoredPlayerIdentity } from "../utils/playerIdentity";
 
 interface RoomPageProps {
   readonly roomId: string;
@@ -171,6 +172,9 @@ export function RoomPage({ roomId }: RoomPageProps) {
   >();
   const [nicknameInput, setNicknameInput] = useState("");
   const [events, setEvents] = useState<readonly RoomEvent[]>([]);
+  const [storedPlayerIdentity, setStoredPlayerIdentity] = useState<
+    StoredPlayerIdentity | undefined
+  >();
   const [room, setRoom] = useState<RoomRecord | undefined>();
   const [roomVersion, setRoomVersion] = useState(0);
   const [shareMessage, setShareMessage] = useState<string | undefined>();
@@ -223,6 +227,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
   }
 
   useEffect(() => {
+    setStoredPlayerIdentity(readPlayerIdentity(roomId));
     void loadRoom();
   }, [roomId]);
 
@@ -871,6 +876,10 @@ export function RoomPage({ roomId }: RoomPageProps) {
       ? []
       : scoreHistory.filter((item) => item.roundNumber === replayState.currentRound.number);
   const currentRoundLedger = createPlayerLedger(currentRoundEntries, replayState?.players ?? []);
+  const currentPlayer =
+    storedPlayerIdentity === undefined
+      ? undefined
+      : replayState?.players.find((player) => player.id === storedPlayerIdentity.playerId);
   const canUndo = scoreHistory.some((item) => !item.isUndone);
   const quickScoreMissingMessage = getQuickScoreMissingMessage();
   const selectedPrimaryPlayerName = getPlayerNickname(
@@ -899,6 +908,9 @@ export function RoomPage({ roomId }: RoomPageProps) {
               : syncStatus === "error"
                 ? "同步失败"
                 : `已同步 · v${room?.version ?? roomVersion}`}
+          </p>
+          <p className="mt-2 text-xs font-medium text-stone-500">
+            {currentPlayer === undefined ? "公共视图" : `当前玩家 · ${currentPlayer.nickname}`}
           </p>
         </div>
 

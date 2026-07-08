@@ -48,8 +48,17 @@ export async function POST(request: Request): Promise<Response> {
 
   try {
     const room = await createRoom(parsedRequest.nickname);
+    const owner = room.players[0];
+
+    if (owner === undefined) {
+      return jsonUnexpectedRoomFailure("创建房间失败，请稍后再试。", "ROOM_CREATE_FAILED", {
+        status: 500,
+      });
+    }
+
     const data: CreateRoomResponse = {
       roomId: room.roomId,
+      playerId: owner.id,
     };
 
     return jsonSuccess(data, {

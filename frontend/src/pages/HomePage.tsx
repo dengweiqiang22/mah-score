@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import { createRoom, joinRoom } from "../api/roomApi";
 import { HomeActionButton } from "../components/HomeActionButton";
+import { savePlayerIdentity } from "../utils/playerIdentity";
 
 export function HomePage() {
   const [isCreatingRoom, setIsCreatingRoom] = useState(false);
@@ -47,6 +48,11 @@ export function HomePage() {
         return;
       }
 
+      savePlayerIdentity({
+        roomId: response.data.roomId,
+        playerId: response.data.playerId,
+        nickname: createNickname.trim(),
+      });
       window.location.assign(`/room/${response.data.roomId}`);
     } catch {
       setErrorMessage("创建房间失败，请稍后再试。");
@@ -72,6 +78,11 @@ export function HomePage() {
         return;
       }
 
+      savePlayerIdentity({
+        roomId: response.data.roomId,
+        playerId: response.data.playerId,
+        nickname: joinNickname.trim(),
+      });
       window.location.assign(`/room/${response.data.roomId}`);
     } catch {
       setErrorMessage("加入房间失败，请稍后再试。");
