@@ -160,6 +160,9 @@ export function RoomPage({ roomId }: RoomPageProps) {
   const [isStarting, setIsStarting] = useState(false);
   const [isUndoing, setIsUndoing] = useState(false);
   const [isFinishConfirmOpen, setIsFinishConfirmOpen] = useState(false);
+  const [removePlayerTarget, setRemovePlayerTarget] = useState<
+    { readonly playerId: string; readonly nickname: string } | undefined
+  >();
   const [nicknameInput, setNicknameInput] = useState("");
   const [events, setEvents] = useState<readonly RoomEvent[]>([]);
   const [room, setRoom] = useState<RoomRecord | undefined>();
@@ -307,13 +310,26 @@ export function RoomPage({ roomId }: RoomPageProps) {
     }
   }
 
-  async function handleRemovePlayer(playerId: string) {
+  function openRemovePlayerConfirm(playerId: string, nickname: string) {
+    setErrorMessage(undefined);
+    setRemovePlayerTarget({ playerId, nickname });
+  }
+
+  function cancelRemovePlayer() {
+    setRemovePlayerTarget(undefined);
+  }
+
+  async function confirmRemovePlayer() {
+    if (removePlayerTarget === undefined) {
+      return;
+    }
+
     setErrorMessage(undefined);
 
     try {
       const response = await removePlayer({
         roomId,
-        playerId,
+        playerId: removePlayerTarget.playerId,
       });
 
       if (!response.success) {
@@ -322,6 +338,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
       }
 
       resetQuickScoreSelection();
+      setRemovePlayerTarget(undefined);
       await loadRoom();
     } catch {
       setErrorMessage("删除玩家失败，请稍后再试。");
@@ -976,8 +993,9 @@ export function RoomPage({ roomId }: RoomPageProps) {
                       </button>
                       <button
                         className="h-10 rounded-md border border-red-200 bg-red-50 px-3 text-sm font-medium text-red-700"
+                        disabled={!isWaiting}
                         onClick={() => {
-                          void handleRemovePlayer(player.id);
+                          openRemovePlayerConfirm(player.id, player.nickname);
                         }}
                         type="button"
                       >
@@ -997,6 +1015,41 @@ export function RoomPage({ roomId }: RoomPageProps) {
                   {isStarting ? "开始中..." : "开始游戏"}
                 </button>
               </div>
+            ) : null}
+
+            {removePlayerTarget !== undefined ? (
+              <section className="grid gap-3 rounded-md border border-amber-200 bg-amber-50 p-4">
+                <div className="grid gap-1">
+                  <h3 className="text-base font-semibold text-amber-900">
+                    确认删除玩家「{removePlayerTarget.nickname}」？
+                  </h3>
+                  <p className="text-sm leading-6 text-amber-800">
+                    删除只允许在房间等待开始阶段进行，确认后该玩家会从房间中移除。
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    className="h-11 rounded-md border border-amber-300 bg-white px-4 text-sm font-semibold text-amber-900 disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={isStarting}
+                    onClick={() => {
+                      cancelRemovePlayer();
+                    }}
+                    type="button"
+                  >
+                    取消
+                  </button>
+                  <button
+                    className="h-11 rounded-md bg-red-700 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={isStarting}
+                    onClick={() => {
+                      void confirmRemovePlayer();
+                    }}
+                    type="button"
+                  >
+                    确认删除
+                  </button>
+                </div>
+              </section>
             ) : null}
 
             {isPlaying ? (
