@@ -1,7 +1,7 @@
 # 当前开发任务
 
-当前版本：v0.3.0
+当前版本：v0.3.1
 
 请执行：
 
-docs/tasks/v0.3.0-foundation-hardening.md
+docs/tasks/v0.3.1-room-ux-fixes.md
