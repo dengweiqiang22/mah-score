@@ -1,8 +1,15 @@
-import type { RoundState, SettlementPlayerState, SettlementState } from "../types/roomState.js";
+import type {
+  CurrentRoundState,
+  SettlementPlayerState,
+  SettlementState,
+} from "../types/roomState.js";
 import type { RoomPlayer } from "../types/room.js";
+import type { RoomEvent } from "../types/event.js";
 
-function getPayloadString(round: RoundState, key: string): string | undefined {
-  const value = round.payload[key];
+import { createScoreHistory, type ScoreHistoryItem } from "./history.js";
+
+function getPayloadString(event: RoomEvent, key: string): string | undefined {
+  const value = event.payload[key];
 
   return typeof value === "string" ? value : undefined;
 }
@@ -11,32 +18,61 @@ function getPlayerNickname(players: readonly RoomPlayer[], playerId: string): st
   return players.find((player) => player.id === playerId)?.nickname ?? "未知玩家";
 }
 
-function countRounds(rounds: readonly RoundState[]): number {
-  return rounds.filter(
-    (round) =>
-      round.type === "DISCARD_WIN" || round.type === "SELF_DRAW" || round.type === "DRAW_GAME",
-  ).length;
+function getCompletedRoundCount(currentRound: CurrentRoundState): number {
+  if (currentRound.number === 0) {
+    return 0;
+  }
+
+  if (currentRound.status === "FINISHED") {
+    return currentRound.number;
+  }
+
+  return Math.max(0, currentRound.number - 1);
 }
 
-function countWins(rounds: readonly RoundState[], playerId: string): number {
-  return rounds.filter((round) => {
-    if (round.type !== "DISCARD_WIN" && round.type !== "SELF_DRAW") {
+function countWins(
+  scoreHistory: readonly ScoreHistoryItem[],
+  playerId: string,
+  completedRoundCount: number,
+): number {
+  return scoreHistory.filter((item) => {
+    if (item.isUndone || item.roundNumber > completedRoundCount) {
       return false;
     }
 
-    return getPayloadString(round, "winnerId") === playerId;
+    if (item.event.type !== "DISCARD_WIN" && item.event.type !== "SELF_DRAW") {
+      return false;
+    }
+
+    return getPayloadString(item.event, "winnerId") === playerId;
   }).length;
 }
 
-function countDiscards(rounds: readonly RoundState[], playerId: string): number {
-  return rounds.filter(
-    (round) => round.type === "DISCARD_WIN" && getPayloadString(round, "discarderId") === playerId,
+function countDiscards(
+  scoreHistory: readonly ScoreHistoryItem[],
+  playerId: string,
+  completedRoundCount: number,
+): number {
+  return scoreHistory.filter(
+    (item) =>
+      !item.isUndone &&
+      item.roundNumber <= completedRoundCount &&
+      item.event.type === "DISCARD_WIN" &&
+      getPayloadString(item.event, "discarderId") === playerId,
   ).length;
 }
 
-function countKongs(rounds: readonly RoundState[], playerId: string): number {
-  return rounds.filter(
-    (round) => round.type === "KONG" && getPayloadString(round, "playerId") === playerId,
+function countKongs(
+  scoreHistory: readonly ScoreHistoryItem[],
+  playerId: string,
+  completedRoundCount: number,
+): number {
+  return scoreHistory.filter(
+    (item) =>
+      !item.isUndone &&
+      item.roundNumber <= completedRoundCount &&
+      item.event.type === "KONG" &&
+      getPayloadString(item.event, "playerId") === playerId,
   ).length;
 }
 
@@ -85,19 +121,22 @@ export function createSettlement(
   roomId: string,
   players: readonly RoomPlayer[],
   scores: readonly { readonly playerId: string; readonly total: number }[],
-  rounds: readonly RoundState[],
+  events: readonly RoomEvent[],
+  currentRound: CurrentRoundState,
 ): SettlementState {
+  const scoreHistory = createScoreHistory(events, players);
+  const completedRoundCount = getCompletedRoundCount(currentRound);
   const settlementWithoutText = {
     roomId,
-    totalRounds: countRounds(rounds),
+    totalRounds: completedRoundCount,
     players: rankPlayers(
       players.map((player) => ({
         playerId: player.id,
         nickname: getPlayerNickname(players, player.id),
         total: scores.find((score) => score.playerId === player.id)?.total ?? 0,
-        winCount: countWins(rounds, player.id),
-        discardCount: countDiscards(rounds, player.id),
-        kongCount: countKongs(rounds, player.id),
+        winCount: countWins(scoreHistory, player.id, completedRoundCount),
+        discardCount: countDiscards(scoreHistory, player.id, completedRoundCount),
+        kongCount: countKongs(scoreHistory, player.id, completedRoundCount),
       })),
     ),
   };

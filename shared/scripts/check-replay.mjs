@@ -599,61 +599,166 @@ assert.deepEqual(legacyFanState.scores, [
   },
 ]);
 
-const settlement = createSettlement(
-  extendedScoreState.roomId,
-  extendedScoreState.players,
-  extendedScoreState.scores,
-  extendedScoreState.rounds,
+const multiWinRoundEvents = [
+  {
+    ...baseEvent,
+    id: "multi_1",
+    type: "PLAYER_JOINED",
+    version: 1,
+    payload: {
+      playerId: "player_1",
+      nickname: "张三",
+    },
+  },
+  {
+    ...baseEvent,
+    id: "multi_2",
+    type: "PLAYER_JOINED",
+    version: 2,
+    payload: {
+      playerId: "player_2",
+      nickname: "李四",
+    },
+  },
+  {
+    ...baseEvent,
+    id: "multi_3",
+    type: "PLAYER_JOINED",
+    version: 3,
+    payload: {
+      playerId: "player_3",
+      nickname: "王五",
+    },
+  },
+  {
+    ...baseEvent,
+    id: "multi_4",
+    type: "PLAYER_JOINED",
+    version: 4,
+    payload: {
+      playerId: "player_4",
+      nickname: "赵六",
+    },
+  },
+  {
+    ...baseEvent,
+    id: "multi_5",
+    type: "GAME_STARTED",
+    version: 5,
+    payload: {},
+  },
+  {
+    ...baseEvent,
+    id: "multi_6",
+    type: "DISCARD_WIN",
+    version: 6,
+    payload: {
+      winnerId: "player_1",
+      discarderId: "player_2",
+    },
+  },
+  {
+    ...baseEvent,
+    id: "multi_7",
+    type: "SELF_DRAW",
+    version: 7,
+    payload: {
+      winnerId: "player_2",
+    },
+  },
+  {
+    ...baseEvent,
+    id: "multi_8",
+    type: "DISCARD_WIN",
+    version: 8,
+    payload: {
+      winnerId: "player_3",
+      discarderId: "player_4",
+    },
+  },
+];
+
+const multiWinRoundState = replayRoomEvents(multiWinRoundEvents);
+const multiWinRoundSettlement = createSettlement(
+  multiWinRoundState.roomId,
+  multiWinRoundState.players,
+  multiWinRoundState.scores,
+  multiWinRoundEvents,
+  multiWinRoundState.currentRound,
 );
 
-assert.equal(settlement.roomId, "123");
-assert.equal(settlement.totalRounds, 2);
-assert.deepEqual(settlement.players, [
-  {
-    playerId: "player_3",
-    nickname: "王五",
-    rank: 1,
-    total: 16,
-    winCount: 1,
-    discardCount: 0,
-    kongCount: 1,
-  },
-  {
-    playerId: "player_1",
-    nickname: "张三",
-    rank: 2,
-    total: 4,
-    winCount: 1,
-    discardCount: 0,
-    kongCount: 0,
-  },
-  {
-    playerId: "player_4",
-    nickname: "赵六",
-    rank: 3,
-    total: -7,
-    winCount: 0,
-    discardCount: 0,
-    kongCount: 1,
-  },
-  {
-    playerId: "player_2",
-    nickname: "李四",
-    rank: 4,
-    total: -13,
-    winCount: 0,
-    discardCount: 1,
-    kongCount: 0,
-  },
-]);
-assert.equal(
-  settlement.text,
+assert.equal(multiWinRoundState.currentRound.status, "FINISHED");
+assert.equal(multiWinRoundSettlement.totalRounds, 1);
+
+const drawGameSettlement = createSettlement(
+  drawGameState.roomId,
+  drawGameState.players,
+  drawGameState.scores,
   [
-    "mah-score 房间 123 结算",
-    "总局数：2",
-    "1. 王五 16 分 胡1 点炮0 杠1",
-    "2. 张三 4 分 胡1 点炮0 杠0",
-    "3. 赵六 -7 分 胡0 点炮0 杠1",
-    "4. 李四 -13 分 胡0 点炮1 杠0",
-  ].join("\n"),
+    ...events.slice(0, 6),
+    {
+      ...baseEvent,
+      id: "event_draw",
+      type: "DRAW_GAME",
+      version: 7,
+      payload: {},
+    },
+  ],
+  drawGameState.currentRound,
 );
+
+assert.equal(drawGameSettlement.totalRounds, 1);
+
+const unfinishedRoundEvents = [
+  ...multiWinRoundEvents,
+  {
+    ...baseEvent,
+    id: "unfinished_9",
+    type: "ROUND_CONFIRMED",
+    version: 9,
+    payload: {},
+  },
+  {
+    ...baseEvent,
+    id: "unfinished_10",
+    type: "KONG",
+    version: 10,
+    payload: {
+      playerId: "player_3",
+      kongType: "DISCARD_KONG",
+      fromPlayerId: "player_4",
+    },
+  },
+  {
+    ...baseEvent,
+    id: "unfinished_11",
+    type: "KONG",
+    version: 11,
+    payload: {
+      playerId: "player_4",
+      kongType: "SUPPLEMENT_KONG",
+    },
+  },
+  {
+    ...baseEvent,
+    id: "unfinished_12",
+    type: "GAME_FINISHED",
+    version: 12,
+    payload: {},
+  },
+];
+
+const unfinishedRoundState = replayRoomEvents(unfinishedRoundEvents);
+const unfinishedRoundSettlement = createSettlement(
+  unfinishedRoundState.roomId,
+  unfinishedRoundState.players,
+  unfinishedRoundState.scores,
+  unfinishedRoundEvents,
+  unfinishedRoundState.currentRound,
+);
+
+assert.equal(unfinishedRoundState.currentRound.number, 2);
+assert.equal(unfinishedRoundState.currentRound.status, "ACTIVE");
+assert.equal(unfinishedRoundSettlement.totalRounds, 1);
+assert.equal(unfinishedRoundSettlement.text.includes("总局数：1"), true);
+assert.equal(unfinishedRoundSettlement.players.every((player) => player.kongCount === 0), true);

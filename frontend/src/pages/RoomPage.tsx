@@ -732,7 +732,8 @@ export function RoomPage({ roomId }: RoomPageProps) {
           replayState.roomId,
           replayState.players,
           replayState.scores,
-          replayState.rounds,
+          events,
+          replayState.currentRound,
         );
 
   function getPlayerScore(playerId: string): number {
