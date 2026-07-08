@@ -52,6 +52,26 @@ interface HistoryFlowItem {
   readonly delta: number;
 }
 
+interface PlayerLedgerEntry {
+  readonly eventId: string;
+  readonly version: number;
+  readonly roundNumber: number;
+  readonly title: string;
+  readonly detail: string;
+  readonly delta: number;
+  readonly isUndone: boolean;
+  readonly isUndoable: boolean;
+}
+
+interface PlayerLedgerItem {
+  readonly playerId: string;
+  readonly nickname: string;
+  readonly total: number;
+  readonly income: number;
+  readonly expense: number;
+  readonly entries: readonly PlayerLedgerEntry[];
+}
+
 const quickScoreModes: readonly QuickScoreModeOption[] = [
   {
     mode: "DISCARD_WIN",
@@ -472,6 +492,55 @@ function createScoreHistory(
       return [historyItem];
     })
     .sort((left, right) => right.event.version - left.event.version);
+}
+
+function createPlayerLedger(
+  scoreHistory: readonly ScoreHistoryItem[],
+  players: readonly RoomPlayer[],
+): readonly PlayerLedgerItem[] {
+  const ledgerMap = new Map<string, PlayerLedgerItem>();
+
+  for (const player of players) {
+    ledgerMap.set(player.id, {
+      playerId: player.id,
+      nickname: player.nickname,
+      total: 0,
+      income: 0,
+      expense: 0,
+      entries: [],
+    });
+  }
+
+  for (const item of scoreHistory) {
+    for (const flow of item.flows) {
+      const currentLedger = ledgerMap.get(flow.playerId);
+
+      if (currentLedger === undefined) {
+        continue;
+      }
+
+      const nextEntry: PlayerLedgerEntry = {
+        eventId: item.event.id,
+        version: item.event.version,
+        roundNumber: item.roundNumber,
+        title: formatRoundTitle(item.round, players),
+        detail: item.detail,
+        delta: flow.delta,
+        isUndone: item.isUndone,
+        isUndoable: !item.isUndone && flow.delta > 0,
+      };
+
+      ledgerMap.set(flow.playerId, {
+        ...currentLedger,
+        total: currentLedger.total + flow.delta,
+        income: currentLedger.income + (flow.delta > 0 ? flow.delta : 0),
+        expense: currentLedger.expense + (flow.delta < 0 ? -flow.delta : 0),
+        entries: [...currentLedger.entries, nextEntry],
+      });
+    }
+  }
+
+  return players.map((player) => ledgerMap.get(player.id)).filter((item): item is PlayerLedgerItem => item !== undefined);
 }
 
 export function RoomPage({ roomId }: RoomPageProps) {
@@ -1029,13 +1098,13 @@ export function RoomPage({ roomId }: RoomPageProps) {
 
   const currentRoundWinnerIds = new Set(replayState?.currentRound.winnerIds ?? []);
   const scoreHistory = createScoreHistory(events, replayState?.players ?? []);
+  const playerLedger = createPlayerLedger(scoreHistory, replayState?.players ?? []);
   const canUndo = scoreHistory.some((item) => !item.isUndone);
   const quickScoreMissingMessage = getQuickScoreMissingMessage();
   const selectedPrimaryPlayerName = getPlayerNickname(
     replayState?.players ?? [],
     selectedPrimaryPlayerId,
   );
-  const visibleScoreHistory = scoreHistory.slice(0, 8);
 
   return (
     <main className="min-h-screen bg-stone-50 px-5 py-6 text-stone-950">
@@ -1372,9 +1441,9 @@ export function RoomPage({ roomId }: RoomPageProps) {
             <div>
               <h2 className="text-xl font-semibold tracking-normal">历史记录</h2>
               <p className="mt-1 text-sm text-stone-500">
-                {visibleScoreHistory.length === 0
-                  ? "暂无计分记录"
-                  : `最近 ${visibleScoreHistory.length} 条玩家收支`}
+                {playerLedger.length === 0
+                  ? "暂无玩家收支"
+                  : "按玩家查看收入与支出"}
               </p>
             </div>
             <p className="shrink-0 text-sm font-medium text-stone-400">
@@ -1383,74 +1452,71 @@ export function RoomPage({ roomId }: RoomPageProps) {
           </button>
 
           {isHistoryExpanded ? (
-            visibleScoreHistory.length === 0 ? (
+            playerLedger.length === 0 ? (
               <p className="rounded-md border border-stone-200 bg-stone-50 p-4 text-base text-stone-600">
                 游戏开始后，玩家收支会显示在这里
               </p>
             ) : (
               <div className="grid gap-3">
-                {visibleScoreHistory.map((item) => (
+                {playerLedger.map((player) => (
                   <div
-                    className={`grid gap-3 rounded-md border p-4 ${
-                      item.isUndone
-                        ? "border-stone-200 bg-stone-100 text-stone-500"
-                        : "border-stone-200 bg-white"
-                    }`}
-                    key={item.event.id}
+                    className="grid gap-3 rounded-md border border-stone-200 bg-white p-4"
+                    key={player.playerId}
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0">
-                        <p className="truncate text-base font-semibold">
-                          第 {item.roundNumber} 局 ·{" "}
-                          {formatRoundTitle(item.round, replayState?.players ?? [])}
-                        </p>
+                        <p className="truncate text-base font-semibold">{player.nickname}</p>
                         <p className="mt-1 text-sm text-stone-500">
-                          {item.detail}
+                          收入 {player.income} · 支出 {player.expense}
                         </p>
                       </div>
-                      <p className="shrink-0 text-sm font-medium text-stone-400">
-                        #{item.event.version}
+                      <p
+                        className={`shrink-0 text-2xl font-semibold tabular-nums ${
+                          player.total >= 0 ? "text-emerald-700" : "text-red-700"
+                        }`}
+                      >
+                        {player.total >= 0 ? `+${player.total}` : player.total}
                       </p>
                     </div>
                     <div className="grid gap-2">
-                      {item.flows.length === 0 ? (
-                        <p className="text-sm font-medium text-stone-500">本局无计分</p>
+                      {player.entries.length === 0 ? (
+                        <p className="text-sm font-medium text-stone-500">暂无收支记录</p>
                       ) : (
-                        item.flows.map((flow) => (
+                        player.entries.slice(0, 4).map((entry) => (
                           <div
                             className="flex items-center justify-between gap-3 rounded-md bg-stone-50 px-3 py-2"
-                            key={`${item.event.id}-${flow.playerId}`}
+                            key={`${player.playerId}-${entry.eventId}`}
                           >
-                            <p className="min-w-0 truncate text-sm font-medium text-stone-700">
-                              {flow.nickname}
-                            </p>
-                            <p
-                              className={`shrink-0 text-sm font-semibold tabular-nums ${
-                                flow.delta > 0 ? "text-emerald-700" : "text-red-700"
-                              }`}
-                            >
-                              {getHistoryFlowLabel(flow.delta)}
-                            </p>
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium text-stone-700">
+                                第 {entry.roundNumber} 局 · {entry.title}
+                              </p>
+                              <p className="mt-1 truncate text-xs text-stone-500">{entry.detail}</p>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-3">
+                              <p
+                                className={`text-sm font-semibold tabular-nums ${
+                                  entry.delta > 0 ? "text-emerald-700" : "text-red-700"
+                                }`}
+                              >
+                                {getHistoryFlowLabel(entry.delta)}
+                              </p>
+                              {entry.isUndoable ? (
+                                <button
+                                  className="h-8 rounded-md border border-red-200 bg-red-50 px-3 text-xs font-semibold text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                  disabled={isUndoing || isScoring}
+                                  onClick={() => {
+                                    void handleUndoRoomEvent(entry.eventId);
+                                  }}
+                                  type="button"
+                                >
+                                  撤销
+                                </button>
+                              ) : null}
+                            </div>
                           </div>
                         ))
                       )}
-                    </div>
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-xs font-medium text-stone-400">
-                        {item.isUndone ? "已撤销" : "有效记录"}
-                      </p>
-                      {!item.isUndone && isPlaying ? (
-                        <button
-                          className="h-9 rounded-md border border-red-200 bg-red-50 px-3 text-sm font-semibold text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
-                          disabled={isUndoing || isScoring}
-                          onClick={() => {
-                            void handleUndoRoomEvent(item.event.id);
-                          }}
-                          type="button"
-                        >
-                          撤销
-                        </button>
-                      ) : null}
                     </div>
                   </div>
                 ))}
