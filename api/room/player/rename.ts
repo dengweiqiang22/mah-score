@@ -1,5 +1,5 @@
-import renamePlayerFunction from "@mah-score/backend/api/room/player/rename";
+import renamePlayerFunction from "../../../backend/api/room/player/rename";
 
-export { POST } from "@mah-score/backend/api/room/player/rename";
+export { POST } from "../../../backend/api/room/player/rename";
 
 export default renamePlayerFunction;

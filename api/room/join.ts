@@ -1,5 +1,5 @@
-import joinRoomFunction from "@mah-score/backend/api/room/join";
+import joinRoomFunction from "../../backend/api/room/join";
 
-export { POST } from "@mah-score/backend/api/room/join";
+export { POST } from "../../backend/api/room/join";
 
 export default joinRoomFunction;
