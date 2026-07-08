@@ -159,6 +159,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
   const [isFinishing, setIsFinishing] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
   const [isUndoing, setIsUndoing] = useState(false);
+  const [isFinishConfirmOpen, setIsFinishConfirmOpen] = useState(false);
   const [nicknameInput, setNicknameInput] = useState("");
   const [events, setEvents] = useState<readonly RoomEvent[]>([]);
   const [room, setRoom] = useState<RoomRecord | undefined>();
@@ -647,9 +648,19 @@ export function RoomPage({ roomId }: RoomPageProps) {
     await submitScoreRequest(scoreRequest);
   }
 
-  async function handleFinishRoom() {
+  function openFinishConfirm() {
+    setErrorMessage(undefined);
+    setIsFinishConfirmOpen(true);
+  }
+
+  function cancelFinishRoom() {
+    setIsFinishConfirmOpen(false);
+  }
+
+  async function confirmFinishRoom() {
     setIsFinishing(true);
     setErrorMessage(undefined);
+    setIsFinishConfirmOpen(false);
 
     try {
       const response = await recordRoomEvent({
@@ -671,6 +682,21 @@ export function RoomPage({ roomId }: RoomPageProps) {
     } finally {
       setIsFinishing(false);
     }
+  }
+
+  function getFinishConfirmLines(): readonly string[] {
+    const lines = ["确认结束游戏后：", "房间会进入已结束状态", "结束后不能继续计分", "会生成最终结算"];
+
+    if (
+      replayState?.currentRound.status === "ACTIVE" &&
+      currentRoundEntries.some((item) => !item.isUndone)
+    ) {
+      lines.push("当前局尚未流局");
+      lines.push("当前局尚未达到三家胡牌");
+      lines.push("当前局未确认账单");
+    }
+
+    return lines;
   }
 
   async function handleConfirmRound() {
@@ -1130,13 +1156,47 @@ export function RoomPage({ roomId }: RoomPageProps) {
                     className="h-12 rounded-md border border-stone-300 bg-white px-4 text-base font-semibold text-stone-900 disabled:cursor-not-allowed disabled:opacity-60"
                     disabled={isScoring || isFinishing}
                     onClick={() => {
-                      void handleFinishRoom();
+                      openFinishConfirm();
                     }}
                     type="button"
                   >
-                    {isFinishing ? "结束中..." : "结束游戏"}
+                    结束游戏
                   </button>
                 </div>
+
+                {isFinishConfirmOpen ? (
+                  <div className="grid gap-3 rounded-md border border-amber-200 bg-amber-50 p-4">
+                    <div className="grid gap-2">
+                      {getFinishConfirmLines().map((line) => (
+                        <p className="text-sm leading-6 text-amber-950" key={line}>
+                          {line}
+                        </p>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        className="h-11 rounded-md border border-amber-300 bg-white px-4 text-sm font-semibold text-amber-900 disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={isFinishing}
+                        onClick={() => {
+                          cancelFinishRoom();
+                        }}
+                        type="button"
+                      >
+                        取消
+                      </button>
+                      <button
+                        className="h-11 rounded-md bg-red-700 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={isFinishing}
+                        onClick={() => {
+                          void confirmFinishRoom();
+                        }}
+                        type="button"
+                      >
+                        {isFinishing ? "结束中..." : "确认结束"}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </section>
