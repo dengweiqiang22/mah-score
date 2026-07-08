@@ -196,6 +196,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
   const [selectedPrimaryPlayerId, setSelectedPrimaryPlayerId] = useState<string | undefined>();
   const [selectedRelatedPlayerId, setSelectedRelatedPlayerId] = useState<string | undefined>();
   const [selectedFan, setSelectedFan] = useState<ScoreFan | undefined>();
+  const [isCurrentRoundAllLedgerExpanded, setIsCurrentRoundAllLedgerExpanded] = useState(false);
   const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
   const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "error">("idle");
 
@@ -908,6 +909,10 @@ export function RoomPage({ roomId }: RoomPageProps) {
     selectedPrimaryPlayerId,
   );
 
+  useEffect(() => {
+    setIsCurrentRoundAllLedgerExpanded(false);
+  }, [roomId, currentRoundNumber]);
+
   return (
     <main className="min-h-screen bg-stone-50 px-5 py-6 text-stone-950">
       <section className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-md flex-col gap-8">
@@ -1429,6 +1434,43 @@ export function RoomPage({ roomId }: RoomPageProps) {
                       )}
                     </div>
                   )}
+
+                  <button
+                    className="h-11 rounded-md border border-stone-300 bg-white px-4 text-sm font-semibold text-stone-900"
+                    onClick={() => {
+                      setIsCurrentRoundAllLedgerExpanded((currentValue) => !currentValue);
+                    }}
+                    type="button"
+                  >
+                    {isCurrentRoundAllLedgerExpanded ? "收起全员账单" : "查看全员账单"}
+                  </button>
+
+                  {isCurrentRoundAllLedgerExpanded ? (
+                    <div className="grid gap-2">
+                      {currentRoundLedger.map((player) => (
+                        <div
+                          className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md bg-stone-50 px-3 py-2"
+                          key={player.playerId}
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium text-stone-700">
+                              {player.nickname}
+                            </p>
+                            <p className="mt-1 text-xs text-stone-500">
+                              收入 {player.income} · 支出 {player.expense}
+                            </p>
+                          </div>
+                          <p
+                            className={`shrink-0 text-sm font-semibold tabular-nums ${
+                              player.total >= 0 ? "text-emerald-700" : "text-red-700"
+                            }`}
+                          >
+                            {player.total >= 0 ? `+${player.total}` : player.total}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                 </section>
 
                 <div className="grid grid-cols-2 gap-3">
