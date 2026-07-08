@@ -8,6 +8,8 @@ export interface ScoreState {
 
 export interface CurrentRoundState {
   readonly number: number;
+  readonly status: "WAITING" | "ACTIVE" | "FINISHED";
+  readonly result?: "WIN" | "DRAW";
   readonly winnerIds: readonly string[];
 }
 

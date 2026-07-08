@@ -457,6 +457,12 @@ function createScoreHistory(
   return [...events]
     .sort((left, right) => left.version - right.version)
     .flatMap((event) => {
+      if (event.type === "ROUND_CONFIRMED") {
+        roundNumber += 1;
+        winnerIds.clear();
+        return [];
+      }
+
       if (!isScoreHistoryEvent(event)) {
         return [];
       }
@@ -476,15 +482,9 @@ function createScoreHistory(
           if (winnerId !== undefined && !winnerIds.has(winnerId)) {
             winnerIds.add(winnerId);
           }
-
-          if (winnerIds.size >= 3) {
-            roundNumber += 1;
-            winnerIds.clear();
-          }
         }
 
         if (event.type === "DRAW_GAME") {
-          roundNumber += 1;
           winnerIds.clear();
         }
       }
@@ -998,6 +998,10 @@ export function RoomPage({ roomId }: RoomPageProps) {
   }
 
   function getQuickScoreMissingMessage(): string {
+    if (replayState?.currentRound.status === "FINISHED") {
+      return "本局已结束，请先确认账单。";
+    }
+
     if (quickScoreMode === undefined) {
       return selectedPrimaryPlayerId === undefined ? "请选择玩家。" : "请选择操作。";
     }
@@ -1061,6 +1065,36 @@ export function RoomPage({ roomId }: RoomPageProps) {
     }
   }
 
+  async function handleConfirmRound() {
+    if (replayState?.currentRound.status !== "FINISHED" || isScoring || isFinishing) {
+      return;
+    }
+
+    setIsScoring(true);
+    setErrorMessage(undefined);
+
+    try {
+      const response = await recordRoomEvent({
+        roomId,
+        type: "ROUND_CONFIRMED",
+        operator: "room",
+        payload: {},
+      });
+
+      if (!response.success) {
+        setErrorMessage(response.message);
+        return;
+      }
+
+      resetQuickScoreSelection();
+      await loadRoom();
+    } catch {
+      setErrorMessage("确认本局失败，请稍后再试。");
+    } finally {
+      setIsScoring(false);
+    }
+  }
+
   const isWaiting = room?.status === "WAITING";
   const isPlaying = room?.status === "PLAYING";
   const isFinished = room?.status === "FINISHED";
@@ -1081,7 +1115,8 @@ export function RoomPage({ roomId }: RoomPageProps) {
         );
   const currentRoundNumber = replayState?.currentRound.number ?? 0;
   const currentRoundWinnerCount = replayState?.currentRound.winnerIds.length ?? 0;
-  const isCurrentRoundFinished = currentRoundWinnerCount >= 3;
+  const isCurrentRoundFinished = replayState?.currentRound.status === "FINISHED";
+  const currentRoundResult = replayState?.currentRound.result;
   const settlement =
     replayState === undefined
       ? undefined
@@ -1099,6 +1134,11 @@ export function RoomPage({ roomId }: RoomPageProps) {
   const currentRoundWinnerIds = new Set(replayState?.currentRound.winnerIds ?? []);
   const scoreHistory = createScoreHistory(events, replayState?.players ?? []);
   const playerLedger = createPlayerLedger(scoreHistory, replayState?.players ?? []);
+  const currentRoundEntries =
+    replayState === undefined
+      ? []
+      : scoreHistory.filter((item) => item.roundNumber === replayState.currentRound.number);
+  const currentRoundLedger = createPlayerLedger(currentRoundEntries, replayState?.players ?? []);
   const canUndo = scoreHistory.some((item) => !item.isUndone);
   const quickScoreMissingMessage = getQuickScoreMissingMessage();
   const selectedPrimaryPlayerName = getPlayerNickname(
@@ -1147,8 +1187,19 @@ export function RoomPage({ roomId }: RoomPageProps) {
               <p className="mt-2 text-xl font-semibold">第 {currentRoundNumber} 局</p>
             </div>
             <div className="rounded-md border border-stone-200 bg-white p-3">
-              <p className="text-xs font-medium text-stone-500">本局胡牌</p>
-              <p className="mt-2 text-xl font-semibold">{currentRoundWinnerCount}/3</p>
+              <p className="text-xs font-medium text-stone-500">本局状态</p>
+              <p className="mt-2 text-xl font-semibold">
+                {replayState === undefined
+                  ? "读取中"
+                  : replayState.currentRound.status === "WAITING"
+                    ? "未开始"
+                    : replayState.currentRound.status === "ACTIVE"
+                      ? "进行中"
+                      : "待确认"}
+              </p>
+              <p className="mt-1 text-xs font-medium text-stone-400">
+                胡牌 {currentRoundWinnerCount}/3
+              </p>
             </div>
           </section>
         ) : null}
@@ -1316,9 +1367,61 @@ export function RoomPage({ roomId }: RoomPageProps) {
             {isPlaying ? (
               <div className="grid gap-3">
                 {isCurrentRoundFinished ? (
-                  <p className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium leading-6 text-amber-800">
-                    本局已有 3 家胡牌，当前局已结束。
-                  </p>
+                  <section className="grid gap-3 rounded-md border border-amber-200 bg-amber-50 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-base font-semibold text-amber-900">本局已结束</h3>
+                        <p className="mt-1 text-sm leading-6 text-amber-800">
+                          {currentRoundResult === "DRAW"
+                            ? "本局流局，确认账单后进入下一局。"
+                            : "本局已有 3 家胡牌，确认账单后进入下一局。"}
+                        </p>
+                      </div>
+                      <button
+                        className="h-10 shrink-0 rounded-md bg-emerald-700 px-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={isScoring || isFinishing}
+                        onClick={() => {
+                          void handleConfirmRound();
+                        }}
+                        type="button"
+                      >
+                        {isScoring ? "确认中..." : "确认账单"}
+                      </button>
+                    </div>
+
+                    <div className="grid gap-2">
+                      {currentRoundLedger.some((player) => player.entries.length > 0) ? (
+                        currentRoundLedger
+                          .filter((player) => player.entries.length > 0)
+                          .map((player) => (
+                            <div
+                              className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md bg-white px-3 py-2"
+                              key={player.playerId}
+                            >
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-medium text-stone-700">
+                                  {player.nickname}
+                                </p>
+                                <p className="mt-1 text-xs text-stone-500">
+                                  收入 {player.income} · 支出 {player.expense}
+                                </p>
+                              </div>
+                              <p
+                                className={`shrink-0 text-sm font-semibold tabular-nums ${
+                                  player.total >= 0 ? "text-emerald-700" : "text-red-700"
+                                }`}
+                              >
+                                {player.total >= 0 ? `+${player.total}` : player.total}
+                              </p>
+                            </div>
+                          ))
+                      ) : (
+                        <p className="rounded-md bg-white px-3 py-2 text-sm text-stone-600">
+                          本局流局，无收支变化。
+                        </p>
+                      )}
+                    </div>
+                  </section>
                 ) : null}
 
                 {quickScoreMode !== undefined &&

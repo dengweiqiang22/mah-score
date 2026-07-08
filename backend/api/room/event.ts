@@ -1,7 +1,8 @@
 import type { AppendRoomEventRequest, AppendRoomEventResponse } from "@mah-score/shared";
 
+import { buildReplayEventsFromSnapshot, replayRoomEvents } from "@mah-score/shared";
 import { jsonFailure, jsonSuccess } from "../../services/apiResponse";
-import { appendRoomEvent } from "../../services/eventStore";
+import { appendRoomEvent, readRoomEvents } from "../../services/eventStore";
 import {
   isRoomEventPayload,
   isRoomEventType,
@@ -71,13 +72,13 @@ export async function POST(request: Request): Promise<Response> {
     });
   }
 
-  if (parsedRequest.type !== "GAME_FINISHED") {
-    return jsonFailure("当前接口只允许记录结束游戏事件。", "EVENT_TYPE_NOT_ALLOWED", {
+  if (parsedRequest.type !== "GAME_FINISHED" && parsedRequest.type !== "ROUND_CONFIRMED") {
+    return jsonFailure("当前接口只允许记录结束游戏和确认本局事件。", "EVENT_TYPE_NOT_ALLOWED", {
       status: 400,
     });
   }
 
-  if (parsedRequest.type === "GAME_FINISHED") {
+  if (parsedRequest.type === "GAME_FINISHED" || parsedRequest.type === "ROUND_CONFIRMED") {
     const room = await getRoom(parsedRequest.roomId);
 
     if (room === undefined) {
@@ -90,6 +91,27 @@ export async function POST(request: Request): Promise<Response> {
       return jsonFailure("当前房间不能结束游戏。", "ROOM_NOT_PLAYING", {
         status: 409,
       });
+    }
+
+    if (parsedRequest.type === "ROUND_CONFIRMED") {
+      const roomEvents = await readRoomEvents(parsedRequest.roomId);
+      const roomState = replayRoomEvents(
+        buildReplayEventsFromSnapshot(
+          {
+            roomId: room.roomId,
+            players: room.players,
+            status: room.status,
+            createdAt: room.createdAt,
+          },
+          roomEvents,
+        ),
+      );
+
+      if (roomState.currentRound.status !== "FINISHED") {
+        return jsonFailure("当前本局尚未结束。", "ROUND_NOT_FINISHED", {
+          status: 409,
+        });
+      }
     }
   }
 
@@ -113,7 +135,7 @@ export async function POST(request: Request): Promise<Response> {
       });
     }
 
-    return jsonUnexpectedRoomFailure("记录结束游戏事件失败，请稍后再试。", "EVENT_APPEND_FAILED", {
+    return jsonUnexpectedRoomFailure("记录房间事件失败，请稍后再试。", "EVENT_APPEND_FAILED", {
       status: 500,
     });
   }

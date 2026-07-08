@@ -233,6 +233,8 @@ assert.equal(state.version, 11);
 assert.equal(state.status, "FINISHED");
 assert.deepEqual(state.currentRound, {
   number: 1,
+  status: "FINISHED",
+  result: "WIN",
   winnerIds: ["player_1", "player_2", "player_3"],
 });
 assert.deepEqual(state.players, [
@@ -294,13 +296,49 @@ const drawGameState = replayRoomEvents([
 ]);
 
 assert.deepEqual(drawGameState.currentRound, {
-  number: 2,
-  winnerIds: [],
+  number: 1,
+  status: "FINISHED",
+  result: "DRAW",
+  winnerIds: ["player_1"],
 });
 assert.deepEqual(
   drawGameState.rounds.map((round) => round.eventId),
   ["event_6", "event_draw"],
 );
+
+const confirmedRoundState = replayRoomEvents([
+  ...events.slice(0, 6),
+  {
+    ...baseEvent,
+    id: "event_finished",
+    type: "DRAW_GAME",
+    version: 7,
+    payload: {},
+  },
+  {
+    ...baseEvent,
+    id: "event_confirmed",
+    type: "ROUND_CONFIRMED",
+    version: 8,
+    payload: {},
+  },
+  {
+    ...baseEvent,
+    id: "event_next_round",
+    type: "SELF_DRAW",
+    version: 9,
+    payload: {
+      winnerId: "player_2",
+    },
+  },
+]);
+
+assert.deepEqual(confirmedRoundState.currentRound, {
+  number: 2,
+  status: "ACTIVE",
+  result: undefined,
+  winnerIds: ["player_2"],
+});
 
 const extendedScoreEvents = [
   {
@@ -417,6 +455,8 @@ const extendedScoreState = replayRoomEvents(extendedScoreEvents);
 
 assert.deepEqual(extendedScoreState.currentRound, {
   number: 1,
+  status: "ACTIVE",
+  result: undefined,
   winnerIds: ["player_1", "player_3"],
 });
 assert.deepEqual(extendedScoreState.scores, [

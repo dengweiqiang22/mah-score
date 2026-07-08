@@ -5,6 +5,7 @@ export type RoomEventType =
   | "PLAYER_REMOVED"
   | "GAME_STARTED"
   | "GAME_FINISHED"
+  | "ROUND_CONFIRMED"
   | "DISCARD_WIN"
   | "SELF_DRAW"
   | "KONG"

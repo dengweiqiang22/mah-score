@@ -161,6 +161,8 @@ function createInitialState(roomId: string): MutableReplayState {
     scores: [],
     currentRound: {
       number: 0,
+      status: "WAITING",
+      result: undefined,
       winnerIds: [],
     },
     rounds: [],
@@ -204,16 +206,6 @@ function getActivePlayers(state: MutableReplayState): readonly RoomPlayer[] {
   return state.players.filter((player) => !winnerIds.has(player.id));
 }
 
-function startNextRound(state: MutableReplayState): MutableReplayState {
-  return {
-    ...state,
-    currentRound: {
-      number: state.currentRound.number + 1,
-      winnerIds: [],
-    },
-  };
-}
-
 function ensureActiveRound(state: MutableReplayState): MutableReplayState {
   if (state.currentRound.number > 0) {
     return state;
@@ -223,6 +215,47 @@ function ensureActiveRound(state: MutableReplayState): MutableReplayState {
     ...state,
     currentRound: {
       number: 1,
+      status: "ACTIVE",
+      result: undefined,
+      winnerIds: [],
+    },
+  };
+}
+
+function finishCurrentRound(state: MutableReplayState, result: "WIN" | "DRAW"): MutableReplayState {
+  if (state.currentRound.number === 0) {
+    return {
+      ...state,
+      currentRound: {
+        number: 1,
+        status: "FINISHED",
+        result,
+        winnerIds: [],
+      },
+    };
+  }
+
+  return {
+    ...state,
+    currentRound: {
+      ...state.currentRound,
+      status: "FINISHED",
+      result,
+    },
+  };
+}
+
+function confirmFinishedRound(state: MutableReplayState): MutableReplayState {
+  if (state.currentRound.status !== "FINISHED") {
+    return state;
+  }
+
+  return {
+    ...state,
+    currentRound: {
+      number: state.currentRound.number + 1,
+      status: "ACTIVE",
+      result: undefined,
       winnerIds: [],
     },
   };
@@ -251,7 +284,18 @@ function recordRoundWinner(state: MutableReplayState, winnerId: string): Mutable
     },
   };
 
-  return nextState;
+  if (winnerIds.size >= 3) {
+    return finishCurrentRound(nextState, "WIN");
+  }
+
+  return {
+    ...nextState,
+    currentRound: {
+      ...nextState.currentRound,
+      status: "ACTIVE",
+      result: undefined,
+    },
+  };
 }
 
 function addScore(scores: ScoreState[], playerId: string, delta: number): ScoreState[] {
@@ -484,7 +528,11 @@ function applyScoreEvent(state: MutableReplayState, event: RoomEvent): MutableRe
   }
 
   if (event.type === "DRAW_GAME") {
-    return startNextRound(ensureActiveRound(state));
+    return finishCurrentRound(ensureActiveRound(state), "DRAW");
+  }
+
+  if (event.type === "ROUND_CONFIRMED") {
+    return confirmFinishedRound(state);
   }
 
   return state;
@@ -520,6 +568,8 @@ function applyEvent(state: MutableReplayState, event: RoomEvent): MutableReplayS
       status: "PLAYING",
       currentRound: {
         number: 1,
+        status: "ACTIVE",
+        result: undefined,
         winnerIds: [],
       },
     };
@@ -532,12 +582,24 @@ function applyEvent(state: MutableReplayState, event: RoomEvent): MutableReplayS
     };
   }
 
+  if (event.type === "ROUND_CONFIRMED") {
+    if (state.currentRound.status !== "FINISHED") {
+      return state;
+    }
+
+    return applyScoreEvent(applyRoundEvent(nextState, event), event);
+  }
+
   if (
     event.type === "DISCARD_WIN" ||
     event.type === "SELF_DRAW" ||
     event.type === "KONG" ||
     event.type === "DRAW_GAME"
   ) {
+    if (state.currentRound.status === "FINISHED") {
+      return state;
+    }
+
     return applyScoreEvent(applyRoundEvent(nextState, event), event);
   }
 

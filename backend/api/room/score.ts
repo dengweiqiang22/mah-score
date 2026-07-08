@@ -310,8 +310,8 @@ export async function POST(request: Request): Promise<Response> {
           ),
         );
 
-        if (roomState.currentRound.winnerIds.length >= 3) {
-          return jsonFailure("本局已经结束，请进入下一局后再计分。", "ROUND_ALREADY_FINISHED", {
+        if (roomState.currentRound.status === "FINISHED") {
+          return jsonFailure("本局已经结束，请先确认账单后再记录下一局。", "ROUND_ALREADY_FINISHED", {
             status: 409,
           });
         }
