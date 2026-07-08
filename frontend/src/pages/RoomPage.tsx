@@ -1252,26 +1252,6 @@ export function RoomPage({ roomId }: RoomPageProps) {
                   </p>
                 ) : null}
 
-                <div className="grid grid-cols-3 gap-2">
-                  {quickScoreModes.map((option) => (
-                    <button
-                      className={`h-11 rounded-md border px-2 text-sm font-semibold ${
-                        quickScoreMode === option.mode
-                          ? "border-emerald-700 bg-emerald-700 text-white"
-                          : "border-stone-300 bg-white text-stone-900"
-                      } disabled:cursor-not-allowed disabled:opacity-60`}
-                      disabled={isScoring || isCurrentRoundFinished}
-                      key={option.mode}
-                      onClick={() => {
-                        void handleSelectQuickScoreMode(option.mode);
-                      }}
-                      type="button"
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-
                 {quickScoreMode !== undefined &&
                 needsRelatedPlayer(quickScoreMode) &&
                 selectedPrimaryPlayerId !== undefined ? (
@@ -1306,6 +1286,26 @@ export function RoomPage({ roomId }: RoomPageProps) {
                     </div>
                   </div>
                 ) : null}
+
+                <div className="grid grid-cols-3 gap-2">
+                  {quickScoreModes.map((option) => (
+                    <button
+                      className={`h-11 rounded-md border px-2 text-sm font-semibold ${
+                        quickScoreMode === option.mode
+                          ? "border-emerald-700 bg-emerald-700 text-white"
+                          : "border-stone-300 bg-white text-stone-900"
+                      } disabled:cursor-not-allowed disabled:opacity-60`}
+                      disabled={isScoring || isCurrentRoundFinished}
+                      key={option.mode}
+                      onClick={() => {
+                        void handleSelectQuickScoreMode(option.mode);
+                      }}
+                      type="button"
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
 
                 {quickScoreMode !== undefined &&
                 needsFan(quickScoreMode) &&
