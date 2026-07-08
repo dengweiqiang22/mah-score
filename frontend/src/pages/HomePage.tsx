@@ -8,15 +8,16 @@ export function HomePage() {
   const [isJoiningRoom, setIsJoiningRoom] = useState(false);
   const [createNickname, setCreateNickname] = useState("");
   const [joinNickname, setJoinNickname] = useState("");
-  const [joinRoomId, setJoinRoomId] = useState("");
+  const [manualJoinRoomId, setManualJoinRoomId] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
+  const [invitedRoomId, setInvitedRoomId] = useState<string | undefined>();
 
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
-    const invitedRoomId = searchParams.get("roomId")?.replace(/\D/gu, "").slice(0, 3);
+    const nextInvitedRoomId = searchParams.get("roomId")?.replace(/\D/gu, "").slice(0, 3);
 
-    if (invitedRoomId?.length === 3) {
-      setJoinRoomId(invitedRoomId);
+    if (nextInvitedRoomId?.length === 3) {
+      setInvitedRoomId(nextInvitedRoomId);
     }
   }, []);
 
@@ -46,9 +47,11 @@ export function HomePage() {
     setIsJoiningRoom(true);
     setErrorMessage(undefined);
 
+    const roomId = invitedRoomId ?? manualJoinRoomId;
+
     try {
       const response = await joinRoom({
-        roomId: joinRoomId,
+        roomId,
         nickname: joinNickname,
       });
 
@@ -66,8 +69,10 @@ export function HomePage() {
   }
 
   function handleJoinRoomIdChange(value: string) {
-    setJoinRoomId(value.replace(/\D/gu, "").slice(0, 3));
+    setManualJoinRoomId(value.replace(/\D/gu, "").slice(0, 3));
   }
+
+  const hasInvitedRoomId = invitedRoomId !== undefined;
 
   return (
     <main className="min-h-screen bg-stone-50 px-5 py-6 text-stone-950">
@@ -86,18 +91,22 @@ export function HomePage() {
           <div className="grid gap-3 rounded-md border border-stone-200 bg-white p-4">
             <div>
               <h2 className="text-lg font-semibold tracking-normal">加入房间</h2>
-              <p className="mt-1 text-sm text-stone-500">输入房间号和昵称</p>
+              <p className="mt-1 text-sm text-stone-500">
+                {hasInvitedRoomId ? "请输入昵称" : "输入房间号和昵称"}
+              </p>
             </div>
-            <input
-              className="h-12 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-emerald-700"
-              inputMode="numeric"
-              maxLength={3}
-              onChange={(event) => {
-                handleJoinRoomIdChange(event.target.value);
-              }}
-              placeholder="房间号"
-              value={joinRoomId}
-            />
+            {!hasInvitedRoomId ? (
+              <input
+                className="h-12 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-emerald-700"
+                inputMode="numeric"
+                maxLength={3}
+                onChange={(event) => {
+                  handleJoinRoomIdChange(event.target.value);
+                }}
+                placeholder="房间号"
+                value={manualJoinRoomId}
+              />
+            ) : null}
             <input
               className="h-12 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-emerald-700"
               maxLength={12}
@@ -109,7 +118,9 @@ export function HomePage() {
             />
             <HomeActionButton
               disabled={
-                isJoiningRoom || joinRoomId.length !== 3 || joinNickname.trim().length === 0
+                isJoiningRoom ||
+                joinNickname.trim().length === 0 ||
+                (!hasInvitedRoomId && manualJoinRoomId.length !== 3)
               }
               onClick={handleJoinRoom}
               variant="primary"
