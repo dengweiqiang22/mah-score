@@ -493,6 +493,52 @@ assert.deepEqual(
   ["extended_6", "extended_7", "extended_8", "extended_10"],
 );
 assert.deepEqual(
+  extendedScoreHistory.map((item) => ({
+    eventId: item.event.id,
+    roundNumber: item.roundNumber,
+    roundActionNumber: item.roundActionNumber,
+    title: item.title,
+    isUndone: item.isUndone,
+  })),
+  [
+    {
+      eventId: "extended_10",
+      roundNumber: 1,
+      roundActionNumber: 5,
+      title: "王五 自摸",
+      isUndone: false,
+    },
+    {
+      eventId: "extended_9",
+      roundNumber: 1,
+      roundActionNumber: 4,
+      title: "李四 暗杠",
+      isUndone: true,
+    },
+    {
+      eventId: "extended_8",
+      roundNumber: 1,
+      roundActionNumber: 3,
+      title: "赵六 补杠",
+      isUndone: false,
+    },
+    {
+      eventId: "extended_7",
+      roundNumber: 1,
+      roundActionNumber: 2,
+      title: "王五 直杠",
+      isUndone: false,
+    },
+    {
+      eventId: "extended_6",
+      roundNumber: 1,
+      roundActionNumber: 1,
+      title: "张三 胡牌",
+      isUndone: false,
+    },
+  ],
+);
+assert.deepEqual(
   extendedScoreLedger.map((player) => ({
     playerId: player.playerId,
     total: player.total,

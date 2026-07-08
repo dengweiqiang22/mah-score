@@ -114,6 +114,18 @@ function getHistoryFlowLabel(delta: number): string {
   return delta > 0 ? `收入 +${delta}` : `支出 ${delta}`;
 }
 
+function getScoreFlowLabel(delta: number): string {
+  return delta > 0 ? `+${delta}` : `${delta}`;
+}
+
+function formatScoreFlowSummary(flows: readonly { readonly nickname: string; readonly delta: number }[]): string {
+  if (flows.length === 0) {
+    return "无分数变化";
+  }
+
+  return flows.map((flow) => `${flow.nickname} ${getScoreFlowLabel(flow.delta)}`).join("，");
+}
+
 function needsRelatedPlayer(mode: QuickScoreMode): boolean {
   return mode === "DISCARD_WIN" || mode === "DISCARD_KONG";
 }
@@ -1261,6 +1273,62 @@ export function RoomPage({ roomId }: RoomPageProps) {
                     </div>
                   </div>
                 ) : null}
+
+                <section className="grid gap-3 rounded-md border border-stone-200 bg-stone-50 p-4">
+                  <div>
+                    <h3 className="text-base font-semibold text-stone-900">本局事件</h3>
+                    <p className="mt-1 text-sm text-stone-500">
+                      {currentRoundEntries.length === 0
+                        ? "本局还没有计分事件"
+                        : "最新事件在上方"}
+                    </p>
+                  </div>
+
+                  {currentRoundEntries.length === 0 ? (
+                    <p className="rounded-md bg-white px-3 py-2 text-sm text-stone-600">
+                      录入点炮、自摸、杠牌或流局后会显示在这里。
+                    </p>
+                  ) : (
+                    <div className="grid gap-2">
+                      {currentRoundEntries.map((item) => (
+                        <article
+                          className={`grid gap-2 rounded-md border bg-white p-3 ${
+                            item.isUndone ? "border-stone-200 opacity-70" : "border-stone-200"
+                          }`}
+                          key={item.event.id}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-xs font-semibold text-stone-500">
+                                第 {item.roundNumber} 局 · 第 {item.roundActionNumber} 笔
+                              </p>
+                              <h4 className="mt-1 truncate text-base font-semibold text-stone-900">
+                                {item.title}
+                              </h4>
+                            </div>
+                            {item.isUndone ? (
+                              <span className="shrink-0 rounded-md border border-stone-300 px-2 py-1 text-xs font-semibold text-stone-500">
+                                已撤销
+                              </span>
+                            ) : (
+                              <span className="shrink-0 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
+                                有效
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm leading-6 text-stone-600">{item.detail}</p>
+                          <p
+                            className={`text-sm font-semibold ${
+                              item.isUndone ? "text-stone-500" : "text-stone-900"
+                            }`}
+                          >
+                            {formatScoreFlowSummary(item.flows)}
+                          </p>
+                        </article>
+                      ))}
+                    </div>
+                  )}
+                </section>
 
                 <div className="grid grid-cols-2 gap-3">
                   <button

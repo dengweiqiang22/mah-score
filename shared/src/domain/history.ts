@@ -12,6 +12,8 @@ export interface ScoreHistoryItem {
   readonly event: RoomEvent;
   readonly round: RoundState;
   readonly roundNumber: number;
+  readonly roundActionNumber: number;
+  readonly title: string;
   readonly isUndone: boolean;
   readonly detail: string;
   readonly flows: readonly HistoryFlowItem[];
@@ -209,11 +211,13 @@ function createRoundFromEvent(event: RoomEvent): RoundState {
 function createScoreHistoryItem(
   event: RoomEvent,
   roundNumber: number,
+  roundActionNumber: number,
   players: readonly RoomPlayer[],
   roundWinnerIds: ReadonlySet<string>,
   isUndone: boolean,
 ): ScoreHistoryItem {
   const round = createRoundFromEvent(event);
+  const title = formatRoundTitle(round, players);
 
   if (event.type === "DISCARD_WIN") {
     const winnerId = getPayloadStringValue(event, "winnerId");
@@ -225,6 +229,8 @@ function createScoreHistoryItem(
       event,
       round,
       roundNumber,
+      roundActionNumber,
+      title,
       isUndone,
       detail: formatRoundDetail(round, players),
       flows: [
@@ -244,6 +250,8 @@ function createScoreHistoryItem(
       event,
       round,
       roundNumber,
+      roundActionNumber,
+      title,
       isUndone,
       detail: formatRoundDetail(round, players),
       flows: activePlayers
@@ -269,6 +277,8 @@ function createScoreHistoryItem(
         event,
         round,
         roundNumber,
+        roundActionNumber,
+        title,
         isUndone,
         detail: formatRoundDetail(round, players),
         flows: [
@@ -284,6 +294,8 @@ function createScoreHistoryItem(
       event,
       round,
       roundNumber,
+      roundActionNumber,
+      title,
       isUndone,
       detail: formatRoundDetail(round, players),
       flows: activePlayers
@@ -302,6 +314,8 @@ function createScoreHistoryItem(
     event,
     round,
     roundNumber,
+    roundActionNumber,
+    title,
     isUndone,
     detail: formatRoundDetail(round, players),
     flows: [],
@@ -325,12 +339,14 @@ export function createScoreHistory(
   );
   const winnerIds = new Set<string>();
   let roundNumber = 1;
+  let roundActionNumber = 0;
 
   return [...events]
     .sort((left, right) => left.version - right.version)
     .flatMap((event) => {
       if (event.type === "ROUND_CONFIRMED") {
         roundNumber += 1;
+        roundActionNumber = 0;
         winnerIds.clear();
         return [];
       }
@@ -339,9 +355,12 @@ export function createScoreHistory(
         return [];
       }
 
+      roundActionNumber += 1;
+
       const historyItem = createScoreHistoryItem(
         event,
         roundNumber,
+        roundActionNumber,
         players,
         new Set(winnerIds),
         undoneEventIds.has(event.id),
@@ -395,7 +414,7 @@ export function createPlayerLedger(
         eventId: item.event.id,
         version: item.event.version,
         roundNumber: item.roundNumber,
-        title: formatRoundTitle(item.round, players),
+        title: item.title,
         detail: item.detail,
         delta: flow.delta,
         isUndone: item.isUndone,
