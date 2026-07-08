@@ -894,6 +894,13 @@ export function RoomPage({ roomId }: RoomPageProps) {
     storedPlayerIdentity === undefined
       ? undefined
       : replayState?.players.find((player) => player.id === storedPlayerIdentity.playerId);
+  const currentPlayerRoundLedger =
+    currentPlayer === undefined
+      ? undefined
+      : currentRoundLedger.find((player) => player.playerId === currentPlayer.id);
+  const currentPlayerRoundEntries =
+    currentPlayerRoundLedger?.entries.filter((entry) => !entry.isUndone) ?? [];
+  const currentPlayerRoundTotal = currentPlayerRoundLedger?.total ?? 0;
   const canUndo = scoreHistory.some((item) => !item.isUndone);
   const quickScoreMissingMessage = getQuickScoreMissingMessage();
   const selectedPrimaryPlayerName = getPlayerNickname(
@@ -1343,6 +1350,83 @@ export function RoomPage({ roomId }: RoomPageProps) {
                           </p>
                         </article>
                       ))}
+                    </div>
+                  )}
+                </section>
+
+                <section className="grid gap-3 rounded-md border border-stone-200 bg-white p-4">
+                  <div>
+                    <h3 className="text-base font-semibold text-stone-900">我的本局账单</h3>
+                    <p className="mt-1 text-sm text-stone-500">
+                      {currentPlayer === undefined
+                        ? "当前为公共视图，未识别本机玩家身份。"
+                        : `只显示 ${currentPlayer.nickname} 的本局收支`}
+                    </p>
+                  </div>
+
+                  {currentPlayer === undefined ? (
+                    <p className="rounded-md bg-stone-50 px-3 py-2 text-sm leading-6 text-stone-600">
+                      可以通过本局事件查看公共记录；加入房间并输入昵称后，会默认显示自己的本局账单。
+                    </p>
+                  ) : (
+                    <div className="grid gap-3">
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="rounded-md bg-stone-50 px-3 py-2">
+                          <p className="text-xs font-medium text-stone-500">收入</p>
+                          <p className="mt-1 text-lg font-semibold text-emerald-700 tabular-nums">
+                            +{currentPlayerRoundLedger?.income ?? 0}
+                          </p>
+                        </div>
+                        <div className="rounded-md bg-stone-50 px-3 py-2">
+                          <p className="text-xs font-medium text-stone-500">支出</p>
+                          <p className="mt-1 text-lg font-semibold text-red-700 tabular-nums">
+                            -{currentPlayerRoundLedger?.expense ?? 0}
+                          </p>
+                        </div>
+                        <div className="rounded-md bg-stone-50 px-3 py-2">
+                          <p className="text-xs font-medium text-stone-500">净变化</p>
+                          <p
+                            className={`mt-1 text-lg font-semibold tabular-nums ${
+                              currentPlayerRoundTotal >= 0 ? "text-emerald-700" : "text-red-700"
+                            }`}
+                          >
+                            {currentPlayerRoundTotal >= 0
+                              ? `+${currentPlayerRoundTotal}`
+                              : currentPlayerRoundTotal}
+                          </p>
+                        </div>
+                      </div>
+
+                      {currentPlayerRoundEntries.length === 0 ? (
+                        <p className="rounded-md bg-stone-50 px-3 py-2 text-sm text-stone-600">
+                          本局暂无与你相关的收支。
+                        </p>
+                      ) : (
+                        <div className="grid gap-2">
+                          {currentPlayerRoundEntries.map((entry) => (
+                            <div
+                              className="flex items-center justify-between gap-3 rounded-md bg-stone-50 px-3 py-2"
+                              key={`${entry.eventId}-${entry.version}`}
+                            >
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-medium text-stone-700">
+                                  第 {entry.roundNumber} 局 · {entry.title}
+                                </p>
+                                <p className="mt-1 truncate text-xs text-stone-500">
+                                  {entry.detail}
+                                </p>
+                              </div>
+                              <p
+                                className={`shrink-0 text-sm font-semibold tabular-nums ${
+                                  entry.delta > 0 ? "text-emerald-700" : "text-red-700"
+                                }`}
+                              >
+                                {getHistoryFlowLabel(entry.delta)}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </section>
