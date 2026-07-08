@@ -95,6 +95,12 @@ async function copyTextToClipboard(text: string): Promise<boolean> {
   }
 }
 
+function getPayloadString(payload: RoomEvent["payload"], key: string): string | undefined {
+  const value = payload[key];
+
+  return typeof value === "string" ? value : undefined;
+}
+
 function getPlayerNickname(players: readonly RoomPlayer[], playerId: string | undefined): string {
   if (playerId === undefined) {
     return "未知玩家";
@@ -412,10 +418,70 @@ export function RoomPage({ roomId }: RoomPageProps) {
     setSettlementCopyMessage("复制失败，请手动复制结算文本");
   }
 
+  function formatUndoTargetDescription(targetEventId?: string): string {
+    const targetHistoryItem =
+      targetEventId === undefined
+        ? [...scoreHistory].find((item) => !item.isUndone)
+        : scoreHistory.find((item) => item.event.id === targetEventId);
+
+    if (targetHistoryItem === undefined) {
+      return targetEventId === undefined ? "上一条计分记录" : "这条计分记录";
+    }
+
+    if (targetHistoryItem.round.type === "DRAW_GAME") {
+      return `第 ${targetHistoryItem.roundNumber} 局 流局`;
+    }
+
+    if (targetHistoryItem.round.type === "DISCARD_WIN") {
+      const winnerName = getPlayerNickname(
+        replayState?.players ?? [],
+        getPayloadString(targetHistoryItem.event.payload, "winnerId"),
+      );
+      const discarderName = getPlayerNickname(
+        replayState?.players ?? [],
+        getPayloadString(targetHistoryItem.event.payload, "discarderId"),
+      );
+
+      return `第 ${targetHistoryItem.roundNumber} 局 ${winnerName} 胡牌，${discarderName} 点炮`;
+    }
+
+    if (targetHistoryItem.round.type === "SELF_DRAW") {
+      const winnerName = getPlayerNickname(
+        replayState?.players ?? [],
+        getPayloadString(targetHistoryItem.event.payload, "winnerId"),
+      );
+
+      return `第 ${targetHistoryItem.roundNumber} 局 ${winnerName} 自摸`;
+    }
+
+    if (targetHistoryItem.round.type === "KONG") {
+      const playerName = getPlayerNickname(
+        replayState?.players ?? [],
+        getPayloadString(targetHistoryItem.event.payload, "playerId"),
+      );
+      const kongType = getPayloadString(targetHistoryItem.event.payload, "kongType");
+
+      if (kongType === "DISCARD_KONG") {
+        const fromPlayerName = getPlayerNickname(
+          replayState?.players ?? [],
+          getPayloadString(targetHistoryItem.event.payload, "fromPlayerId"),
+        );
+
+        return `第 ${targetHistoryItem.roundNumber} 局 ${playerName} 直杠，${fromPlayerName} 引杠`;
+      }
+
+      if (kongType === "SUPPLEMENT_KONG") {
+        return `第 ${targetHistoryItem.roundNumber} 局 ${playerName} 补杠`;
+      }
+
+      return `第 ${targetHistoryItem.roundNumber} 局 ${playerName} 暗杠`;
+    }
+
+    return `第 ${targetHistoryItem.roundNumber} 局`;
+  }
+
   async function handleUndoRoomEvent(targetEventId?: string) {
-    const shouldUndo = window.confirm(
-      targetEventId === undefined ? "确认撤销上一条计分记录？" : "确认撤销这条计分记录？",
-    );
+    const shouldUndo = window.confirm(`确认撤销：${formatUndoTargetDescription(targetEventId)}？`);
 
     if (!shouldUndo) {
       return;
