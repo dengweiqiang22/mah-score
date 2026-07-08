@@ -1,4 +1,4 @@
-import type { RoomEventPayload, RoomEventType } from "@mah-score/shared";
+import type { RoomEventPayload, RoomEventType } from "../../shared/src/index.js";
 
 const roomEventTypes = [
   "ROOM_CREATED",

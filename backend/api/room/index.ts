@@ -1,9 +1,9 @@
-import type { GetRoomResponse } from "@mah-score/shared";
+import type { GetRoomResponse } from "../../../shared/src/index.js";
 
-import { jsonFailure, jsonSuccess } from "../../services/apiResponse";
-import { getRedisConfigurationError } from "../../services/redis";
-import { getRoom } from "../../services/roomService";
-import { isValidRoomId } from "../../services/roomValidation";
+import { jsonFailure, jsonSuccess } from "../../services/apiResponse.js";
+import { getRedisConfigurationError } from "../../services/redis.js";
+import { getRoom } from "../../services/roomService.js";
+import { isValidRoomId } from "../../services/roomValidation.js";
 
 export async function GET(request: Request): Promise<Response> {
   const redisConfigurationError = getRedisConfigurationError();

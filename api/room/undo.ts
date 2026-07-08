@@ -1,5 +1,5 @@
-import undoFunction from "../../backend/api/room/undo";
+import undoFunction from "../../backend/api/room/undo.js";
 
-export { POST } from "../../backend/api/room/undo";
+export { POST } from "../../backend/api/room/undo.js";
 
 export default undoFunction;

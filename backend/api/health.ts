@@ -1,4 +1,4 @@
-import type { ApiResponse } from "@mah-score/shared";
+import type { ApiResponse } from "../../shared/src/index.js";
 
 interface HealthData {
   readonly status: "ok";

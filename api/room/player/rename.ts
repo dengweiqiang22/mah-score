@@ -1,5 +1,5 @@
-import renamePlayerFunction from "../../../backend/api/room/player/rename";
+import renamePlayerFunction from "../../../backend/api/room/player/rename.js";
 
-export { POST } from "../../../backend/api/room/player/rename";
+export { POST } from "../../../backend/api/room/player/rename.js";
 
 export default renamePlayerFunction;

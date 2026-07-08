@@ -2,24 +2,24 @@ import type {
   AppendRoomEventResponse,
   ScoreEventRequest,
   ScoreFan,
-} from "@mah-score/shared";
+} from "../../../shared/src/index.js";
 
-import { buildReplayEventsFromSnapshot, replayRoomEvents } from "@mah-score/shared";
-import { jsonFailure, jsonSuccess } from "../../services/apiResponse";
-import { appendRoomEvent, readRoomEvents } from "../../services/eventStore";
-import { isValidEventOperator } from "../../services/eventValidation";
-import { readJsonBody } from "../../services/requestBody";
-import { jsonRoomBusyFailure } from "../../services/roomFailure";
-import { getRedisConfigurationError } from "../../services/redis";
-import { getRoom, withRoomLock } from "../../services/roomService";
-import { isValidRoomId } from "../../services/roomValidation";
+import { buildReplayEventsFromSnapshot, replayRoomEvents } from "../../../shared/src/index.js";
+import { jsonFailure, jsonSuccess } from "../../services/apiResponse.js";
+import { appendRoomEvent, readRoomEvents } from "../../services/eventStore.js";
+import { isValidEventOperator } from "../../services/eventValidation.js";
+import { readJsonBody } from "../../services/requestBody.js";
+import { jsonRoomBusyFailure } from "../../services/roomFailure.js";
+import { getRedisConfigurationError } from "../../services/redis.js";
+import { getRoom, withRoomLock } from "../../services/roomService.js";
+import { isValidRoomId } from "../../services/roomValidation.js";
 import {
   getScoreEventPayload,
   isKongType,
   isScoreAction,
   isScoreFan,
   roomHasPlayer,
-} from "../../services/scoreValidation";
+} from "../../services/scoreValidation.js";
 
 interface ParseScoreEventRequestFailure {
   readonly code: string;

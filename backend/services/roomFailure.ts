@@ -1,4 +1,4 @@
-import { jsonFailure } from "./apiResponse";
+import { jsonFailure } from "./apiResponse.js";
 
 export function jsonRoomBusyFailure(init?: ResponseInit): Response {
   return jsonFailure("当前房间正在处理其他操作，请稍后再试。", "ROOM_BUSY", {

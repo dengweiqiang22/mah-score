@@ -1,5 +1,5 @@
-import syncFunction from "../../backend/api/room/sync";
+import syncFunction from "../../backend/api/room/sync.js";
 
-export { GET } from "../../backend/api/room/sync";
+export { GET } from "../../backend/api/room/sync.js";
 
 export default syncFunction;

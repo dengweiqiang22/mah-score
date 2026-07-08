@@ -1,5 +1,5 @@
-import scoreFunction from "../../backend/api/room/score";
+import scoreFunction from "../../backend/api/room/score.js";
 
-export { POST } from "../../backend/api/room/score";
+export { POST } from "../../backend/api/room/score.js";
 
 export default scoreFunction;

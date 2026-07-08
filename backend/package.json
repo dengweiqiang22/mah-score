@@ -18,7 +18,7 @@
     "./api/room/player/remove": "./api/room/player/remove.ts"
   },
   "scripts": {
-    "build": "tsc -b",
+    "build": "tsc -b --force",
     "typecheck": "tsc -b --pretty false"
   },
   "dependencies": {

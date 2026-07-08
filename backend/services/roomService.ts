@@ -1,10 +1,10 @@
-import type { RoomEvent, RoomRecord, RoomSnapshot } from "@mah-score/shared";
+import type { RoomEvent, RoomRecord, RoomSnapshot } from "../../shared/src/index.js";
 
-import { buildReplayEventsFromSnapshot, replayRoomEvents } from "@mah-score/shared";
+import { buildReplayEventsFromSnapshot, replayRoomEvents } from "../../shared/src/index.js";
 
-import { redis } from "./redis";
-import { appendRoomEvent, readRoomEvents } from "./eventStore";
-import { createCandidateRoomId } from "./roomId";
+import { redis } from "./redis.js";
+import { appendRoomEvent, readRoomEvents } from "./eventStore.js";
+import { createCandidateRoomId } from "./roomId.js";
 
 const maxRoomIdAttempts = 20;
 const minPlayersToStart = 2;

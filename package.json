@@ -11,7 +11,7 @@
   "scripts": {
     "dev": "npm run dev -w frontend",
     "build": "npm run build -w shared && npm run build -w backend && npm run build -w frontend",
-    "typecheck": "npm run build -w shared && tsc -b --pretty false",
+    "typecheck": "npm run build -w shared && npm run build -w backend && tsc -b --pretty false",
     "lint": "eslint .",
     "test": "npm run test --workspaces --if-present",
     "format": "prettier --write .",

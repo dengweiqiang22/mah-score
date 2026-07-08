@@ -1,6 +1,6 @@
 import { kv } from "@vercel/kv";
 
-import { getEnvValue } from "./env";
+import { getEnvValue } from "./env.js";
 
 const requiredEnvNames = ["KV_REST_API_URL", "KV_REST_API_TOKEN"] as const;
 

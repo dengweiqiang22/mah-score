@@ -1,18 +1,18 @@
-import type { AppendRoomEventRequest, AppendRoomEventResponse } from "@mah-score/shared";
+import type { AppendRoomEventRequest, AppendRoomEventResponse } from "../../../shared/src/index.js";
 
-import { buildReplayEventsFromSnapshot, replayRoomEvents } from "@mah-score/shared";
-import { jsonFailure, jsonSuccess } from "../../services/apiResponse";
-import { appendRoomEvent, readRoomEvents } from "../../services/eventStore";
+import { buildReplayEventsFromSnapshot, replayRoomEvents } from "../../../shared/src/index.js";
+import { jsonFailure, jsonSuccess } from "../../services/apiResponse.js";
+import { appendRoomEvent, readRoomEvents } from "../../services/eventStore.js";
 import {
   isRoomEventPayload,
   isRoomEventType,
   isValidEventOperator,
-} from "../../services/eventValidation";
-import { readJsonBody } from "../../services/requestBody";
-import { jsonUnexpectedRoomFailure } from "../../services/roomFailure";
-import { getRedisConfigurationError } from "../../services/redis";
-import { getRoom } from "../../services/roomService";
-import { isValidRoomId } from "../../services/roomValidation";
+} from "../../services/eventValidation.js";
+import { readJsonBody } from "../../services/requestBody.js";
+import { jsonUnexpectedRoomFailure } from "../../services/roomFailure.js";
+import { getRedisConfigurationError } from "../../services/redis.js";
+import { getRoom } from "../../services/roomService.js";
+import { isValidRoomId } from "../../services/roomValidation.js";
 
 function parseAppendRoomEventRequest(value: unknown): AppendRoomEventRequest | undefined {
   if (

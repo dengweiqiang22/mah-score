@@ -1,6 +1,6 @@
-import type { RoomEvent, RoomEventPayload, RoomEventType } from "@mah-score/shared";
+import type { RoomEvent, RoomEventPayload, RoomEventType } from "../../shared/src/index.js";
 
-import { redis } from "./redis";
+import { redis } from "./redis.js";
 
 interface AppendRoomEventInput {
   readonly roomId: string;

@@ -1,14 +1,14 @@
-import type { RenamePlayerRequest } from "@mah-score/shared";
+import type { RenamePlayerRequest } from "../../../../shared/src/index.js";
 
-import { jsonFailure, jsonSuccess } from "../../../services/apiResponse";
-import { readJsonBody } from "../../../services/requestBody";
-import { getRedisConfigurationError } from "../../../services/redis";
-import { renamePlayer } from "../../../services/roomService";
+import { jsonFailure, jsonSuccess } from "../../../services/apiResponse.js";
+import { readJsonBody } from "../../../services/requestBody.js";
+import { getRedisConfigurationError } from "../../../services/redis.js";
+import { renamePlayer } from "../../../services/roomService.js";
 import {
   isExpectedPlayerEditError,
   isValidNickname,
   isValidRoomId,
-} from "../../../services/roomValidation";
+} from "../../../services/roomValidation.js";
 
 function parseRenamePlayerRequest(value: unknown): RenamePlayerRequest | undefined {
   if (

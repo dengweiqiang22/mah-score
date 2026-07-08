@@ -1,10 +1,10 @@
-import type { JoinRoomRequest, JoinRoomResponse } from "@mah-score/shared";
+import type { JoinRoomRequest, JoinRoomResponse } from "../../../shared/src/index.js";
 
-import { jsonFailure, jsonSuccess } from "../../services/apiResponse";
-import { readJsonBody } from "../../services/requestBody";
-import { jsonRoomBusyFailure } from "../../services/roomFailure";
-import { getRedisConfigurationError } from "../../services/redis";
-import { joinRoom } from "../../services/roomService";
+import { jsonFailure, jsonSuccess } from "../../services/apiResponse.js";
+import { readJsonBody } from "../../services/requestBody.js";
+import { jsonRoomBusyFailure } from "../../services/roomFailure.js";
+import { getRedisConfigurationError } from "../../services/redis.js";
+import { joinRoom } from "../../services/roomService.js";
 
 function parseJoinRoomRequest(value: unknown): JoinRoomRequest | undefined {
   if (

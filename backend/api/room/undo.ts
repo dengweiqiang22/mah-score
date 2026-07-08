@@ -1,13 +1,13 @@
-import type { AppendRoomEventResponse, UndoRoomEventRequest } from "@mah-score/shared";
+import type { AppendRoomEventResponse, UndoRoomEventRequest } from "../../../shared/src/index.js";
 
-import { jsonFailure, jsonSuccess } from "../../services/apiResponse";
-import { appendRoomEvent, getLastUndoableEvent, readRoomEvents } from "../../services/eventStore";
-import { isValidEventOperator } from "../../services/eventValidation";
-import { readJsonBody } from "../../services/requestBody";
-import { jsonRoomBusyFailure } from "../../services/roomFailure";
-import { getRedisConfigurationError } from "../../services/redis";
-import { getRoom, withRoomLock } from "../../services/roomService";
-import { isValidRoomId } from "../../services/roomValidation";
+import { jsonFailure, jsonSuccess } from "../../services/apiResponse.js";
+import { appendRoomEvent, getLastUndoableEvent, readRoomEvents } from "../../services/eventStore.js";
+import { isValidEventOperator } from "../../services/eventValidation.js";
+import { readJsonBody } from "../../services/requestBody.js";
+import { jsonRoomBusyFailure } from "../../services/roomFailure.js";
+import { getRedisConfigurationError } from "../../services/redis.js";
+import { getRoom, withRoomLock } from "../../services/roomService.js";
+import { isValidRoomId } from "../../services/roomValidation.js";
 
 function parseUndoRoomEventRequest(value: unknown): UndoRoomEventRequest | undefined {
   if (

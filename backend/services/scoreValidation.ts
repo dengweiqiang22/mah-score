@@ -1,6 +1,6 @@
-import type { KongType, RoomRecord, ScoreEventRequest, ScoreFan } from "@mah-score/shared";
+import type { KongType, RoomRecord, ScoreEventRequest, ScoreFan } from "../../shared/src/index.js";
 
-import { kongTypes, scoreFans } from "@mah-score/shared";
+import { kongTypes, scoreFans } from "../../shared/src/index.js";
 
 export function isScoreAction(value: string): value is ScoreEventRequest["action"] {
   return value === "DISCARD_WIN" || value === "SELF_DRAW" || value === "KONG" || value === "DRAW_GAME";

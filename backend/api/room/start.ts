@@ -1,11 +1,11 @@
-import type { StartRoomRequest } from "@mah-score/shared";
+import type { StartRoomRequest } from "../../../shared/src/index.js";
 
-import { jsonFailure, jsonSuccess } from "../../services/apiResponse";
-import { readJsonBody } from "../../services/requestBody";
-import { jsonRoomBusyFailure } from "../../services/roomFailure";
-import { getRedisConfigurationError } from "../../services/redis";
-import { startRoom } from "../../services/roomService";
-import { isValidRoomId } from "../../services/roomValidation";
+import { jsonFailure, jsonSuccess } from "../../services/apiResponse.js";
+import { readJsonBody } from "../../services/requestBody.js";
+import { jsonRoomBusyFailure } from "../../services/roomFailure.js";
+import { getRedisConfigurationError } from "../../services/redis.js";
+import { startRoom } from "../../services/roomService.js";
+import { isValidRoomId } from "../../services/roomValidation.js";
 
 function parseStartRoomRequest(value: unknown): StartRoomRequest | undefined {
   if (

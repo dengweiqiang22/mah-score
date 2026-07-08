@@ -1,11 +1,11 @@
-import type { CreateRoomRequest, CreateRoomResponse } from "@mah-score/shared";
+import type { CreateRoomRequest, CreateRoomResponse } from "../../../shared/src/index.js";
 
-import { jsonFailure, jsonSuccess } from "../../services/apiResponse";
-import { readJsonBody } from "../../services/requestBody";
-import { jsonUnexpectedRoomFailure } from "../../services/roomFailure";
-import { getRedisConfigurationError } from "../../services/redis";
-import { createRoom } from "../../services/roomService";
-import { isValidNickname } from "../../services/roomValidation";
+import { jsonFailure, jsonSuccess } from "../../services/apiResponse.js";
+import { readJsonBody } from "../../services/requestBody.js";
+import { jsonUnexpectedRoomFailure } from "../../services/roomFailure.js";
+import { getRedisConfigurationError } from "../../services/redis.js";
+import { createRoom } from "../../services/roomService.js";
+import { isValidNickname } from "../../services/roomValidation.js";
 
 function parseCreateRoomRequest(value: unknown): CreateRoomRequest | undefined {
   if (

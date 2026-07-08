@@ -1,10 +1,10 @@
-import type { SyncRoomEventsResponse } from "@mah-score/shared";
+import type { SyncRoomEventsResponse } from "../../../shared/src/index.js";
 
-import { jsonFailure, jsonSuccess } from "../../services/apiResponse";
-import { readRoomEventsAfterVersion } from "../../services/eventStore";
-import { getRedisConfigurationError } from "../../services/redis";
-import { getRoom } from "../../services/roomService";
-import { isValidRoomId } from "../../services/roomValidation";
+import { jsonFailure, jsonSuccess } from "../../services/apiResponse.js";
+import { readRoomEventsAfterVersion } from "../../services/eventStore.js";
+import { getRedisConfigurationError } from "../../services/redis.js";
+import { getRoom } from "../../services/roomService.js";
+import { isValidRoomId } from "../../services/roomValidation.js";
 
 function parseVersion(value: string | null): number | undefined {
   if (value === null || value.trim() === "") {
