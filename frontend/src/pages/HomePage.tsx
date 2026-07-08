@@ -11,14 +11,26 @@ export function HomePage() {
   const [manualJoinRoomId, setManualJoinRoomId] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
   const [invitedRoomId, setInvitedRoomId] = useState<string | undefined>();
+  const [inviteModeError, setInviteModeError] = useState<string | undefined>();
 
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
-    const nextInvitedRoomId = searchParams.get("roomId")?.replace(/\D/gu, "").slice(0, 3);
+    const rawRoomId = searchParams.get("roomId");
 
-    if (nextInvitedRoomId?.length === 3) {
-      setInvitedRoomId(nextInvitedRoomId);
+    if (rawRoomId === null) {
+      setInvitedRoomId(undefined);
+      setInviteModeError(undefined);
+      return;
     }
+
+    if (!/^\d{3}$/u.test(rawRoomId)) {
+      setInvitedRoomId(undefined);
+      setInviteModeError("邀请链接中的房间号无效，请检查链接是否完整。");
+      return;
+    }
+
+    setInvitedRoomId(rawRoomId);
+    setInviteModeError(undefined);
   }, []);
 
   async function handleCreateRoom() {
@@ -72,7 +84,7 @@ export function HomePage() {
     setManualJoinRoomId(value.replace(/\D/gu, "").slice(0, 3));
   }
 
-  const hasInvitedRoomId = invitedRoomId !== undefined;
+  const isInviteMode = invitedRoomId !== undefined && inviteModeError === undefined;
 
   return (
     <main className="min-h-screen bg-stone-50 px-5 py-6 text-stone-950">
@@ -83,6 +95,11 @@ export function HomePage() {
         </div>
 
         <div className="grid gap-3 pb-8">
+          {inviteModeError !== undefined ? (
+            <p className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-700">
+              {inviteModeError}
+            </p>
+          ) : null}
           {errorMessage !== undefined ? (
             <p className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-700">
               {errorMessage}
@@ -92,10 +109,10 @@ export function HomePage() {
             <div>
               <h2 className="text-lg font-semibold tracking-normal">加入房间</h2>
               <p className="mt-1 text-sm text-stone-500">
-                {hasInvitedRoomId ? "请输入昵称" : "输入房间号和昵称"}
+                {isInviteMode ? `邀请加入房间 ${invitedRoomId}` : "输入房间号和昵称"}
               </p>
             </div>
-            {!hasInvitedRoomId ? (
+            {!isInviteMode ? (
               <input
                 className="h-12 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-emerald-700"
                 inputMode="numeric"
@@ -120,7 +137,7 @@ export function HomePage() {
               disabled={
                 isJoiningRoom ||
                 joinNickname.trim().length === 0 ||
-                (!hasInvitedRoomId && manualJoinRoomId.length !== 3)
+                (!isInviteMode && manualJoinRoomId.length !== 3)
               }
               onClick={handleJoinRoom}
               variant="primary"
@@ -129,28 +146,30 @@ export function HomePage() {
             </HomeActionButton>
           </div>
 
-          <div className="grid gap-3 rounded-md border border-stone-200 bg-white p-4">
-            <div>
-              <h2 className="text-lg font-semibold tracking-normal">创建房间</h2>
-              <p className="mt-1 text-sm text-stone-500">没有房间号时使用</p>
+          {!isInviteMode ? (
+            <div className="grid gap-3 rounded-md border border-stone-200 bg-white p-4">
+              <div>
+                <h2 className="text-lg font-semibold tracking-normal">创建房间</h2>
+                <p className="mt-1 text-sm text-stone-500">没有房间号时使用</p>
+              </div>
+              <input
+                className="h-12 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-emerald-700"
+                maxLength={12}
+                onChange={(event) => {
+                  setCreateNickname(event.target.value);
+                }}
+                placeholder="房主昵称"
+                value={createNickname}
+              />
+              <HomeActionButton
+                disabled={isCreatingRoom || createNickname.trim().length === 0}
+                onClick={handleCreateRoom}
+                variant="secondary"
+              >
+                {isCreatingRoom ? "创建中..." : "创建房间"}
+              </HomeActionButton>
             </div>
-            <input
-              className="h-12 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-emerald-700"
-              maxLength={12}
-              onChange={(event) => {
-                setCreateNickname(event.target.value);
-              }}
-              placeholder="房主昵称"
-              value={createNickname}
-            />
-            <HomeActionButton
-              disabled={isCreatingRoom || createNickname.trim().length === 0}
-              onClick={handleCreateRoom}
-              variant="secondary"
-            >
-              {isCreatingRoom ? "创建中..." : "创建房间"}
-            </HomeActionButton>
-          </div>
+          ) : null}
         </div>
       </section>
     </main>
