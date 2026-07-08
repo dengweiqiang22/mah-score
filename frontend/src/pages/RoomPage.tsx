@@ -42,6 +42,14 @@ interface ScoreHistoryItem {
   readonly round: RoundState;
   readonly roundNumber: number;
   readonly isUndone: boolean;
+  readonly detail: string;
+  readonly flows: readonly HistoryFlowItem[];
+}
+
+interface HistoryFlowItem {
+  readonly playerId: string;
+  readonly nickname: string;
+  readonly delta: number;
 }
 
 const quickScoreModes: readonly QuickScoreModeOption[] = [
@@ -162,6 +170,10 @@ function getPlayerNickname(players: readonly RoomPlayer[], playerId: string | un
   return players.find((player) => player.id === playerId)?.nickname ?? "未知玩家";
 }
 
+function getHistoryFlowLabel(delta: number): string {
+  return delta > 0 ? `收入 +${delta}` : `支出 ${delta}`;
+}
+
 function formatRoundTitle(round: RoundState, players: readonly RoomPlayer[]): string {
   if (round.type === "DISCARD_WIN") {
     const winnerName = getPlayerNickname(players, getPayloadString(round.payload, "winnerId"));
@@ -226,6 +238,29 @@ function formatRoundDetail(round: RoundState, players: readonly RoomPlayer[]): s
   return "本局不计分";
 }
 
+function createHistoryFlow(
+  players: readonly RoomPlayer[],
+  playerId: string | undefined,
+  delta: number,
+): HistoryFlowItem | undefined {
+  if (playerId === undefined) {
+    return undefined;
+  }
+
+  return {
+    playerId,
+    nickname: getPlayerNickname(players, playerId),
+    delta,
+  };
+}
+
+function getRoundActivePlayers(
+  players: readonly RoomPlayer[],
+  currentRoundWinnerIds: ReadonlySet<string>,
+): readonly RoomPlayer[] {
+  return players.filter((player) => !currentRoundWinnerIds.has(player.id));
+}
+
 function needsRelatedPlayer(mode: QuickScoreMode): boolean {
   return mode === "DISCARD_WIN" || mode === "DISCARD_KONG";
 }
@@ -279,7 +314,112 @@ function createRoundFromEvent(event: RoomEvent): RoundState {
   };
 }
 
-function createScoreHistory(events: readonly RoomEvent[]): readonly ScoreHistoryItem[] {
+function createScoreHistoryItem(
+  event: RoomEvent,
+  roundNumber: number,
+  players: readonly RoomPlayer[],
+  currentRoundWinnerIds: ReadonlySet<string>,
+  isUndone: boolean,
+): ScoreHistoryItem {
+  const round = createRoundFromEvent(event);
+
+  if (event.type === "DISCARD_WIN") {
+    const winnerId = getPayloadString(event.payload, "winnerId");
+    const discarderId = getPayloadString(event.payload, "discarderId");
+    const fan = getPayloadNumber(event.payload, "fan");
+    const score = getFanScore(fan);
+
+    return {
+      event,
+      round,
+      roundNumber,
+      isUndone,
+      detail: formatRoundDetail(round, players),
+      flows: [
+        createHistoryFlow(players, winnerId, score),
+        createHistoryFlow(players, discarderId, -score),
+      ].filter((item): item is HistoryFlowItem => item !== undefined),
+    };
+  }
+
+  if (event.type === "SELF_DRAW") {
+    const winnerId = getPayloadString(event.payload, "winnerId");
+    const fan = getPayloadNumber(event.payload, "fan");
+    const score = getFanScore(fan);
+    const activePlayers = getRoundActivePlayers(players, currentRoundWinnerIds);
+
+    return {
+      event,
+      round,
+      roundNumber,
+      isUndone,
+      detail: formatRoundDetail(round, players),
+      flows: activePlayers
+        .map((player) =>
+          createHistoryFlow(
+            players,
+            player.id,
+            player.id === winnerId ? score * (activePlayers.length - 1) : -score,
+          ),
+        )
+        .filter((item): item is HistoryFlowItem => item !== undefined),
+    };
+  }
+
+  if (event.type === "KONG") {
+    const playerId = getPayloadString(event.payload, "playerId");
+    const kongType = getPayloadString(event.payload, "kongType");
+    const fromPlayerId = getPayloadString(event.payload, "fromPlayerId");
+    const activePlayers = getRoundActivePlayers(players, currentRoundWinnerIds);
+
+    if (kongType === "DISCARD_KONG") {
+      return {
+        event,
+        round,
+        roundNumber,
+        isUndone,
+        detail: formatRoundDetail(round, players),
+        flows: [
+          createHistoryFlow(players, playerId, 1),
+          createHistoryFlow(players, fromPlayerId, -1),
+        ].filter((item): item is HistoryFlowItem => item !== undefined),
+      };
+    }
+
+    const payerScore = kongType === "CONCEALED_KONG" ? 2 : 1;
+
+    return {
+      event,
+      round,
+      roundNumber,
+      isUndone,
+      detail: formatRoundDetail(round, players),
+      flows: activePlayers
+        .map((player) =>
+          createHistoryFlow(
+            players,
+            player.id,
+            player.id === playerId ? payerScore * (activePlayers.length - 1) : -payerScore,
+          ),
+        )
+        .filter((item): item is HistoryFlowItem => item !== undefined),
+    };
+  }
+
+  return {
+    event,
+    round,
+    roundNumber,
+    isUndone,
+    detail: formatRoundDetail(round, players),
+    flows: [],
+  };
+}
+
+function createScoreHistory(
+  events: readonly RoomEvent[],
+  players: readonly RoomPlayer[],
+): readonly ScoreHistoryItem[] {
   const undoneEventIds = new Set(
     events.flatMap((event) => {
       if (event.type !== "UNDO") {
@@ -301,12 +441,13 @@ function createScoreHistory(events: readonly RoomEvent[]): readonly ScoreHistory
         return [];
       }
 
-      const historyItem: ScoreHistoryItem = {
+      const historyItem = createScoreHistoryItem(
         event,
-        round: createRoundFromEvent(event),
         roundNumber,
-        isUndone: undoneEventIds.has(event.id),
-      };
+        players,
+        new Set(winnerIds),
+        undoneEventIds.has(event.id),
+      );
 
       if (!historyItem.isUndone) {
         if (event.type === "DISCARD_WIN" || event.type === "SELF_DRAW") {
@@ -631,7 +772,12 @@ export function RoomPage({ roomId }: RoomPageProps) {
   }
 
   function handleSelectPrimaryPlayer(playerId: string) {
-    if (room?.status !== "PLAYING" || isScoring || isCurrentRoundFinished) {
+    if (
+      room?.status !== "PLAYING" ||
+      isScoring ||
+      isCurrentRoundFinished ||
+      currentRoundWinnerIds.has(playerId)
+    ) {
       return;
     }
 
@@ -766,6 +912,11 @@ export function RoomPage({ roomId }: RoomPageProps) {
       return;
     }
 
+    if (currentRoundWinnerIds.has(playerId)) {
+      setErrorMessage("已胡牌玩家不能继续作为操作对象。");
+      return;
+    }
+
     setSelectedRelatedPlayerId(playerId);
 
     const scoreRequest = getQuickScoreRequest({
@@ -876,7 +1027,8 @@ export function RoomPage({ roomId }: RoomPageProps) {
     return replayState?.scores.find((score) => score.playerId === playerId)?.total ?? 0;
   }
 
-  const scoreHistory = createScoreHistory(events);
+  const currentRoundWinnerIds = new Set(replayState?.currentRound.winnerIds ?? []);
+  const scoreHistory = createScoreHistory(events, replayState?.players ?? []);
   const canUndo = scoreHistory.some((item) => !item.isUndone);
   const quickScoreMissingMessage = getQuickScoreMissingMessage();
   const selectedPrimaryPlayerName = getPlayerNickname(
@@ -972,30 +1124,44 @@ export function RoomPage({ roomId }: RoomPageProps) {
 
             <div className="grid grid-cols-2 gap-2">
               {room.players.map((player) => (
-                <button
-                  className={`min-h-16 rounded-md border px-3 py-2 text-left ${
-                    selectedPrimaryPlayerId === player.id
-                      ? "border-emerald-600 bg-emerald-50"
-                      : selectedRelatedPlayerId === player.id
-                        ? "border-red-300 bg-red-50"
-                        : "border-stone-200 bg-stone-50"
-                  } disabled:cursor-not-allowed disabled:opacity-60`}
-                  disabled={!isPlaying || isCurrentRoundFinished || isScoring}
-                  key={player.id}
-                  onClick={() => {
-                    handleSelectPrimaryPlayer(player.id);
-                  }}
-                  type="button"
-                >
-                  <span className="block truncate text-base font-semibold">{player.nickname}</span>
-                  <span className="mt-1 block text-sm font-medium text-stone-500">
-                    {selectedPrimaryPlayerId === player.id
-                      ? "当前玩家"
-                      : selectedRelatedPlayerId === player.id
-                        ? getModeRelatedPlayerLabel(quickScoreMode ?? "DISCARD_WIN")
-                        : `${getPlayerScore(player.id)} 分`}
-                  </span>
-                </button>
+                currentRoundWinnerIds.has(player.id) ? (
+                  <button
+                    className="min-h-16 rounded-md border border-stone-300 bg-stone-100 px-3 py-2 text-left text-stone-400 disabled:cursor-not-allowed"
+                    disabled
+                    key={player.id}
+                    type="button"
+                  >
+                    <span className="block truncate text-base font-semibold">{player.nickname}</span>
+                    <span className="mt-1 block text-sm font-medium text-stone-400">
+                      已胡牌 · {getPlayerScore(player.id)} 分
+                    </span>
+                  </button>
+                ) : (
+                  <button
+                    className={`min-h-16 rounded-md border px-3 py-2 text-left ${
+                      selectedPrimaryPlayerId === player.id
+                        ? "border-emerald-600 bg-emerald-50"
+                        : selectedRelatedPlayerId === player.id
+                          ? "border-red-300 bg-red-50"
+                          : "border-stone-200 bg-stone-50"
+                    } disabled:cursor-not-allowed disabled:opacity-60`}
+                    disabled={!isPlaying || isCurrentRoundFinished || isScoring}
+                    key={player.id}
+                    onClick={() => {
+                      handleSelectPrimaryPlayer(player.id);
+                    }}
+                    type="button"
+                  >
+                    <span className="block truncate text-base font-semibold">{player.nickname}</span>
+                    <span className="mt-1 block text-sm font-medium text-stone-500">
+                      {selectedPrimaryPlayerId === player.id
+                        ? "当前玩家"
+                        : selectedRelatedPlayerId === player.id
+                          ? getModeRelatedPlayerLabel(quickScoreMode ?? "DISCARD_WIN")
+                          : `${getPlayerScore(player.id)} 分`}
+                    </span>
+                  </button>
+                )
               ))}
             </div>
 
@@ -1115,7 +1281,11 @@ export function RoomPage({ roomId }: RoomPageProps) {
                     </p>
                     <div className="grid grid-cols-3 gap-2">
                       {room.players
-                        .filter((player) => player.id !== selectedPrimaryPlayerId)
+                        .filter(
+                          (player) =>
+                            player.id !== selectedPrimaryPlayerId &&
+                            !currentRoundWinnerIds.has(player.id),
+                        )
                         .map((player) => (
                           <button
                             className={`h-11 rounded-md border px-2 text-sm font-semibold ${
@@ -1203,8 +1373,8 @@ export function RoomPage({ roomId }: RoomPageProps) {
               <h2 className="text-xl font-semibold tracking-normal">历史记录</h2>
               <p className="mt-1 text-sm text-stone-500">
                 {visibleScoreHistory.length === 0
-                  ? "暂无计分事件"
-                  : `最近 ${visibleScoreHistory.length} 条计分事件`}
+                  ? "暂无计分记录"
+                  : `最近 ${visibleScoreHistory.length} 条玩家收支`}
               </p>
             </div>
             <p className="shrink-0 text-sm font-medium text-stone-400">
@@ -1215,7 +1385,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
           {isHistoryExpanded ? (
             visibleScoreHistory.length === 0 ? (
               <p className="rounded-md border border-stone-200 bg-stone-50 p-4 text-base text-stone-600">
-                游戏开始后，计分事件会显示在这里
+                游戏开始后，玩家收支会显示在这里
               </p>
             ) : (
               <div className="grid gap-3">
@@ -1235,12 +1405,35 @@ export function RoomPage({ roomId }: RoomPageProps) {
                           {formatRoundTitle(item.round, replayState?.players ?? [])}
                         </p>
                         <p className="mt-1 text-sm text-stone-500">
-                          {formatRoundDetail(item.round, replayState?.players ?? [])}
+                          {item.detail}
                         </p>
                       </div>
                       <p className="shrink-0 text-sm font-medium text-stone-400">
                         #{item.event.version}
                       </p>
+                    </div>
+                    <div className="grid gap-2">
+                      {item.flows.length === 0 ? (
+                        <p className="text-sm font-medium text-stone-500">本局无计分</p>
+                      ) : (
+                        item.flows.map((flow) => (
+                          <div
+                            className="flex items-center justify-between gap-3 rounded-md bg-stone-50 px-3 py-2"
+                            key={`${item.event.id}-${flow.playerId}`}
+                          >
+                            <p className="min-w-0 truncate text-sm font-medium text-stone-700">
+                              {flow.nickname}
+                            </p>
+                            <p
+                              className={`shrink-0 text-sm font-semibold tabular-nums ${
+                                flow.delta > 0 ? "text-emerald-700" : "text-red-700"
+                              }`}
+                            >
+                              {getHistoryFlowLabel(flow.delta)}
+                            </p>
+                          </div>
+                        ))
+                      )}
                     </div>
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-xs font-medium text-stone-400">
