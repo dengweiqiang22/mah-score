@@ -18,12 +18,24 @@ function getPlayerNickname(players: readonly RoomPlayer[], playerId: string): st
   return players.find((player) => player.id === playerId)?.nickname ?? "未知玩家";
 }
 
-function getCompletedRoundCount(currentRound: CurrentRoundState): number {
+function getCompletedRoundCount(
+  currentRound: CurrentRoundState,
+  scoreHistory: readonly ScoreHistoryItem[],
+): number {
   if (currentRound.number === 0) {
     return 0;
   }
 
   if (currentRound.status === "FINISHED") {
+    return currentRound.number;
+  }
+
+  if (
+    scoreHistory.some(
+      (item) =>
+        !item.isUndone && item.roundNumber === currentRound.number && item.event.type !== "DRAW_GAME",
+    )
+  ) {
     return currentRound.number;
   }
 
@@ -125,7 +137,7 @@ export function createSettlement(
   currentRound: CurrentRoundState,
 ): SettlementState {
   const scoreHistory = createScoreHistory(events, players);
-  const completedRoundCount = getCompletedRoundCount(currentRound);
+  const completedRoundCount = getCompletedRoundCount(currentRound, scoreHistory);
   const settlementWithoutText = {
     roomId,
     totalRounds: completedRoundCount,

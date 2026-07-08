@@ -805,6 +805,13 @@ const unfinishedRoundSettlement = createSettlement(
 
 assert.equal(unfinishedRoundState.currentRound.number, 2);
 assert.equal(unfinishedRoundState.currentRound.status, "ACTIVE");
-assert.equal(unfinishedRoundSettlement.totalRounds, 1);
-assert.equal(unfinishedRoundSettlement.text.includes("总局数：1"), true);
-assert.equal(unfinishedRoundSettlement.players.every((player) => player.kongCount === 0), true);
+assert.equal(unfinishedRoundSettlement.totalRounds, 2);
+assert.equal(unfinishedRoundSettlement.text.includes("总局数：2"), true);
+assert.equal(
+  unfinishedRoundSettlement.players.find((player) => player.playerId === "player_3")?.kongCount,
+  1,
+);
+assert.equal(
+  unfinishedRoundSettlement.players.find((player) => player.playerId === "player_4")?.kongCount,
+  1,
+);
