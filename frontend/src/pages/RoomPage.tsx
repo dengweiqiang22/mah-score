@@ -12,6 +12,7 @@ import { useEffect, useState } from "react";
 import {
   buildReplayEventsFromSnapshot,
   createPlayerLedger,
+  createRoundLedgers,
   createScoreHistory,
   createSettlement,
   replayRoomEvents,
@@ -197,6 +198,12 @@ export function RoomPage({ roomId }: RoomPageProps) {
   const [selectedRelatedPlayerId, setSelectedRelatedPlayerId] = useState<string | undefined>();
   const [selectedFan, setSelectedFan] = useState<ScoreFan | undefined>();
   const [isCurrentRoundAllLedgerExpanded, setIsCurrentRoundAllLedgerExpanded] = useState(false);
+  const [expandedHistoryRoundNumbers, setExpandedHistoryRoundNumbers] = useState<readonly number[]>(
+    [],
+  );
+  const [expandedHistoryAllLedgerRoundNumbers, setExpandedHistoryAllLedgerRoundNumbers] = useState<
+    readonly number[]
+  >([]);
   const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
   const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "error">("idle");
 
@@ -205,6 +212,22 @@ export function RoomPage({ roomId }: RoomPageProps) {
     setSelectedRelatedPlayerId(undefined);
     setSelectedFan(undefined);
     setQuickScoreMode(undefined);
+  }
+
+  function toggleHistoryRound(roundNumber: number) {
+    setExpandedHistoryRoundNumbers((currentValue) =>
+      currentValue.includes(roundNumber)
+        ? currentValue.filter((item) => item !== roundNumber)
+        : [...currentValue, roundNumber],
+    );
+  }
+
+  function toggleHistoryAllLedger(roundNumber: number) {
+    setExpandedHistoryAllLedgerRoundNumbers((currentValue) =>
+      currentValue.includes(roundNumber)
+        ? currentValue.filter((item) => item !== roundNumber)
+        : [...currentValue, roundNumber],
+    );
   }
 
   const inviteUrl = new URL(`/?roomId=${roomId}`, window.location.origin).toString();
@@ -891,6 +914,10 @@ export function RoomPage({ roomId }: RoomPageProps) {
       ? []
       : scoreHistory.filter((item) => item.roundNumber === replayState.currentRound.number);
   const currentRoundLedger = createPlayerLedger(currentRoundEntries, replayState?.players ?? []);
+  const historyRoundLedgers =
+    replayState === undefined
+      ? []
+      : createRoundLedgers(scoreHistory, replayState.players, replayState.currentRound.number);
   const currentPlayer =
     storedPlayerIdentity === undefined
       ? undefined
@@ -908,9 +935,13 @@ export function RoomPage({ roomId }: RoomPageProps) {
     replayState?.players ?? [],
     selectedPrimaryPlayerId,
   );
+  const expandedHistoryRoundNumberSet = new Set(expandedHistoryRoundNumbers);
+  const expandedHistoryAllLedgerRoundNumberSet = new Set(expandedHistoryAllLedgerRoundNumbers);
 
   useEffect(() => {
     setIsCurrentRoundAllLedgerExpanded(false);
+    setExpandedHistoryRoundNumbers([]);
+    setExpandedHistoryAllLedgerRoundNumbers([]);
   }, [roomId, currentRoundNumber]);
 
   return (
@@ -1471,6 +1502,216 @@ export function RoomPage({ roomId }: RoomPageProps) {
                       ))}
                     </div>
                   ) : null}
+                </section>
+
+                <section className="grid gap-3 rounded-md border border-stone-200 bg-white p-4">
+                  <div>
+                    <h3 className="text-base font-semibold text-stone-900">历史局账单</h3>
+                    <p className="mt-1 text-sm text-stone-500">
+                      {historyRoundLedgers.length === 0
+                        ? "确认本局账单后，会显示前面几局。"
+                        : "最近一局在上方"}
+                    </p>
+                  </div>
+
+                  {historyRoundLedgers.length === 0 ? (
+                    <p className="rounded-md bg-stone-50 px-3 py-2 text-sm text-stone-600">
+                      暂无历史局账单。
+                    </p>
+                  ) : (
+                    <div className="grid gap-3">
+                      {historyRoundLedgers.map((roundLedger) => {
+                        const isRoundExpanded = expandedHistoryRoundNumberSet.has(
+                          roundLedger.roundNumber,
+                        );
+                        const isAllLedgerExpanded = expandedHistoryAllLedgerRoundNumberSet.has(
+                          roundLedger.roundNumber,
+                        );
+                        const myRoundLedger =
+                          currentPlayer === undefined
+                            ? undefined
+                            : roundLedger.ledger.find(
+                                (player) => player.playerId === currentPlayer.id,
+                              );
+                        const myRoundEntries =
+                          myRoundLedger?.entries.filter((entry) => !entry.isUndone) ?? [];
+                        const myRoundTotal = myRoundLedger?.total ?? 0;
+
+                        return (
+                          <article
+                            className="grid gap-3 rounded-md border border-stone-200 bg-stone-50 p-3"
+                            key={roundLedger.roundNumber}
+                          >
+                            <button
+                              className="grid gap-3 text-left"
+                              onClick={() => {
+                                toggleHistoryRound(roundLedger.roundNumber);
+                              }}
+                              type="button"
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <h4 className="text-base font-semibold text-stone-900">
+                                    第 {roundLedger.roundNumber} 局
+                                  </h4>
+                                  <p className="mt-1 text-sm text-stone-500">
+                                    {currentPlayer === undefined
+                                      ? "公共视图，展开查看该局事件"
+                                      : `我的收入 ${myRoundLedger?.income ?? 0} · 支出 ${
+                                          myRoundLedger?.expense ?? 0
+                                        }`}
+                                  </p>
+                                </div>
+                                <div className="text-right">
+                                  <p
+                                    className={`text-lg font-semibold tabular-nums ${
+                                      myRoundTotal >= 0 ? "text-emerald-700" : "text-red-700"
+                                    }`}
+                                  >
+                                    {currentPlayer === undefined
+                                      ? `${roundLedger.entries.length} 笔`
+                                      : myRoundTotal >= 0
+                                        ? `+${myRoundTotal}`
+                                        : myRoundTotal}
+                                  </p>
+                                  <p className="mt-1 text-xs font-medium text-stone-400">
+                                    {isRoundExpanded ? "收起" : "展开"}
+                                  </p>
+                                </div>
+                              </div>
+                            </button>
+
+                            {isRoundExpanded ? (
+                              <div className="grid gap-3">
+                                <div className="grid gap-2">
+                                  <p className="text-sm font-semibold text-stone-700">该局事件</p>
+                                  {roundLedger.entries.map((item) => (
+                                    <div
+                                      className={`grid gap-1 rounded-md border bg-white px-3 py-2 ${
+                                        item.isUndone
+                                          ? "border-stone-200 opacity-70"
+                                          : "border-stone-200"
+                                      }`}
+                                      key={item.event.id}
+                                    >
+                                      <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                          <p className="text-xs font-semibold text-stone-500">
+                                            第 {item.roundNumber} 局 · 第{" "}
+                                            {item.roundActionNumber} 笔
+                                          </p>
+                                          <p className="mt-1 truncate text-sm font-semibold text-stone-900">
+                                            {item.title}
+                                          </p>
+                                        </div>
+                                        <span
+                                          className={`shrink-0 rounded-md border px-2 py-1 text-xs font-semibold ${
+                                            item.isUndone
+                                              ? "border-stone-300 text-stone-500"
+                                              : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                          }`}
+                                        >
+                                          {item.isUndone ? "已撤销" : "有效"}
+                                        </span>
+                                      </div>
+                                      <p className="text-sm leading-6 text-stone-600">
+                                        {item.detail}
+                                      </p>
+                                      <p
+                                        className={`text-sm font-semibold ${
+                                          item.isUndone ? "text-stone-500" : "text-stone-900"
+                                        }`}
+                                      >
+                                        {item.isUndone ? "原变化：" : "分数变化："}
+                                        {formatScoreFlowSummary(item.flows)}
+                                      </p>
+                                    </div>
+                                  ))}
+                                </div>
+
+                                <div className="grid gap-2">
+                                  <p className="text-sm font-semibold text-stone-700">
+                                    我的该局账单
+                                  </p>
+                                  {currentPlayer === undefined ? (
+                                    <p className="rounded-md bg-white px-3 py-2 text-sm text-stone-600">
+                                      当前为公共视图，未识别本机玩家身份。
+                                    </p>
+                                  ) : myRoundEntries.length === 0 ? (
+                                    <p className="rounded-md bg-white px-3 py-2 text-sm text-stone-600">
+                                      该局暂无与你相关的收支。
+                                    </p>
+                                  ) : (
+                                    myRoundEntries.map((entry) => (
+                                      <div
+                                        className="flex items-center justify-between gap-3 rounded-md bg-white px-3 py-2"
+                                        key={`${roundLedger.roundNumber}-${entry.eventId}-${entry.version}`}
+                                      >
+                                        <div className="min-w-0">
+                                          <p className="truncate text-sm font-medium text-stone-700">
+                                            {entry.title}
+                                          </p>
+                                          <p className="mt-1 truncate text-xs text-stone-500">
+                                            {entry.detail}
+                                          </p>
+                                        </div>
+                                        <p
+                                          className={`shrink-0 text-sm font-semibold tabular-nums ${
+                                            entry.delta > 0 ? "text-emerald-700" : "text-red-700"
+                                          }`}
+                                        >
+                                          {getHistoryFlowLabel(entry.delta)}
+                                        </p>
+                                      </div>
+                                    ))
+                                  )}
+                                </div>
+
+                                <button
+                                  className="h-10 rounded-md border border-stone-300 bg-white px-4 text-sm font-semibold text-stone-900"
+                                  onClick={() => {
+                                    toggleHistoryAllLedger(roundLedger.roundNumber);
+                                  }}
+                                  type="button"
+                                >
+                                  {isAllLedgerExpanded ? "收起全员账单" : "查看全员账单"}
+                                </button>
+
+                                {isAllLedgerExpanded ? (
+                                  <div className="grid gap-2">
+                                    {roundLedger.ledger.map((player) => (
+                                      <div
+                                        className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md bg-white px-3 py-2"
+                                        key={`${roundLedger.roundNumber}-${player.playerId}`}
+                                      >
+                                        <div className="min-w-0">
+                                          <p className="truncate text-sm font-medium text-stone-700">
+                                            {player.nickname}
+                                          </p>
+                                          <p className="mt-1 text-xs text-stone-500">
+                                            收入 {player.income} · 支出 {player.expense}
+                                          </p>
+                                        </div>
+                                        <p
+                                          className={`shrink-0 text-sm font-semibold tabular-nums ${
+                                            player.total >= 0
+                                              ? "text-emerald-700"
+                                              : "text-red-700"
+                                          }`}
+                                        >
+                                          {player.total >= 0 ? `+${player.total}` : player.total}
+                                        </p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : null}
+                              </div>
+                            ) : null}
+                          </article>
+                        );
+                      })}
+                    </div>
+                  )}
                 </section>
 
                 <div className="grid grid-cols-2 gap-3">

@@ -39,6 +39,12 @@ export interface PlayerLedgerItem {
   readonly entries: readonly PlayerLedgerEntry[];
 }
 
+export interface RoundLedgerItem {
+  readonly roundNumber: number;
+  readonly entries: readonly ScoreHistoryItem[];
+  readonly ledger: readonly PlayerLedgerItem[];
+}
+
 function getPayloadString(payload: RoomEvent["payload"], key: string): string | undefined {
   const value = payload[key];
 
@@ -436,4 +442,28 @@ export function createPlayerLedger(
   }
 
   return players.map((player) => ledgerMap.get(player.id)).filter((item): item is PlayerLedgerItem => item !== undefined);
+}
+
+export function createRoundLedgers(
+  scoreHistory: readonly ScoreHistoryItem[],
+  players: readonly RoomPlayer[],
+  currentRoundNumber: number,
+): readonly RoundLedgerItem[] {
+  const roundNumbers = Array.from(
+    new Set(
+      scoreHistory
+        .filter((item) => item.roundNumber < currentRoundNumber)
+        .map((item) => item.roundNumber),
+    ),
+  ).sort((left, right) => right - left);
+
+  return roundNumbers.map((roundNumber) => {
+    const entries = scoreHistory.filter((item) => item.roundNumber === roundNumber);
+
+    return {
+      roundNumber,
+      entries,
+      ledger: createPlayerLedger(entries, players),
+    };
+  });
 }
