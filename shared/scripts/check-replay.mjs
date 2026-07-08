@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 
-import { buildReplayEventsFromSnapshot, createSettlement, replayRoomEvents } from "../dist/index.js";
+import {
+  buildReplayEventsFromSnapshot,
+  createPlayerLedger,
+  createScoreHistory,
+  createSettlement,
+  replayRoomEvents,
+} from "../dist/index.js";
 
 const baseEvent = {
   roomId: "123",
@@ -452,6 +458,11 @@ const extendedScoreEvents = [
 ];
 
 const extendedScoreState = replayRoomEvents(extendedScoreEvents);
+const extendedScoreHistory = createScoreHistory(extendedScoreEvents, extendedScoreState.players);
+const extendedScoreLedger = createPlayerLedger(
+  extendedScoreHistory,
+  extendedScoreState.players,
+);
 
 assert.deepEqual(extendedScoreState.currentRound, {
   number: 1,
@@ -481,6 +492,46 @@ assert.deepEqual(
   extendedScoreState.rounds.map((round) => round.eventId),
   ["extended_6", "extended_7", "extended_8", "extended_10"],
 );
+assert.deepEqual(
+  extendedScoreLedger.map((player) => ({
+    playerId: player.playerId,
+    total: player.total,
+    income: player.income,
+    expense: player.expense,
+  })),
+  [
+    {
+      playerId: "player_1",
+      total: 4,
+      income: 4,
+      expense: 0,
+    },
+    {
+      playerId: "player_2",
+      total: -13,
+      income: 0,
+      expense: 13,
+    },
+    {
+      playerId: "player_3",
+      total: 16,
+      income: 17,
+      expense: 1,
+    },
+    {
+      playerId: "player_4",
+      total: -7,
+      income: 2,
+      expense: 9,
+    },
+  ],
+);
+const undoneLedgerEntry = extendedScoreLedger
+  .find((player) => player.playerId === "player_2")
+  ?.entries.find((entry) => entry.eventId === "extended_9");
+
+assert.equal(undoneLedgerEntry?.isUndone, true);
+assert.equal(undoneLedgerEntry?.isUndoable, false);
 
 const concealedKongState = replayRoomEvents([
   ...extendedScoreEvents.slice(0, 5),

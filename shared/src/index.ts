@@ -1,6 +1,13 @@
 export type { ApiFailureResponse, ApiResponse, ApiSuccessResponse } from "./types/api.js";
+export { createPlayerLedger, createScoreHistory } from "./domain/history.js";
 export { createSettlement } from "./domain/settlement.js";
 export { buildReplayEventsFromSnapshot, replayRoomEvents } from "./domain/replay.js";
+export type {
+  HistoryFlowItem,
+  PlayerLedgerEntry,
+  PlayerLedgerItem,
+  ScoreHistoryItem,
+} from "./domain/history.js";
 export type {
   AppendRoomEventRequest,
   AppendRoomEventResponse,
