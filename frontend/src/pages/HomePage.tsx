@@ -115,8 +115,11 @@ export function HomePage() {
             {!isInviteMode ? (
               <input
                 className="h-12 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-emerald-700"
+                autoComplete="off"
+                id="join-room-id"
                 inputMode="numeric"
                 maxLength={3}
+                name="joinRoomId"
                 onChange={(event) => {
                   handleJoinRoomIdChange(event.target.value);
                 }}
@@ -126,7 +129,10 @@ export function HomePage() {
             ) : null}
             <input
               className="h-12 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-emerald-700"
+              autoComplete="nickname"
+              id="join-nickname"
               maxLength={12}
+              name="joinNickname"
               onChange={(event) => {
                 setJoinNickname(event.target.value);
               }}
@@ -154,7 +160,10 @@ export function HomePage() {
               </div>
               <input
                 className="h-12 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-emerald-700"
+                autoComplete="nickname"
+                id="create-nickname"
                 maxLength={12}
+                name="createNickname"
                 onChange={(event) => {
                   setCreateNickname(event.target.value);
                 }}

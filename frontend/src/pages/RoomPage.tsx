@@ -1017,7 +1017,10 @@ export function RoomPage({ roomId }: RoomPageProps) {
                     >
                       <input
                         className="h-12 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-emerald-700"
+                        autoComplete="nickname"
+                        id={`rename-nickname-${player.id}`}
                         maxLength={12}
+                        name={`renameNickname-${player.id}`}
                         onChange={(event) => {
                           setNicknameInput(event.target.value);
                         }}
