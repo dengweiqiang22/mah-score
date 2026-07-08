@@ -318,7 +318,7 @@ function createScoreHistoryItem(
   event: RoomEvent,
   roundNumber: number,
   players: readonly RoomPlayer[],
-  currentRoundWinnerIds: ReadonlySet<string>,
+  roundWinnerIds: ReadonlySet<string>,
   isUndone: boolean,
 ): ScoreHistoryItem {
   const round = createRoundFromEvent(event);
@@ -346,7 +346,7 @@ function createScoreHistoryItem(
     const winnerId = getPayloadString(event.payload, "winnerId");
     const fan = getPayloadNumber(event.payload, "fan");
     const score = getFanScore(fan);
-    const activePlayers = getRoundActivePlayers(players, currentRoundWinnerIds);
+    const activePlayers = getRoundActivePlayers(players, roundWinnerIds);
 
     return {
       event,
@@ -370,7 +370,7 @@ function createScoreHistoryItem(
     const playerId = getPayloadString(event.payload, "playerId");
     const kongType = getPayloadString(event.payload, "kongType");
     const fromPlayerId = getPayloadString(event.payload, "fromPlayerId");
-    const activePlayers = getRoundActivePlayers(players, currentRoundWinnerIds);
+    const activePlayers = getRoundActivePlayers(players, roundWinnerIds);
 
     if (kongType === "DISCARD_KONG") {
       return {
