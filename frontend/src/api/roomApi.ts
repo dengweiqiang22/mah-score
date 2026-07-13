@@ -54,7 +54,7 @@ export async function getRoom(roomId: string): Promise<ApiResponse<GetRoomRespon
 }
 
 export async function getRoomDetail(roomId: string): Promise<ApiResponse<GetRoomDetailResponse>> {
-  const response = await fetch(`/api/room/detail?roomId=${encodeURIComponent(roomId)}`);
+  const response = await fetch(`/api/room?roomId=${encodeURIComponent(roomId)}`);
   const data = (await response.json()) as ApiResponse<GetRoomDetailResponse>;
 
   return data;

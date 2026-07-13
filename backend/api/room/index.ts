@@ -1,8 +1,8 @@
-import type { GetRoomResponse } from "../../../shared/src/index.js";
+import type { GetRoomDetailResponse } from "../../../shared/src/index.js";
 
 import { jsonFailure, jsonSuccess } from "../../services/apiResponse.js";
 import { getRedisConfigurationError } from "../../services/redis.js";
-import { getRoom } from "../../services/roomService.js";
+import { getRoomDetail } from "../../services/roomService.js";
 import { isValidRoomId } from "../../services/roomValidation.js";
 
 export async function GET(request: Request): Promise<Response> {
@@ -22,16 +22,17 @@ export async function GET(request: Request): Promise<Response> {
     });
   }
 
-  const room = await getRoom(roomId);
+  const roomDetail = await getRoomDetail(roomId);
 
-  if (room === undefined) {
+  if (roomDetail === undefined) {
     return jsonFailure("房间不存在。", "ROOM_NOT_FOUND", {
       status: 404,
     });
   }
 
-  const data: GetRoomResponse = {
-    room,
+  const data: GetRoomDetailResponse = {
+    room: roomDetail.room,
+    events: roomDetail.events,
   };
 
   return jsonSuccess(data);
