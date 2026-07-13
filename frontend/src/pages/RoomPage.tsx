@@ -8,7 +8,7 @@ import type {
   ScoreEventRequest,
 } from "@mah-score/shared";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   buildReplayEventsFromSnapshot,
   createPlayerLedger,
@@ -126,6 +126,56 @@ function formatScoreFlowSummary(flows: readonly { readonly nickname: string; rea
   return flows.map((flow) => `${flow.nickname} ${getScoreFlowLabel(flow.delta)}`).join("，");
 }
 
+function getHighestEventVersion(events: readonly RoomEvent[]): number {
+  return events.reduce((version, event) => Math.max(version, event.version), 0);
+}
+
+function mergeRoomEvents(
+  currentEvents: readonly RoomEvent[],
+  incomingEvents: readonly RoomEvent[],
+): readonly RoomEvent[] {
+  if (incomingEvents.length === 0) {
+    return currentEvents;
+  }
+
+  const currentEventIds = new Set(currentEvents.map((event) => event.id));
+  const currentVersion = getHighestEventVersion(currentEvents);
+  const newEvents = incomingEvents
+    .filter((event) => event.version > currentVersion && !currentEventIds.has(event.id))
+    .sort((leftEvent, rightEvent) => leftEvent.version - rightEvent.version);
+
+  if (newEvents.length === 0) {
+    return currentEvents;
+  }
+
+  return [...currentEvents, ...newEvents];
+}
+
+function replayRoomRecord(
+  room: RoomRecord,
+  events: readonly RoomEvent[],
+  version: number,
+): RoomRecord {
+  const replayState = replayRoomEvents(
+    buildReplayEventsFromSnapshot(
+      {
+        roomId: room.roomId,
+        players: room.players,
+        status: room.status,
+        createdAt: room.createdAt,
+      },
+      events,
+    ),
+  );
+
+  return {
+    ...room,
+    version,
+    players: replayState.players,
+    status: replayState.status,
+  };
+}
+
 function needsRelatedPlayer(mode: QuickScoreMode): boolean {
   return mode === "DISCARD_WIN" || mode === "DISCARD_KONG";
 }
@@ -205,6 +255,10 @@ export function RoomPage({ roomId }: RoomPageProps) {
   >([]);
   const [isPlayerLedgerExpanded, setIsPlayerLedgerExpanded] = useState(false);
   const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "error">("idle");
+  const eventsRef = useRef<readonly RoomEvent[]>([]);
+  const roomRef = useRef<RoomRecord | undefined>(undefined);
+  const roomVersionRef = useRef(0);
+  const isSyncingRef = useRef(false);
 
   function resetQuickScoreSelection() {
     setSelectedPrimaryPlayerId(undefined);
@@ -246,6 +300,9 @@ export function RoomPage({ roomId }: RoomPageProps) {
       setRoom(roomDetailResponse.data.room);
       setRoomVersion(roomDetailResponse.data.room.version);
       setEvents(roomDetailResponse.data.events);
+      roomRef.current = roomDetailResponse.data.room;
+      roomVersionRef.current = roomDetailResponse.data.room.version;
+      eventsRef.current = roomDetailResponse.data.events;
     } catch {
       setErrorMessage("读取房间失败，请稍后再试。");
     } finally {
@@ -284,45 +341,71 @@ export function RoomPage({ roomId }: RoomPageProps) {
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
-      setEvents((currentEvents) => {
-        const currentEventVersion = currentEvents.reduce(
-          (version, event) => Math.max(version, event.version),
-          0,
-        );
-        const currentVersion = Math.max(roomVersion, currentEventVersion);
+      if (isSyncingRef.current) {
+        return;
+      }
 
-        void syncRoomEvents(roomId, currentVersion)
-          .then((response) => {
-            if (!response.success) {
-              setSyncStatus("error");
-              return;
-            }
+      const currentVersion = Math.max(
+        roomVersionRef.current,
+        getHighestEventVersion(eventsRef.current),
+      );
 
-            if (response.data.version !== currentVersion) {
-              void loadRoom();
-              setSyncStatus("idle");
-              return;
-            }
+      isSyncingRef.current = true;
+      setSyncStatus("syncing");
 
-            if (response.data.events.length === 0) {
-              setSyncStatus("idle");
-              return;
-            }
-            setSyncStatus("idle");
-          })
-          .catch(() => {
+      void syncRoomEvents(roomId, currentVersion)
+        .then((response) => {
+          if (!response.success) {
             setSyncStatus("error");
-          });
+            return;
+          }
 
-        setSyncStatus("syncing");
-        return currentEvents;
-      });
+          const latestVersion = Math.max(
+            roomVersionRef.current,
+            getHighestEventVersion(eventsRef.current),
+          );
+
+          if (response.data.version < latestVersion) {
+            setSyncStatus("idle");
+            return;
+          }
+
+          if (response.data.events.length === 0) {
+            roomVersionRef.current = response.data.version;
+            setRoomVersion(response.data.version);
+            setSyncStatus("idle");
+            return;
+          }
+
+          const mergedEvents = mergeRoomEvents(eventsRef.current, response.data.events);
+          eventsRef.current = mergedEvents;
+          setEvents(mergedEvents);
+
+          const currentRoom = roomRef.current;
+
+          if (currentRoom !== undefined) {
+            const nextRoom = replayRoomRecord(currentRoom, mergedEvents, response.data.version);
+
+            roomRef.current = nextRoom;
+            setRoom(nextRoom);
+          }
+
+          roomVersionRef.current = response.data.version;
+          setRoomVersion(response.data.version);
+          setSyncStatus("idle");
+        })
+        .catch(() => {
+          setSyncStatus("error");
+        })
+        .finally(() => {
+          isSyncingRef.current = false;
+        });
     }, 3000);
 
     return () => {
       window.clearInterval(intervalId);
     };
-  }, [roomId, roomVersion]);
+  }, [roomId]);
 
   async function handleRenamePlayer(playerId: string) {
     setErrorMessage(undefined);
