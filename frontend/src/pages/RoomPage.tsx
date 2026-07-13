@@ -20,8 +20,7 @@ import {
 import QRCode from "qrcode";
 
 import {
-  getRoom,
-  getRoomEvents,
+  getRoomDetail,
   recordScoreEvent,
   recordRoomEvent,
   removePlayer,
@@ -237,24 +236,16 @@ export function RoomPage({ roomId }: RoomPageProps) {
     setErrorMessage(undefined);
 
     try {
-      const [roomResponse, eventsResponse] = await Promise.all([
-        getRoom(roomId),
-        getRoomEvents(roomId),
-      ]);
+      const roomDetailResponse = await getRoomDetail(roomId);
 
-      if (!roomResponse.success) {
-        setErrorMessage(roomResponse.message);
+      if (!roomDetailResponse.success) {
+        setErrorMessage(roomDetailResponse.message);
         return;
       }
 
-      if (!eventsResponse.success) {
-        setErrorMessage(eventsResponse.message);
-        return;
-      }
-
-      setRoom(roomResponse.data.room);
-      setRoomVersion(roomResponse.data.room.version);
-      setEvents(eventsResponse.data.events);
+      setRoom(roomDetailResponse.data.room);
+      setRoomVersion(roomDetailResponse.data.room.version);
+      setEvents(roomDetailResponse.data.events);
     } catch {
       setErrorMessage("读取房间失败，请稍后再试。");
     } finally {

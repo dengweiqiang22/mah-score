@@ -1,3 +1,5 @@
+import type { RoomEvent } from "./event.js";
+
 export type RoomStatus = "WAITING" | "PLAYING" | "FINISHED";
 
 export interface RoomPlayer {
@@ -42,6 +44,11 @@ export interface JoinRoomResponse {
 
 export interface GetRoomResponse {
   readonly room: RoomRecord;
+}
+
+export interface GetRoomDetailResponse {
+  readonly room: RoomRecord;
+  readonly events: readonly RoomEvent[];
 }
 
 export interface RenamePlayerRequest {

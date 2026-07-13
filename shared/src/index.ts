@@ -43,6 +43,7 @@ export { kongTypes, scoreFans } from "./types/score.js";
 export type {
   CreateRoomResponse,
   CreateRoomRequest,
+  GetRoomDetailResponse,
   GetRoomResponse,
   JoinRoomRequest,
   JoinRoomResponse,

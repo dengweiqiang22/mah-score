@@ -211,6 +211,30 @@ export async function getRoom(roomId: string): Promise<RoomRecord | undefined> {
   return parseRoom(roomId, roomValue, events);
 }
 
+export async function getRoomDetail(
+  roomId: string,
+): Promise<{ readonly room: RoomRecord; readonly events: readonly RoomEvent[] } | undefined> {
+  const [roomValue, events] = await Promise.all([
+    redis.hgetall(getRoomKey(roomId)),
+    readRoomEvents(roomId),
+  ]);
+
+  if (roomValue === null) {
+    return undefined;
+  }
+
+  const room = parseRoom(roomId, roomValue, events);
+
+  if (room === undefined) {
+    return undefined;
+  }
+
+  return {
+    room,
+    events,
+  };
+}
+
 export async function joinRoom(
   roomId: string,
   nickname: string,
