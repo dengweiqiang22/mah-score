@@ -259,6 +259,16 @@ export function RoomPage({ roomId }: RoomPageProps) {
   const roomRef = useRef<RoomRecord | undefined>(undefined);
   const roomVersionRef = useRef(0);
   const isSyncingRef = useRef(false);
+  const syncStatusRef = useRef<"idle" | "syncing" | "error">("idle");
+
+  function updateSyncStatus(nextSyncStatus: "idle" | "syncing" | "error") {
+    if (syncStatusRef.current === nextSyncStatus) {
+      return;
+    }
+
+    syncStatusRef.current = nextSyncStatus;
+    setSyncStatus(nextSyncStatus);
+  }
 
   function resetQuickScoreSelection() {
     setSelectedPrimaryPlayerId(undefined);
@@ -351,12 +361,11 @@ export function RoomPage({ roomId }: RoomPageProps) {
       );
 
       isSyncingRef.current = true;
-      setSyncStatus("syncing");
 
       void syncRoomEvents(roomId, currentVersion)
         .then((response) => {
           if (!response.success) {
-            setSyncStatus("error");
+            updateSyncStatus("error");
             return;
           }
 
@@ -366,14 +375,13 @@ export function RoomPage({ roomId }: RoomPageProps) {
           );
 
           if (response.data.version < latestVersion) {
-            setSyncStatus("idle");
+            updateSyncStatus("idle");
             return;
           }
 
           if (response.data.events.length === 0) {
             roomVersionRef.current = response.data.version;
-            setRoomVersion(response.data.version);
-            setSyncStatus("idle");
+            updateSyncStatus("idle");
             return;
           }
 
@@ -392,10 +400,10 @@ export function RoomPage({ roomId }: RoomPageProps) {
 
           roomVersionRef.current = response.data.version;
           setRoomVersion(response.data.version);
-          setSyncStatus("idle");
+          updateSyncStatus("idle");
         })
         .catch(() => {
-          setSyncStatus("error");
+          updateSyncStatus("error");
         })
         .finally(() => {
           isSyncingRef.current = false;
