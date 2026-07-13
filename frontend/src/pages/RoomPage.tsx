@@ -29,6 +29,7 @@ import {
   syncRoomEvents,
   undoRoomEvent,
 } from "../api/roomApi";
+import { takeInitialRoomDetail } from "../utils/initialRoomDetail";
 import { readPlayerIdentity, type StoredPlayerIdentity } from "../utils/playerIdentity";
 
 interface RoomPageProps {
@@ -300,6 +301,18 @@ export function RoomPage({ roomId }: RoomPageProps) {
     setErrorMessage(undefined);
 
     try {
+      const initialRoomDetail = takeInitialRoomDetail(roomId);
+
+      if (initialRoomDetail !== undefined) {
+        setRoom(initialRoomDetail.room);
+        setRoomVersion(initialRoomDetail.room.version);
+        setEvents(initialRoomDetail.events);
+        roomRef.current = initialRoomDetail.room;
+        roomVersionRef.current = initialRoomDetail.room.version;
+        eventsRef.current = initialRoomDetail.events;
+        return;
+      }
+
       const roomDetailResponse = await getRoomDetail(roomId);
 
       if (!roomDetailResponse.success) {

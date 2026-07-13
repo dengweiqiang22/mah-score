@@ -164,7 +164,9 @@ export async function withRoomLock<T>(roomId: string, operation: () => Promise<T
   }
 }
 
-export async function createRoom(nickname: string): Promise<RoomRecord> {
+export async function createRoomDetail(
+  nickname: string,
+): Promise<{ readonly room: RoomRecord; readonly events: readonly RoomEvent[] }> {
   const roomId = await createUnusedRoomId();
   const now = new Date().toISOString();
   const player = {
@@ -204,13 +206,19 @@ export async function createRoom(nickname: string): Promise<RoomRecord> {
     },
   });
 
-  const createdRoom = await getRoom(roomId);
+  const createdRoomDetail = await getRoomDetail(roomId);
 
-  if (createdRoom === undefined) {
+  if (createdRoomDetail === undefined) {
     throw new Error("ROOM_NOT_FOUND");
   }
 
-  return createdRoom;
+  return createdRoomDetail;
+}
+
+export async function createRoom(nickname: string): Promise<RoomRecord> {
+  const createdRoomDetail = await createRoomDetail(nickname);
+
+  return createdRoomDetail.room;
 }
 
 export async function getRoom(roomId: string): Promise<RoomRecord | undefined> {

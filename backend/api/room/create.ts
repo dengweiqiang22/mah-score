@@ -4,7 +4,7 @@ import { jsonFailure, jsonSuccess } from "../../services/apiResponse.js";
 import { readJsonBody } from "../../services/requestBody.js";
 import { jsonUnexpectedRoomFailure } from "../../services/roomFailure.js";
 import { getRedisConfigurationError } from "../../services/redis.js";
-import { createRoom } from "../../services/roomService.js";
+import { createRoomDetail } from "../../services/roomService.js";
 import { isValidNickname } from "../../services/roomValidation.js";
 
 function parseCreateRoomRequest(value: unknown): CreateRoomRequest | undefined {
@@ -47,7 +47,8 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
-    const room = await createRoom(parsedRequest.nickname);
+    const roomDetail = await createRoomDetail(parsedRequest.nickname);
+    const { room, events } = roomDetail;
     const owner = room.players[0];
 
     if (owner === undefined) {
@@ -59,6 +60,8 @@ export async function POST(request: Request): Promise<Response> {
     const data: CreateRoomResponse = {
       roomId: room.roomId,
       playerId: owner.id,
+      room,
+      events,
     };
 
     return jsonSuccess(data, {

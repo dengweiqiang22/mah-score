@@ -30,6 +30,8 @@ export interface CreateRoomRequest {
 export interface CreateRoomResponse {
   readonly roomId: string;
   readonly playerId: string;
+  readonly room: RoomRecord;
+  readonly events: readonly RoomEvent[];
 }
 
 export interface JoinRoomRequest {

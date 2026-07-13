@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import { createRoom, joinRoom } from "../api/roomApi";
 import { HomeActionButton } from "../components/HomeActionButton";
+import { saveInitialRoomDetail } from "../utils/initialRoomDetail";
 import { savePlayerIdentity } from "../utils/playerIdentity";
 
 export function HomePage() {
@@ -52,6 +53,10 @@ export function HomePage() {
         roomId: response.data.roomId,
         playerId: response.data.playerId,
         nickname: createNickname.trim(),
+      });
+      saveInitialRoomDetail({
+        room: response.data.room,
+        events: response.data.events,
       });
       window.location.assign(`/room/${response.data.roomId}`);
     } catch {
