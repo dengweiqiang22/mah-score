@@ -8,7 +8,7 @@ import type {
   ScoreEventRequest,
 } from "@mah-score/shared";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   buildReplayEventsFromSnapshot,
   createPlayerLedger,
@@ -955,70 +955,108 @@ export function RoomPage({ roomId }: RoomPageProps) {
   const isPlaying = room?.status === "PLAYING";
   const isFinished = room?.status === "FINISHED";
   const canStart = isWaiting && room.players.length >= 2 && room.players.length <= 4;
-  const replayState: RoomState | undefined =
-    room === undefined
-      ? undefined
-      : replayRoomEvents(
-          buildReplayEventsFromSnapshot(
-            {
-              roomId: room.roomId,
-              players: room.players,
-              status: room.status,
-              createdAt: room.createdAt,
-            },
-            events,
+  const replayState: RoomState | undefined = useMemo(
+    () =>
+      room === undefined
+        ? undefined
+        : replayRoomEvents(
+            buildReplayEventsFromSnapshot(
+              {
+                roomId: room.roomId,
+                players: room.players,
+                status: room.status,
+                createdAt: room.createdAt,
+              },
+              events,
+            ),
           ),
-        );
+    [events, room],
+  );
   const currentRoundNumber = replayState?.currentRound.number ?? 0;
   const currentRoundWinnerCount = replayState?.currentRound.winnerIds.length ?? 0;
   const isCurrentRoundFinished = replayState?.currentRound.status === "FINISHED";
   const currentRoundResult = replayState?.currentRound.result;
-  const settlement =
-    replayState === undefined
-      ? undefined
-      : createSettlement(
-          replayState.roomId,
-          replayState.players,
-          replayState.scores,
-          events,
-          replayState.currentRound,
-        );
+  const settlement = useMemo(
+    () =>
+      replayState === undefined
+        ? undefined
+        : createSettlement(
+            replayState.roomId,
+            replayState.players,
+            replayState.scores,
+            events,
+            replayState.currentRound,
+          ),
+    [events, replayState],
+  );
 
   function getPlayerScore(playerId: string): number {
     return replayState?.scores.find((score) => score.playerId === playerId)?.total ?? 0;
   }
 
-  const currentRoundWinnerIds = new Set(replayState?.currentRound.winnerIds ?? []);
-  const scoreHistory = createScoreHistory(events, replayState?.players ?? []);
-  const playerLedger = createPlayerLedger(scoreHistory, replayState?.players ?? []);
-  const currentRoundEntries =
-    replayState === undefined
-      ? []
-      : scoreHistory.filter((item) => item.roundNumber === replayState.currentRound.number);
-  const currentRoundLedger = createPlayerLedger(currentRoundEntries, replayState?.players ?? []);
-  const historyRoundLedgers =
-    replayState === undefined
-      ? []
-      : createRoundLedgers(scoreHistory, replayState.players, replayState.currentRound.number);
-  const currentPlayer =
-    storedPlayerIdentity === undefined
-      ? undefined
-      : replayState?.players.find((player) => player.id === storedPlayerIdentity.playerId);
-  const currentPlayerRoundLedger =
-    currentPlayer === undefined
-      ? undefined
-      : currentRoundLedger.find((player) => player.playerId === currentPlayer.id);
-  const currentPlayerRoundEntries =
-    currentPlayerRoundLedger?.entries.filter((entry) => !entry.isUndone) ?? [];
-  const currentPlayerRoundTotal = currentPlayerRoundLedger?.total ?? 0;
-  const canUndo = scoreHistory.some((item) => !item.isUndone);
-  const quickScoreMissingMessage = getQuickScoreMissingMessage();
-  const selectedPrimaryPlayerName = getPlayerNickname(
-    replayState?.players ?? [],
-    selectedPrimaryPlayerId,
+  const currentRoundWinnerIds = useMemo(
+    () => new Set(replayState?.currentRound.winnerIds ?? []),
+    [replayState],
   );
-  const expandedHistoryRoundNumberSet = new Set(expandedHistoryRoundNumbers);
-  const expandedHistoryAllLedgerRoundNumberSet = new Set(expandedHistoryAllLedgerRoundNumbers);
+  const scoreHistory = useMemo(
+    () => createScoreHistory(events, replayState?.players ?? []),
+    [events, replayState],
+  );
+  const playerLedger = useMemo(
+    () => createPlayerLedger(scoreHistory, replayState?.players ?? []),
+    [replayState, scoreHistory],
+  );
+  const currentRoundEntries = useMemo(
+    () =>
+      replayState === undefined
+        ? []
+        : scoreHistory.filter((item) => item.roundNumber === replayState.currentRound.number),
+    [replayState, scoreHistory],
+  );
+  const currentRoundLedger = useMemo(
+    () => createPlayerLedger(currentRoundEntries, replayState?.players ?? []),
+    [currentRoundEntries, replayState],
+  );
+  const historyRoundLedgers = useMemo(
+    () =>
+      replayState === undefined
+        ? []
+        : createRoundLedgers(scoreHistory, replayState.players, replayState.currentRound.number),
+    [replayState, scoreHistory],
+  );
+  const currentPlayer = useMemo(
+    () =>
+      storedPlayerIdentity === undefined
+        ? undefined
+        : replayState?.players.find((player) => player.id === storedPlayerIdentity.playerId),
+    [replayState, storedPlayerIdentity],
+  );
+  const currentPlayerRoundLedger = useMemo(
+    () =>
+      currentPlayer === undefined
+        ? undefined
+        : currentRoundLedger.find((player) => player.playerId === currentPlayer.id),
+    [currentPlayer, currentRoundLedger],
+  );
+  const currentPlayerRoundEntries = useMemo(
+    () => currentPlayerRoundLedger?.entries.filter((entry) => !entry.isUndone) ?? [],
+    [currentPlayerRoundLedger],
+  );
+  const currentPlayerRoundTotal = currentPlayerRoundLedger?.total ?? 0;
+  const canUndo = useMemo(() => scoreHistory.some((item) => !item.isUndone), [scoreHistory]);
+  const quickScoreMissingMessage = getQuickScoreMissingMessage();
+  const selectedPrimaryPlayerName = useMemo(
+    () => getPlayerNickname(replayState?.players ?? [], selectedPrimaryPlayerId),
+    [replayState, selectedPrimaryPlayerId],
+  );
+  const expandedHistoryRoundNumberSet = useMemo(
+    () => new Set(expandedHistoryRoundNumbers),
+    [expandedHistoryRoundNumbers],
+  );
+  const expandedHistoryAllLedgerRoundNumberSet = useMemo(
+    () => new Set(expandedHistoryAllLedgerRoundNumbers),
+    [expandedHistoryAllLedgerRoundNumbers],
+  );
 
   useEffect(() => {
     setIsCurrentRoundAllLedgerExpanded(false);
