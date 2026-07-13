@@ -3,7 +3,7 @@ import type { SyncRoomEventsResponse } from "../../../shared/src/index.js";
 import { jsonFailure, jsonSuccess } from "../../services/apiResponse.js";
 import { readRoomEventsAfterVersion } from "../../services/eventStore.js";
 import { getRedisConfigurationError } from "../../services/redis.js";
-import { getRoom } from "../../services/roomService.js";
+import { getRoomVersion } from "../../services/roomService.js";
 import { isValidRoomId } from "../../services/roomValidation.js";
 
 function parseVersion(value: string | null): number | undefined {
@@ -45,17 +45,23 @@ export async function GET(request: Request): Promise<Response> {
     });
   }
 
-  const room = await getRoom(roomId);
+  const currentVersion = await getRoomVersion(roomId);
 
-  if (room === undefined) {
+  if (currentVersion === undefined) {
     return jsonFailure("房间不存在。", "ROOM_NOT_FOUND", {
       status: 404,
     });
   }
 
+  if (version > currentVersion) {
+    return jsonFailure("客户端 Version 不能大于房间当前 Version。", "INVALID_VERSION", {
+      status: 409,
+    });
+  }
+
   const data: SyncRoomEventsResponse = {
-    events: await readRoomEventsAfterVersion(roomId, version),
-    version: room.version,
+    events: version === currentVersion ? [] : await readRoomEventsAfterVersion(roomId, version),
+    version: currentVersion,
   };
 
   return jsonSuccess(data);

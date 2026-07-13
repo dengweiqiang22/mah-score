@@ -99,7 +99,12 @@ export async function readRoomEventsAfterVersion(
   roomId: string,
   version: number,
 ): Promise<readonly RoomEvent[]> {
-  const events = await readRoomEvents(roomId);
+  const values = await redis.lrange<unknown>(getRoomEventsKey(roomId), version, -1);
+  const events = values.flatMap((value) => {
+    const event = parseRoomEvent(value);
+
+    return event === undefined ? [] : [event];
+  });
 
   return events.filter((event) => event.version > version);
 }

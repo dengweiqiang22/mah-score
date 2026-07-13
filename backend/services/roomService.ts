@@ -92,6 +92,21 @@ function parseRoom(
   };
 }
 
+function parseRoomVersion(value: Record<string, unknown>): number | undefined {
+  const version =
+    typeof value.version === "number"
+      ? value.version
+      : typeof value.version === "string"
+        ? Number.parseInt(value.version, 10)
+        : undefined;
+
+  if (version === undefined || Number.isNaN(version)) {
+    return undefined;
+  }
+
+  return version;
+}
+
 async function createUnusedRoomId(): Promise<string> {
   for (let attempt = 0; attempt < maxRoomIdAttempts; attempt += 1) {
     const roomId = createCandidateRoomId();
@@ -233,6 +248,16 @@ export async function getRoomDetail(
     room,
     events,
   };
+}
+
+export async function getRoomVersion(roomId: string): Promise<number | undefined> {
+  const roomValue = await redis.hgetall(getRoomKey(roomId));
+
+  if (roomValue === null) {
+    return undefined;
+  }
+
+  return parseRoomVersion(roomValue);
 }
 
 export async function joinRoom(
