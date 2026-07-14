@@ -84,7 +84,7 @@ function parseRoom(
 
   return {
     roomId,
-    version,
+    version: Math.max(version, replayState.version),
     players: replayState.players.length > 0 ? replayState.players : legacyPlayers,
     status: replayState.status,
     createdAt: value.createdAt,

@@ -77,6 +77,136 @@ assert.deepEqual(roomCreatedState.players, [
     nickname: "赵六",
   },
 ]);
+assert.equal(roomCreatedState.status, "PLAYING");
+assert.deepEqual(roomCreatedState.currentRound, {
+  number: 1,
+  status: "ACTIVE",
+  result: undefined,
+  winnerIds: [],
+});
+assert.deepEqual(roomCreatedState.scores, [
+  {
+    playerId: "player_1",
+    total: 0,
+  },
+  {
+    playerId: "player_2",
+    total: 0,
+  },
+  {
+    playerId: "player_3",
+    total: 0,
+  },
+]);
+
+const lifecycleState = replayRoomEvents([
+  {
+    ...baseEvent,
+    id: "lifecycle_1",
+    type: "ROOM_CREATED",
+    version: 1,
+    payload: {},
+  },
+  {
+    ...baseEvent,
+    id: "lifecycle_2",
+    type: "PLAYER_JOINED",
+    version: 2,
+    payload: {
+      playerId: "player_1",
+      nickname: "张三",
+    },
+  },
+  {
+    ...baseEvent,
+    id: "lifecycle_3",
+    type: "PLAYER_JOINED",
+    version: 3,
+    payload: {
+      playerId: "player_2",
+      nickname: "李四",
+    },
+  },
+  {
+    ...baseEvent,
+    id: "lifecycle_4",
+    type: "PLAYER_RENAMED",
+    version: 4,
+    payload: {
+      playerId: "player_1",
+      nickname: "王五",
+    },
+  },
+  {
+    ...baseEvent,
+    id: "lifecycle_5",
+    type: "PLAYER_REMOVED",
+    version: 5,
+    payload: {
+      playerId: "player_2",
+    },
+  },
+  {
+    ...baseEvent,
+    id: "lifecycle_6",
+    type: "PLAYER_JOINED",
+    version: 6,
+    payload: {
+      playerId: "player_3",
+      nickname: "赵六",
+    },
+  },
+  {
+    ...baseEvent,
+    id: "lifecycle_7",
+    type: "GAME_STARTED",
+    version: 7,
+    payload: {},
+  },
+  {
+    ...baseEvent,
+    id: "lifecycle_8",
+    type: "GAME_FINISHED",
+    version: 8,
+    payload: {},
+  },
+]);
+
+assert.equal(lifecycleState.version, 8);
+assert.equal(lifecycleState.status, "FINISHED");
+assert.deepEqual(lifecycleState.players, [
+  {
+    id: "player_1",
+    nickname: "王五",
+  },
+  {
+    id: "player_3",
+    nickname: "赵六",
+  },
+]);
+assert.deepEqual(lifecycleState.scores, [
+  {
+    playerId: "player_1",
+    total: 0,
+  },
+  {
+    playerId: "player_3",
+    total: 0,
+  },
+]);
+assert.deepEqual(
+  lifecycleState.events.map((event) => event.type),
+  [
+    "ROOM_CREATED",
+    "PLAYER_JOINED",
+    "PLAYER_JOINED",
+    "PLAYER_RENAMED",
+    "PLAYER_REMOVED",
+    "PLAYER_JOINED",
+    "GAME_STARTED",
+    "GAME_FINISHED",
+  ],
+);
 
 const legacySnapshot = {
   roomId: "456",
@@ -128,6 +258,27 @@ assert.deepEqual(
       total: -1,
     },
   ],
+);
+
+const legacyFinishedReplayState = replayRoomEvents(
+  buildReplayEventsFromSnapshot(
+    {
+      ...legacySnapshot,
+      status: "FINISHED",
+    },
+    [],
+  ),
+);
+
+assert.equal(legacyFinishedReplayState.roomId, "456");
+assert.equal(legacyFinishedReplayState.status, "FINISHED");
+assert.deepEqual(
+  legacyFinishedReplayState.players.map((player) => player.id),
+  ["legacy_player_1", "legacy_player_2"],
+);
+assert.deepEqual(
+  legacyFinishedReplayState.events.map((event) => event.type),
+  ["ROOM_CREATED", "PLAYER_JOINED", "PLAYER_JOINED", "GAME_STARTED", "GAME_FINISHED"],
 );
 
 const events = [
