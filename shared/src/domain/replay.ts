@@ -513,14 +513,18 @@ function applyScoreEvent(state: MutableReplayState, event: RoomEvent): MutableRe
     const scoredState = applyDiscardWinScore(state, event);
     const winnerId = getStringPayloadValue(event, "winnerId");
 
-    return winnerId === undefined ? scoredState : recordRoundWinner(scoredState, winnerId);
+    return scoredState === state || winnerId === undefined
+      ? scoredState
+      : recordRoundWinner(scoredState, winnerId);
   }
 
   if (event.type === "SELF_DRAW") {
     const scoredState = applySelfDrawScore(state, event);
     const winnerId = getStringPayloadValue(event, "winnerId");
 
-    return winnerId === undefined ? scoredState : recordRoundWinner(scoredState, winnerId);
+    return scoredState === state || winnerId === undefined
+      ? scoredState
+      : recordRoundWinner(scoredState, winnerId);
   }
 
   if (event.type === "KONG") {

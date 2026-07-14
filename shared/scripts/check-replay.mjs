@@ -208,6 +208,50 @@ assert.deepEqual(
   ],
 );
 
+const outOfOrderLifecycleState = replayRoomEvents([
+  {
+    ...baseEvent,
+    id: "out_of_order_3",
+    type: "PLAYER_JOINED",
+    version: 3,
+    payload: {
+      playerId: "player_2",
+      nickname: "李四",
+    },
+  },
+  {
+    ...baseEvent,
+    id: "out_of_order_1",
+    type: "ROOM_CREATED",
+    version: 1,
+    payload: {},
+  },
+  {
+    ...baseEvent,
+    id: "out_of_order_4",
+    type: "GAME_STARTED",
+    version: 4,
+    payload: {},
+  },
+  {
+    ...baseEvent,
+    id: "out_of_order_2",
+    type: "PLAYER_JOINED",
+    version: 2,
+    payload: {
+      playerId: "player_1",
+      nickname: "张三",
+    },
+  },
+]);
+
+assert.equal(outOfOrderLifecycleState.version, 4);
+assert.equal(outOfOrderLifecycleState.status, "PLAYING");
+assert.deepEqual(
+  outOfOrderLifecycleState.events.map((event) => event.id),
+  ["out_of_order_1", "out_of_order_2", "out_of_order_3", "out_of_order_4"],
+);
+
 const legacySnapshot = {
   roomId: "456",
   createdAt: "2026-07-06T00:00:00.000Z",
@@ -730,6 +774,114 @@ const undoneLedgerEntry = extendedScoreLedger
 assert.equal(undoneLedgerEntry?.isUndone, true);
 assert.equal(undoneLedgerEntry?.isUndoable, false);
 
+const undoScoreEvents = [
+  {
+    ...baseEvent,
+    id: "undo_1",
+    type: "PLAYER_JOINED",
+    version: 1,
+    payload: {
+      playerId: "player_1",
+      nickname: "张三",
+    },
+  },
+  {
+    ...baseEvent,
+    id: "undo_2",
+    type: "PLAYER_JOINED",
+    version: 2,
+    payload: {
+      playerId: "player_2",
+      nickname: "李四",
+    },
+  },
+  {
+    ...baseEvent,
+    id: "undo_3",
+    type: "PLAYER_JOINED",
+    version: 3,
+    payload: {
+      playerId: "player_3",
+      nickname: "王五",
+    },
+  },
+  {
+    ...baseEvent,
+    id: "undo_4",
+    type: "GAME_STARTED",
+    version: 4,
+    payload: {},
+  },
+  {
+    ...baseEvent,
+    id: "undo_5",
+    type: "DISCARD_WIN",
+    version: 5,
+    payload: {
+      winnerId: "player_1",
+      discarderId: "player_2",
+    },
+  },
+  {
+    ...baseEvent,
+    id: "undo_6",
+    type: "UNDO",
+    version: 6,
+    payload: {
+      targetEventId: "undo_5",
+    },
+  },
+  {
+    ...baseEvent,
+    id: "undo_7",
+    type: "SELF_DRAW",
+    version: 7,
+    payload: {
+      winnerId: "player_2",
+    },
+  },
+];
+const undoScoreState = replayRoomEvents(undoScoreEvents);
+const undoScoreHistory = createScoreHistory(undoScoreEvents, undoScoreState.players);
+
+assert.deepEqual(undoScoreState.scores, [
+  {
+    playerId: "player_1",
+    total: -1,
+  },
+  {
+    playerId: "player_2",
+    total: 2,
+  },
+  {
+    playerId: "player_3",
+    total: -1,
+  },
+]);
+assert.deepEqual(
+  undoScoreState.rounds.map((round) => round.eventId),
+  ["undo_7"],
+);
+assert.deepEqual(
+  undoScoreHistory.map((item) => ({
+    eventId: item.event.id,
+    isUndone: item.isUndone,
+    isUndoable: item.event.type !== "DRAW_GAME" && !item.isUndone,
+  })),
+  [
+    {
+      eventId: "undo_7",
+      isUndone: false,
+      isUndoable: true,
+    },
+    {
+      eventId: "undo_5",
+      isUndone: true,
+      isUndoable: false,
+    },
+  ],
+);
+
 const concealedKongState = replayRoomEvents([
   ...extendedScoreEvents.slice(0, 5),
   {
@@ -795,6 +947,68 @@ assert.deepEqual(legacyFanState.scores, [
     total: 0,
   },
 ]);
+
+const invalidScoreState = replayRoomEvents([
+  ...extendedScoreEvents.slice(0, 5),
+  {
+    ...baseEvent,
+    id: "invalid_same_player",
+    type: "DISCARD_WIN",
+    version: 6,
+    payload: {
+      winnerId: "player_1",
+      discarderId: "player_1",
+    },
+  },
+  {
+    ...baseEvent,
+    id: "invalid_missing_player",
+    type: "SELF_DRAW",
+    version: 7,
+    payload: {
+      winnerId: "missing_player",
+    },
+  },
+  {
+    ...baseEvent,
+    id: "valid_first_win",
+    type: "DISCARD_WIN",
+    version: 8,
+    payload: {
+      winnerId: "player_2",
+      discarderId: "player_3",
+    },
+  },
+  {
+    ...baseEvent,
+    id: "invalid_duplicate_winner",
+    type: "SELF_DRAW",
+    version: 9,
+    payload: {
+      winnerId: "player_2",
+    },
+  },
+]);
+
+assert.deepEqual(invalidScoreState.scores, [
+  {
+    playerId: "player_1",
+    total: 0,
+  },
+  {
+    playerId: "player_2",
+    total: 1,
+  },
+  {
+    playerId: "player_3",
+    total: -1,
+  },
+  {
+    playerId: "player_4",
+    total: 0,
+  },
+]);
+assert.deepEqual(invalidScoreState.currentRound.winnerIds, ["player_2"]);
 
 const multiWinRoundEvents = [
   {
