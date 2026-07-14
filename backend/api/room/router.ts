@@ -9,6 +9,7 @@ import { POST as renamePlayer } from "./player/rename.js";
 import { POST as recordScore } from "./score.js";
 import { POST as startRoom } from "./start.js";
 import { GET as syncRoomEvents } from "./sync.js";
+import { isScoreAction } from "../../services/scoreValidation.js";
 import { POST as undoRoomEvent } from "./undo.js";
 
 type RoomPostAction =
@@ -24,6 +25,10 @@ type RoomPostAction =
 function getPostAction(value: unknown): RoomPostAction | undefined {
   if (typeof value !== "object" || value === null || !("action" in value)) {
     return undefined;
+  }
+
+  if (typeof value.action === "string" && isScoreAction(value.action)) {
+    return "score";
   }
 
   if (

@@ -91,7 +91,16 @@ export async function startRoom(request: StartRoomRequest): Promise<ApiResponse<
 export async function recordScoreEvent(
   request: ScoreEventRequest,
 ): Promise<ApiResponse<EmptyResponse>> {
-  return postRoomAction("score", request);
+  const response = await fetch("/api/room", {
+    body: JSON.stringify(request),
+    headers: {
+      "Content-Type": "application/json",
+    },
+    method: "POST",
+  });
+  const data = (await response.json()) as ApiResponse<EmptyResponse>;
+
+  return data;
 }
 
 export async function recordRoomEvent(
