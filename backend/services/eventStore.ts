@@ -21,6 +21,34 @@ function createEventId(): string {
   return `event_${crypto.randomUUID()}`;
 }
 
+function getEventStatusCache(type: RoomEventType): "PLAYING" | "FINISHED" | undefined {
+  if (type === "GAME_STARTED") {
+    return "PLAYING";
+  }
+
+  if (type === "GAME_FINISHED") {
+    return "FINISHED";
+  }
+
+  return undefined;
+}
+
+function parseAppendRoomEventResult(value: unknown): { readonly version: number } | undefined {
+  if (!Array.isArray(value) || value.length < 1) {
+    return undefined;
+  }
+
+  const version = value[0];
+
+  if (typeof version !== "number" || !Number.isInteger(version)) {
+    return undefined;
+  }
+
+  return {
+    version,
+  };
+}
+
 function parseRoomEvent(value: unknown): RoomEvent | undefined {
   let parsedValue: unknown;
 
@@ -57,30 +85,70 @@ function parseRoomEvent(value: unknown): RoomEvent | undefined {
 }
 
 export async function appendRoomEvent(input: AppendRoomEventInput): Promise<RoomEvent> {
-  const roomExists = await redis.exists(getRoomKey(input.roomId));
-
-  if (roomExists === 0) {
-    throw new Error("ROOM_NOT_FOUND");
-  }
-
   const timestamp = new Date().toISOString();
-  const version = await redis.hincrby(getRoomKey(input.roomId), "version", 1);
-  const event: RoomEvent = {
+  const eventWithoutVersion = {
     id: createEventId(),
     roomId: input.roomId,
     type: input.type,
-    version,
     operator: input.operator,
     timestamp,
     payload: input.payload,
   };
+  const eventStatusCache = getEventStatusCache(input.type);
+  const appendEventScript = `
+    if redis.call("EXISTS", KEYS[1]) == 0 then
+      return {0}
+    end
 
-  await redis.rpush(getRoomEventsKey(input.roomId), JSON.stringify(event));
-  await redis.hset(getRoomKey(input.roomId), {
-    ...(input.type === "GAME_STARTED" ? { status: "PLAYING" } : {}),
-    ...(input.type === "GAME_FINISHED" ? { status: "FINISHED" } : {}),
-    updatedAt: timestamp,
-  });
+    local version = redis.call("HINCRBY", KEYS[1], "version", 1)
+    local event = "{" ..
+      "\\"id\\":" .. cjson.encode(ARGV[1]) .. "," ..
+      "\\"roomId\\":" .. cjson.encode(ARGV[2]) .. "," ..
+      "\\"type\\":" .. cjson.encode(ARGV[3]) .. "," ..
+      "\\"version\\":" .. version .. "," ..
+      "\\"operator\\":" .. cjson.encode(ARGV[4]) .. "," ..
+      "\\"timestamp\\":" .. cjson.encode(ARGV[5]) .. "," ..
+      "\\"payload\\":" .. ARGV[6] ..
+    "}"
+
+    redis.call("RPUSH", KEYS[2], event)
+
+    if ARGV[7] == "" then
+      redis.call("HSET", KEYS[1], "updatedAt", ARGV[5])
+    else
+      redis.call("HSET", KEYS[1], "status", ARGV[7], "updatedAt", ARGV[5])
+    end
+
+    return {version}
+  `;
+  const scriptResult = parseAppendRoomEventResult(
+    await redis.eval(
+      appendEventScript,
+      [getRoomKey(input.roomId), getRoomEventsKey(input.roomId)],
+      [
+        eventWithoutVersion.id,
+        eventWithoutVersion.roomId,
+        eventWithoutVersion.type,
+        eventWithoutVersion.operator,
+        eventWithoutVersion.timestamp,
+        JSON.stringify(eventWithoutVersion.payload),
+        eventStatusCache ?? "",
+      ],
+    ),
+  );
+
+  if (scriptResult === undefined) {
+    throw new Error("EVENT_APPEND_FAILED");
+  }
+
+  if (scriptResult.version === 0) {
+    throw new Error("ROOM_NOT_FOUND");
+  }
+
+  const event: RoomEvent = {
+    ...eventWithoutVersion,
+    version: scriptResult.version,
+  };
 
   return event;
 }
