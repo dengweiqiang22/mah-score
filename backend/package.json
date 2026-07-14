@@ -5,17 +5,7 @@
   "type": "module",
   "exports": {
     "./api/health": "./api/health.ts",
-    "./api/room": "./api/room/index.ts",
-    "./api/room/create": "./api/room/create.ts",
-    "./api/room/event": "./api/room/event.ts",
-    "./api/room/events": "./api/room/events.ts",
-    "./api/room/join": "./api/room/join.ts",
-    "./api/room/score": "./api/room/score.ts",
-    "./api/room/start": "./api/room/start.ts",
-    "./api/room/sync": "./api/room/sync.ts",
-    "./api/room/undo": "./api/room/undo.ts",
-    "./api/room/player/rename": "./api/room/player/rename.ts",
-    "./api/room/player/remove": "./api/room/player/remove.ts"
+    "./api/room": "./api/room/router.ts"
   },
   "scripts": {
     "build": "tsc -b --force",

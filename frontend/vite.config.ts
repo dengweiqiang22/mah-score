@@ -2,17 +2,7 @@ import react from "@vitejs/plugin-react";
 import { defineConfig, loadEnv, type Plugin } from "vite";
 
 import healthFunction from "../backend/api/health";
-import roomFunction from "../backend/api/room";
-import createRoomFunction from "../backend/api/room/create";
-import roomEventFunction from "../backend/api/room/event";
-import roomEventsFunction from "../backend/api/room/events";
-import joinRoomFunction from "../backend/api/room/join";
-import scoreFunction from "../backend/api/room/score";
-import startRoomFunction from "../backend/api/room/start";
-import syncFunction from "../backend/api/room/sync";
-import undoFunction from "../backend/api/room/undo";
-import removePlayerFunction from "../backend/api/room/player/remove";
-import renamePlayerFunction from "../backend/api/room/player/rename";
+import roomRouterFunction from "../backend/api/room/router";
 
 function applyRootEnv(mode: string): void {
   const rootEnv = loadEnv(mode, "..", "");
@@ -72,136 +62,19 @@ function localApiPlugin(): Plugin {
 
         await sendApiResponse(response, apiResponse);
       });
-      server.middlewares.use("/api/room/player/rename", async (request, response, next) => {
-        if (request.method !== "POST") {
-          next();
-          return;
-        }
-
-        const apiRequest = await createRequestFromIncomingMessage(
-          request,
-          "/api/room/player/rename",
-        );
-        const apiResponse = await renamePlayerFunction.fetch(apiRequest);
-
-        await sendApiResponse(response, apiResponse);
-      });
-      server.middlewares.use("/api/room/player/remove", async (request, response, next) => {
-        if (request.method !== "POST") {
-          next();
-          return;
-        }
-
-        const apiRequest = await createRequestFromIncomingMessage(
-          request,
-          "/api/room/player/remove",
-        );
-        const apiResponse = await removePlayerFunction.fetch(apiRequest);
-
-        await sendApiResponse(response, apiResponse);
-      });
-      server.middlewares.use("/api/room/create", async (request, response, next) => {
-        if (request.method !== "POST") {
-          next();
-          return;
-        }
-
-        const apiRequest = await createRequestFromIncomingMessage(request, "/api/room/create");
-        const apiResponse = await createRoomFunction.fetch(apiRequest);
-
-        await sendApiResponse(response, apiResponse);
-      });
-      server.middlewares.use("/api/room/join", async (request, response, next) => {
-        if (request.method !== "POST") {
-          next();
-          return;
-        }
-
-        const apiRequest = await createRequestFromIncomingMessage(request, "/api/room/join");
-        const apiResponse = await joinRoomFunction.fetch(apiRequest);
-
-        await sendApiResponse(response, apiResponse);
-      });
-      server.middlewares.use("/api/room/start", async (request, response, next) => {
-        if (request.method !== "POST") {
-          next();
-          return;
-        }
-
-        const apiRequest = await createRequestFromIncomingMessage(request, "/api/room/start");
-        const apiResponse = await startRoomFunction.fetch(apiRequest);
-
-        await sendApiResponse(response, apiResponse);
-      });
-      server.middlewares.use("/api/room/event", async (request, response, next) => {
-        if (request.method !== "POST") {
-          next();
-          return;
-        }
-
-        const apiRequest = await createRequestFromIncomingMessage(request, "/api/room/event");
-        const apiResponse = await roomEventFunction.fetch(apiRequest);
-
-        await sendApiResponse(response, apiResponse);
-      });
-      server.middlewares.use("/api/room/score", async (request, response, next) => {
-        if (request.method !== "POST") {
-          next();
-          return;
-        }
-
-        const apiRequest = await createRequestFromIncomingMessage(request, "/api/room/score");
-        const apiResponse = await scoreFunction.fetch(apiRequest);
-
-        await sendApiResponse(response, apiResponse);
-      });
-      server.middlewares.use("/api/room/undo", async (request, response, next) => {
-        if (request.method !== "POST") {
-          next();
-          return;
-        }
-
-        const apiRequest = await createRequestFromIncomingMessage(request, "/api/room/undo");
-        const apiResponse = await undoFunction.fetch(apiRequest);
-
-        await sendApiResponse(response, apiResponse);
-      });
-      server.middlewares.use("/api/room/events", async (request, response, next) => {
-        if (request.method !== "GET" || request.url === undefined) {
-          next();
-          return;
-        }
-
-        const apiRequest = new Request(new URL(request.url, "http://localhost"), {
-          method: "GET",
-        });
-        const apiResponse = await roomEventsFunction.fetch(apiRequest);
-
-        await sendApiResponse(response, apiResponse);
-      });
-      server.middlewares.use("/api/room/sync", async (request, response, next) => {
-        if (request.method !== "GET" || request.url === undefined) {
-          next();
-          return;
-        }
-
-        const apiRequest = new Request(new URL(request.url, "http://localhost"), {
-          method: "GET",
-        });
-        const apiResponse = await syncFunction.fetch(apiRequest);
-
-        await sendApiResponse(response, apiResponse);
-      });
       server.middlewares.use("/api/room", async (request, response, next) => {
-        if (request.method !== "GET" || request.url === undefined) {
+        if ((request.method !== "GET" && request.method !== "POST") || request.url === undefined) {
           next();
           return;
         }
 
-        const apiRequest = new Request(new URL(request.url, "http://localhost"), {
-          method: "GET",
-        });
-        const apiResponse = await roomFunction.fetch(apiRequest);
+        const apiRequest =
+          request.method === "GET"
+            ? new Request(new URL(request.url, "http://localhost"), {
+                method: "GET",
+              })
+            : await createRequestFromIncomingMessage(request, request.url);
+        const apiResponse = await roomRouterFunction.fetch(apiRequest);
 
         await sendApiResponse(response, apiResponse);
       });
