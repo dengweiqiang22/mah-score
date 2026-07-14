@@ -2,6 +2,7 @@ import type { RenamePlayerRequest } from "../../../../shared/src/index.js";
 
 import { jsonFailure, jsonSuccess } from "../../../services/apiResponse.js";
 import { readJsonBody } from "../../../services/requestBody.js";
+import { jsonRoomBusyFailure } from "../../../services/roomFailure.js";
 import { getRedisConfigurationError } from "../../../services/redis.js";
 import { renamePlayer } from "../../../services/roomService.js";
 import {
@@ -48,6 +49,10 @@ function getRenameFailure(error: unknown): Response {
     return jsonFailure("当前房间不能修改玩家。", "ROOM_NOT_EDITABLE", {
       status: 409,
     });
+  }
+
+  if (error.message === "ROOM_BUSY") {
+    return jsonRoomBusyFailure();
   }
 
   if (error.message === "PLAYER_NOT_FOUND") {

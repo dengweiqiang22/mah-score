@@ -2,6 +2,7 @@ import type { RemovePlayerRequest } from "../../../../shared/src/index.js";
 
 import { jsonFailure, jsonSuccess } from "../../../services/apiResponse.js";
 import { readJsonBody } from "../../../services/requestBody.js";
+import { jsonRoomBusyFailure } from "../../../services/roomFailure.js";
 import { getRedisConfigurationError } from "../../../services/redis.js";
 import { removePlayer } from "../../../services/roomService.js";
 import { isExpectedPlayerEditError, isValidRoomId } from "../../../services/roomValidation.js";
@@ -41,6 +42,10 @@ function getRemoveFailure(error: unknown): Response {
     return jsonFailure("当前房间不能删除玩家。", "ROOM_NOT_EDITABLE", {
       status: 409,
     });
+  }
+
+  if (error.message === "ROOM_BUSY") {
+    return jsonRoomBusyFailure();
   }
 
   if (error.message === "PLAYER_NOT_FOUND") {

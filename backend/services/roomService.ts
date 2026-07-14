@@ -316,78 +316,82 @@ export async function renamePlayer(
   playerId: string,
   nickname: string,
 ): Promise<RoomRecord["players"][number]> {
-  const room = await getRoom(roomId);
-  const normalizedNickname = nickname.trim();
+  return withRoomLock(roomId, async () => {
+    const room = await getRoom(roomId);
+    const normalizedNickname = nickname.trim();
 
-  if (room === undefined) {
-    throw new Error("ROOM_NOT_FOUND");
-  }
+    if (room === undefined) {
+      throw new Error("ROOM_NOT_FOUND");
+    }
 
-  if (room.status !== "WAITING") {
-    throw new Error("ROOM_NOT_EDITABLE");
-  }
+    if (room.status !== "WAITING") {
+      throw new Error("ROOM_NOT_EDITABLE");
+    }
 
-  const playerExists = room.players.some((player) => player.id === playerId);
+    const playerExists = room.players.some((player) => player.id === playerId);
 
-  if (!playerExists) {
-    throw new Error("PLAYER_NOT_FOUND");
-  }
+    if (!playerExists) {
+      throw new Error("PLAYER_NOT_FOUND");
+    }
 
-  if (room.players.some((player) => player.id !== playerId && player.nickname === normalizedNickname)) {
-    throw new Error("PLAYER_NICKNAME_EXISTS");
-  }
+    if (room.players.some((player) => player.id !== playerId && player.nickname === normalizedNickname)) {
+      throw new Error("PLAYER_NICKNAME_EXISTS");
+    }
 
-  const updatedPlayers = room.players.map((player) =>
-    player.id === playerId
-      ? {
-          ...player,
-          nickname: normalizedNickname,
-        }
-      : player,
-  );
-  const renamedPlayer = updatedPlayers.find((player) => player.id === playerId);
+    const updatedPlayers = room.players.map((player) =>
+      player.id === playerId
+        ? {
+            ...player,
+            nickname: normalizedNickname,
+          }
+        : player,
+    );
+    const renamedPlayer = updatedPlayers.find((player) => player.id === playerId);
 
-  await appendRoomEvent({
-    roomId,
-    type: "PLAYER_RENAMED",
-    operator: "room",
-    payload: {
-      playerId,
-      nickname: normalizedNickname,
-    },
+    await appendRoomEvent({
+      roomId,
+      type: "PLAYER_RENAMED",
+      operator: "room",
+      payload: {
+        playerId,
+        nickname: normalizedNickname,
+      },
+    });
+
+    if (renamedPlayer === undefined) {
+      throw new Error("PLAYER_NOT_FOUND");
+    }
+
+    return renamedPlayer;
   });
-
-  if (renamedPlayer === undefined) {
-    throw new Error("PLAYER_NOT_FOUND");
-  }
-
-  return renamedPlayer;
 }
 
 export async function removePlayer(roomId: string, playerId: string): Promise<void> {
-  const room = await getRoom(roomId);
+  return withRoomLock(roomId, async () => {
+    const room = await getRoom(roomId);
 
-  if (room === undefined) {
-    throw new Error("ROOM_NOT_FOUND");
-  }
+    if (room === undefined) {
+      throw new Error("ROOM_NOT_FOUND");
+    }
 
-  if (room.status !== "WAITING") {
-    throw new Error("ROOM_NOT_EDITABLE");
-  }
+    if (room.status !== "WAITING") {
+      throw new Error("ROOM_NOT_EDITABLE");
+    }
 
-  const updatedPlayers = room.players.filter((player) => player.id !== playerId);
+    const updatedPlayers = room.players.filter((player) => player.id !== playerId);
 
-  if (updatedPlayers.length === room.players.length) {
-    throw new Error("PLAYER_NOT_FOUND");
-  }
+    if (updatedPlayers.length === room.players.length) {
+      throw new Error("PLAYER_NOT_FOUND");
+    }
 
-  await appendRoomEvent({
-    roomId,
-    type: "PLAYER_REMOVED",
-    operator: "room",
-    payload: {
-      playerId,
-    },
+    await appendRoomEvent({
+      roomId,
+      type: "PLAYER_REMOVED",
+      operator: "room",
+      payload: {
+        playerId,
+      },
+    });
   });
 }
 

@@ -9,9 +9,9 @@ import {
   isValidEventOperator,
 } from "../../services/eventValidation.js";
 import { readJsonBody } from "../../services/requestBody.js";
-import { jsonUnexpectedRoomFailure } from "../../services/roomFailure.js";
+import { jsonRoomBusyFailure, jsonUnexpectedRoomFailure } from "../../services/roomFailure.js";
 import { getRedisConfigurationError } from "../../services/redis.js";
-import { getRoom } from "../../services/roomService.js";
+import { getRoom, withRoomLock } from "../../services/roomService.js";
 import { isValidRoomId } from "../../services/roomValidation.js";
 
 function parseAppendRoomEventRequest(value: unknown): AppendRoomEventRequest | undefined {
@@ -78,54 +78,67 @@ export async function POST(request: Request): Promise<Response> {
     });
   }
 
-  if (parsedRequest.type === "GAME_FINISHED" || parsedRequest.type === "ROUND_CONFIRMED") {
-    const room = await getRoom(parsedRequest.roomId);
-
-    if (room === undefined) {
-      return jsonFailure("房间不存在。", "ROOM_NOT_FOUND", {
-        status: 404,
-      });
-    }
-
-    if (room.status !== "PLAYING") {
-      return jsonFailure("当前房间不能结束游戏。", "ROOM_NOT_PLAYING", {
-        status: 409,
-      });
-    }
-
-    if (parsedRequest.type === "ROUND_CONFIRMED") {
-      const roomEvents = await readRoomEvents(parsedRequest.roomId);
-      const roomState = replayRoomEvents(
-        buildReplayEventsFromSnapshot(
-          {
-            roomId: room.roomId,
-            players: room.players,
-            status: room.status,
-            createdAt: room.createdAt,
-          },
-          roomEvents,
-        ),
-      );
-
-      if (roomState.currentRound.status !== "FINISHED") {
-        return jsonFailure("当前本局尚未结束。", "ROUND_NOT_FINISHED", {
-          status: 409,
-        });
-      }
-    }
-  }
-
   try {
-    const event = await appendRoomEvent(parsedRequest);
-    const data: AppendRoomEventResponse = {
-      event,
-    };
+    const data = await withRoomLock(
+      parsedRequest.roomId,
+      async (): Promise<AppendRoomEventResponse | Response> => {
+        const room = await getRoom(parsedRequest.roomId);
+
+        if (room === undefined) {
+          return jsonFailure("房间不存在。", "ROOM_NOT_FOUND", {
+            status: 404,
+          });
+        }
+
+        if (room.status !== "PLAYING") {
+          return jsonFailure("当前房间不能结束游戏。", "ROOM_NOT_PLAYING", {
+            status: 409,
+          });
+        }
+
+        if (parsedRequest.type === "ROUND_CONFIRMED") {
+          const roomEvents = await readRoomEvents(parsedRequest.roomId);
+          const roomState = replayRoomEvents(
+            buildReplayEventsFromSnapshot(
+              {
+                roomId: room.roomId,
+                players: room.players,
+                status: room.status,
+                createdAt: room.createdAt,
+              },
+              roomEvents,
+            ),
+          );
+
+          if (roomState.currentRound.status !== "FINISHED") {
+            return jsonFailure("当前本局尚未结束。", "ROUND_NOT_FINISHED", {
+              status: 409,
+            });
+          }
+        }
+
+        const event = await appendRoomEvent(parsedRequest);
+
+        return {
+          event,
+        };
+      },
+    );
+
+    if (data instanceof Response) {
+      return data;
+    }
 
     return jsonSuccess(data, {
       status: 201,
     });
   } catch (error) {
-    if (!(error instanceof Error && error.message === "ROOM_NOT_FOUND")) {
+    if (
+      !(
+        error instanceof Error &&
+        (error.message === "ROOM_NOT_FOUND" || error.message === "ROOM_BUSY")
+      )
+    ) {
       console.error("Failed to append room event.", error);
     }
 
@@ -133,6 +146,10 @@ export async function POST(request: Request): Promise<Response> {
       return jsonFailure("房间不存在。", "ROOM_NOT_FOUND", {
         status: 404,
       });
+    }
+
+    if (error instanceof Error && error.message === "ROOM_BUSY") {
+      return jsonRoomBusyFailure();
     }
 
     return jsonUnexpectedRoomFailure("记录房间事件失败，请稍后再试。", "EVENT_APPEND_FAILED", {
