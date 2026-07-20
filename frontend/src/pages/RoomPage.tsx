@@ -190,7 +190,6 @@ export function RoomPage({ roomId }: RoomPageProps) {
   const [selectedPrimaryPlayerId, setSelectedPrimaryPlayerId] = useState<string | undefined>();
   const [selectedRelatedPlayerId, setSelectedRelatedPlayerId] = useState<string | undefined>();
   const [selectedFan, setSelectedFan] = useState<ScoreFan | undefined>();
-  const [isCurrentRoundAllLedgerExpanded, setIsCurrentRoundAllLedgerExpanded] = useState(false);
   const [expandedHistoryRoundNumbers, setExpandedHistoryRoundNumbers] = useState<readonly number[]>(
     [],
   );
@@ -871,18 +870,6 @@ export function RoomPage({ roomId }: RoomPageProps) {
         : replayState?.players.find((player) => player.id === storedPlayerIdentity.playerId),
     [replayState, storedPlayerIdentity],
   );
-  const currentPlayerRoundLedger = useMemo(
-    () =>
-      currentPlayer === undefined
-        ? undefined
-        : currentRoundLedger.find((player) => player.playerId === currentPlayer.id),
-    [currentPlayer, currentRoundLedger],
-  );
-  const currentPlayerRoundEntries = useMemo(
-    () => currentPlayerRoundLedger?.entries.filter((entry) => !entry.isUndone) ?? [],
-    [currentPlayerRoundLedger],
-  );
-  const currentPlayerRoundTotal = currentPlayerRoundLedger?.total ?? 0;
   const canUndo = useMemo(() => scoreHistory.some((item) => !item.isUndone), [scoreHistory]);
   const quickScoreMissingMessage = getQuickScoreMissingMessage();
   const selectedPrimaryPlayerName = useMemo(
@@ -899,7 +886,6 @@ export function RoomPage({ roomId }: RoomPageProps) {
   );
 
   useEffect(() => {
-    setIsCurrentRoundAllLedgerExpanded(false);
     setExpandedHistoryRoundNumbers([]);
     setExpandedHistoryAllLedgerRoundNumbers([]);
   }, [roomId, currentRoundNumber]);
@@ -1256,13 +1242,67 @@ export function RoomPage({ roomId }: RoomPageProps) {
                   </div>
                 ) : null}
 
-                <section className="grid gap-3 rounded-md border border-stone-200 bg-stone-50 p-4">
+                <section className="grid gap-3 rounded-md border border-stone-200 bg-white p-4">
                   <div>
-                    <h3 className="text-base font-semibold text-stone-900">本局事件</h3>
+                    <h3 className="text-base font-semibold text-stone-900">本局账单</h3>
                     <p className="mt-1 text-sm text-stone-500">
                       {currentRoundEntries.length === 0
-                        ? "本局还没有计分事件"
-                        : "最新事件在上方"}
+                        ? "本局暂无收支，所有玩家净变化为 0。"
+                        : "所有玩家本局收支，一起核对。"}
+                    </p>
+                  </div>
+
+                  <div className="grid gap-2">
+                    {currentRoundLedger.map((player) => {
+                      const isCurrentPlayer = currentPlayer?.id === player.playerId;
+
+                      return (
+                        <div
+                          className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md px-3 py-2 ${
+                            isCurrentPlayer
+                              ? "bg-emerald-50 ring-1 ring-emerald-100"
+                              : "bg-stone-50"
+                          }`}
+                          key={player.playerId}
+                        >
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="truncate text-sm font-semibold text-stone-900">
+                                {player.nickname}
+                              </p>
+                              {isCurrentPlayer ? (
+                                <span className="shrink-0 rounded-md bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+                                  我
+                                </span>
+                              ) : null}
+                            </div>
+                            <p className="mt-1 text-xs text-stone-500">
+                              收入 {player.income} · 支出 {player.expense}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p
+                              className={`text-lg font-semibold tabular-nums ${
+                                player.total >= 0 ? "text-emerald-700" : "text-red-700"
+                              }`}
+                            >
+                              {player.total >= 0 ? `+${player.total}` : player.total}
+                            </p>
+                            <p className="mt-1 text-xs font-medium text-stone-400">净变化</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+
+                <section className="grid gap-3 rounded-md border border-stone-200 bg-stone-50 p-4">
+                  <div>
+                    <h3 className="text-base font-semibold text-stone-900">本局明细</h3>
+                    <p className="mt-1 text-sm text-stone-500">
+                      {currentRoundEntries.length === 0
+                        ? "本局还没有计分事件。"
+                        : "用于核对本局账单，最新事件在上方。"}
                     </p>
                   </div>
 
@@ -1325,120 +1365,6 @@ export function RoomPage({ roomId }: RoomPageProps) {
                       ))}
                     </div>
                   )}
-                </section>
-
-                <section className="grid gap-3 rounded-md border border-stone-200 bg-white p-4">
-                  <div>
-                    <h3 className="text-base font-semibold text-stone-900">我的本局账单</h3>
-                    <p className="mt-1 text-sm text-stone-500">
-                      {currentPlayer === undefined
-                        ? "当前为公共视图，未识别本机玩家身份。"
-                        : `只显示 ${currentPlayer.nickname} 的本局收支`}
-                    </p>
-                  </div>
-
-                  {currentPlayer === undefined ? (
-                    <p className="rounded-md bg-stone-50 px-3 py-2 text-sm leading-6 text-stone-600">
-                      可以通过本局事件查看公共记录；加入房间并输入昵称后，会默认显示自己的本局账单。
-                    </p>
-                  ) : (
-                    <div className="grid gap-3">
-                      <div className="grid grid-cols-3 gap-2">
-                        <div className="rounded-md bg-stone-50 px-3 py-2">
-                          <p className="text-xs font-medium text-stone-500">收入</p>
-                          <p className="mt-1 text-lg font-semibold text-emerald-700 tabular-nums">
-                            +{currentPlayerRoundLedger?.income ?? 0}
-                          </p>
-                        </div>
-                        <div className="rounded-md bg-stone-50 px-3 py-2">
-                          <p className="text-xs font-medium text-stone-500">支出</p>
-                          <p className="mt-1 text-lg font-semibold text-red-700 tabular-nums">
-                            -{currentPlayerRoundLedger?.expense ?? 0}
-                          </p>
-                        </div>
-                        <div className="rounded-md bg-stone-50 px-3 py-2">
-                          <p className="text-xs font-medium text-stone-500">净变化</p>
-                          <p
-                            className={`mt-1 text-lg font-semibold tabular-nums ${
-                              currentPlayerRoundTotal >= 0 ? "text-emerald-700" : "text-red-700"
-                            }`}
-                          >
-                            {currentPlayerRoundTotal >= 0
-                              ? `+${currentPlayerRoundTotal}`
-                              : currentPlayerRoundTotal}
-                          </p>
-                        </div>
-                      </div>
-
-                      {currentPlayerRoundEntries.length === 0 ? (
-                        <p className="rounded-md bg-stone-50 px-3 py-2 text-sm text-stone-600">
-                          本局暂无与你相关的收支。
-                        </p>
-                      ) : (
-                        <div className="grid gap-2">
-                          {currentPlayerRoundEntries.map((entry) => (
-                            <div
-                              className="flex items-center justify-between gap-3 rounded-md bg-stone-50 px-3 py-2"
-                              key={`${entry.eventId}-${entry.version}`}
-                            >
-                              <div className="min-w-0">
-                                <p className="truncate text-sm font-medium text-stone-700">
-                                  第 {entry.roundNumber} 局 · {entry.title}
-                                </p>
-                                <p className="mt-1 truncate text-xs text-stone-500">
-                                  {entry.detail}
-                                </p>
-                              </div>
-                              <p
-                                className={`shrink-0 text-sm font-semibold tabular-nums ${
-                                  entry.delta > 0 ? "text-emerald-700" : "text-red-700"
-                                }`}
-                              >
-                                {getHistoryFlowLabel(entry.delta)}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  <button
-                    className="h-11 rounded-md border border-stone-300 bg-white px-4 text-sm font-semibold text-stone-900"
-                    onClick={() => {
-                      setIsCurrentRoundAllLedgerExpanded((currentValue) => !currentValue);
-                    }}
-                    type="button"
-                  >
-                    {isCurrentRoundAllLedgerExpanded ? "收起全员账单" : "查看全员账单"}
-                  </button>
-
-                  {isCurrentRoundAllLedgerExpanded ? (
-                    <div className="grid gap-2">
-                      {currentRoundLedger.map((player) => (
-                        <div
-                          className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md bg-stone-50 px-3 py-2"
-                          key={player.playerId}
-                        >
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-medium text-stone-700">
-                              {player.nickname}
-                            </p>
-                            <p className="mt-1 text-xs text-stone-500">
-                              收入 {player.income} · 支出 {player.expense}
-                            </p>
-                          </div>
-                          <p
-                            className={`shrink-0 text-sm font-semibold tabular-nums ${
-                              player.total >= 0 ? "text-emerald-700" : "text-red-700"
-                            }`}
-                          >
-                            {player.total >= 0 ? `+${player.total}` : player.total}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
                 </section>
 
                 <section className="grid gap-3 rounded-md border border-stone-200 bg-white p-4">
