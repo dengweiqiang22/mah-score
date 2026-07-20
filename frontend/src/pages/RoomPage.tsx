@@ -1327,51 +1327,42 @@ export function RoomPage({ roomId }: RoomPageProps) {
                     <div className="grid gap-2">
                       {currentRoundEntries.map((item) => (
                         <article
-                          className={`grid gap-2 rounded-md bg-stone-100 p-3 ${
+                          className={`rounded-md bg-stone-100 px-3 py-2 ${
                             item.isUndone ? "opacity-70" : ""
                           }`}
                           key={item.event.id}
                         >
-                          <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center justify-between gap-3">
                             <div className="min-w-0">
-                              <p className="text-xs font-semibold text-stone-500">
-                                第 {item.roundNumber} 局 · 第 {item.roundActionNumber} 笔
+                              <p className="truncate text-sm font-semibold text-stone-900">
+                                {item.roundActionNumber}. {item.title}
                               </p>
-                              <h4 className="mt-1 truncate text-base font-semibold text-stone-900">
-                                {item.title}
-                              </h4>
+                              <p className="mt-1 truncate text-xs text-stone-500">
+                                {item.detail}
+                              </p>
                             </div>
-                            <div className="flex shrink-0 items-center gap-2">
-                              {item.isUndone ? (
-                                <span className="rounded-md border border-stone-300 px-2 py-1 text-xs font-semibold text-stone-500">
-                                  已撤销
-                                </span>
-                              ) : (
-                                <>
-                                  <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
-                                    有效
-                                  </span>
-                                  <button
-                                    className="h-8 rounded-md border border-red-200 bg-red-50 px-3 text-xs font-semibold text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
-                                    disabled={isUndoing || isScoring}
-                                    onClick={() => {
-                                      void handleUndoRoomEvent(item.event.id);
-                                    }}
-                                    type="button"
-                                  >
-                                    撤销
-                                  </button>
-                                </>
-                              )}
-                            </div>
+                            {item.isUndone ? (
+                              <span className="shrink-0 text-xs font-semibold text-stone-500">
+                                已撤销
+                              </span>
+                            ) : (
+                              <button
+                                className="h-8 shrink-0 rounded-md bg-red-50 px-3 text-xs font-semibold text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                disabled={isUndoing || isScoring}
+                                onClick={() => {
+                                  void handleUndoRoomEvent(item.event.id);
+                                }}
+                                type="button"
+                              >
+                                撤销
+                              </button>
+                            )}
                           </div>
-                          <p className="text-sm leading-6 text-stone-600">{item.detail}</p>
                           <p
-                            className={`text-sm font-semibold ${
-                              item.isUndone ? "text-stone-500" : "text-stone-900"
+                            className={`mt-2 truncate text-xs font-semibold ${
+                              item.isUndone ? "text-stone-500" : "text-stone-700"
                             }`}
                           >
-                            {item.isUndone ? "原变化：" : "分数变化："}
                             {formatScoreFlowSummary(item.flows)}
                           </p>
                         </article>
