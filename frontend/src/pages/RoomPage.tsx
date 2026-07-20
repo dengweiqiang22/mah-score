@@ -891,9 +891,9 @@ export function RoomPage({ roomId }: RoomPageProps) {
   }, [roomId, currentRoundNumber]);
 
   return (
-    <main className="min-h-screen bg-stone-50 px-4 py-4 text-stone-950">
-      <section className="mx-auto flex min-h-[calc(100vh-2rem)] w-full max-w-md flex-col gap-4">
-        <div className="rounded-md border border-stone-200 bg-white px-3 py-2">
+    <main className="min-h-screen bg-stone-100 px-4 py-4 text-stone-950">
+      <section className="mx-auto flex min-h-[calc(100vh-2rem)] w-full max-w-md flex-col gap-3">
+        <div className="px-1 py-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-medium text-stone-500">
             <span>房间 {roomId}</span>
             <span className="text-stone-300">·</span>
@@ -929,7 +929,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
         ) : null}
 
         {room !== undefined ? (
-          <section className="grid gap-4 rounded-md border border-stone-200 bg-white p-4">
+          <section className="grid gap-4 rounded-md bg-white p-4 shadow-sm ring-1 ring-stone-200/80">
             <div className="flex items-center justify-between gap-3 border-b border-stone-200 pb-3">
               <div>
                 <h2 className="text-xl font-semibold tracking-normal">
@@ -948,7 +948,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
                 </p>
               </div>
               <button
-                className="h-10 rounded-md border border-stone-300 bg-white px-3 text-sm font-medium text-stone-900"
+                className="h-10 rounded-md bg-stone-100 px-3 text-sm font-medium text-stone-900 active:bg-stone-200"
                 onClick={() => {
                   void loadRoom();
                 }}
@@ -961,7 +961,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
             {isLoading ? <p className="text-base text-stone-600">读取中...</p> : null}
 
             {!isLoading && room.players.length === 0 ? (
-              <p className="rounded-md border border-stone-200 bg-stone-50 p-4 text-base text-stone-600">
+              <p className="rounded-md bg-stone-100 p-4 text-base text-stone-600">
                 等待玩家加入
               </p>
             ) : null}
@@ -970,7 +970,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
               {room.players.map((player) => (
                 currentRoundWinnerIds.has(player.id) ? (
                   <button
-                    className="min-h-16 rounded-md border border-stone-300 bg-stone-100 px-3 py-2 text-left text-stone-400 disabled:cursor-not-allowed"
+                    className="min-h-16 rounded-md bg-stone-100 px-3 py-2 text-left text-stone-400 disabled:cursor-not-allowed"
                     disabled
                     key={player.id}
                     type="button"
@@ -982,12 +982,12 @@ export function RoomPage({ roomId }: RoomPageProps) {
                   </button>
                 ) : (
                   <button
-                    className={`min-h-16 rounded-md border px-3 py-2 text-left ${
+                    className={`min-h-16 rounded-md px-3 py-2 text-left ${
                       selectedPrimaryPlayerId === player.id
-                        ? "border-emerald-600 bg-emerald-50"
+                        ? "bg-emerald-50 ring-2 ring-emerald-500"
                         : selectedRelatedPlayerId === player.id
-                          ? "border-red-300 bg-red-50"
-                          : "border-stone-200 bg-stone-50"
+                          ? "bg-red-50 ring-2 ring-red-300"
+                          : "bg-stone-100"
                     } disabled:cursor-not-allowed disabled:opacity-60`}
                     disabled={!isPlaying || isCurrentRoundFinished || isScoring}
                     key={player.id}
@@ -1198,10 +1198,10 @@ export function RoomPage({ roomId }: RoomPageProps) {
                 <div className="grid grid-cols-3 gap-2">
                   {quickScoreModes.map((option) => (
                     <button
-                      className={`h-11 rounded-md border px-2 text-sm font-semibold ${
+                      className={`h-12 rounded-md px-2 text-sm font-semibold ${
                         quickScoreMode === option.mode
-                          ? "border-emerald-700 bg-emerald-700 text-white"
-                          : "border-stone-300 bg-white text-stone-900"
+                          ? "bg-emerald-700 text-white"
+                          : "bg-stone-100 text-stone-900"
                       } disabled:cursor-not-allowed disabled:opacity-60`}
                       disabled={isScoring || isCurrentRoundFinished}
                       key={option.mode}
@@ -1223,10 +1223,10 @@ export function RoomPage({ roomId }: RoomPageProps) {
                     <div className="grid grid-cols-4 gap-2">
                       {scoreFans.map((fan) => (
                         <button
-                          className={`h-11 rounded-md border px-2 text-sm font-semibold ${
+                          className={`h-11 rounded-md px-2 text-sm font-semibold ${
                             selectedFan === fan
-                              ? "border-stone-900 bg-stone-900 text-white"
-                              : "border-stone-300 bg-white text-stone-900"
+                              ? "bg-stone-900 text-white"
+                              : "bg-stone-100 text-stone-900"
                           }`}
                           disabled={isScoring}
                           key={fan}
@@ -1242,7 +1242,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
                   </div>
                 ) : null}
 
-                <section className="grid gap-3 rounded-md border border-stone-200 bg-white p-4">
+                <section className="grid gap-3 rounded-md bg-white p-4 shadow-sm ring-1 ring-stone-200/80">
                   <div>
                     <h3 className="text-base font-semibold text-stone-900">本局账单</h3>
                     <p className="mt-1 text-sm text-stone-500">
@@ -1296,7 +1296,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
                   </div>
                 </section>
 
-                <section className="grid gap-3 rounded-md border border-stone-200 bg-stone-50 p-4">
+                <section className="grid gap-3 rounded-md bg-white p-4 shadow-sm ring-1 ring-stone-200/80">
                   <div>
                     <h3 className="text-base font-semibold text-stone-900">本局明细</h3>
                     <p className="mt-1 text-sm text-stone-500">
@@ -1314,8 +1314,8 @@ export function RoomPage({ roomId }: RoomPageProps) {
                     <div className="grid gap-2">
                       {currentRoundEntries.map((item) => (
                         <article
-                          className={`grid gap-2 rounded-md border bg-white p-3 ${
-                            item.isUndone ? "border-stone-200 opacity-70" : "border-stone-200"
+                          className={`grid gap-2 rounded-md bg-stone-100 p-3 ${
+                            item.isUndone ? "opacity-70" : ""
                           }`}
                           key={item.event.id}
                         >
@@ -1367,7 +1367,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
                   )}
                 </section>
 
-                <details className="rounded-md border border-stone-200 bg-white p-4">
+                <details className="rounded-md bg-white p-4 shadow-sm ring-1 ring-stone-200/80">
                   <summary className="cursor-pointer text-base font-semibold tracking-normal text-stone-900">
                     历史局账单
                   </summary>
@@ -1403,7 +1403,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
 
                         return (
                           <article
-                            className="grid gap-3 rounded-md border border-stone-200 bg-stone-50 p-3"
+                            className="grid gap-3 rounded-md bg-stone-100 p-3"
                             key={roundLedger.roundNumber}
                           >
                             <button
@@ -1579,7 +1579,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
                   </div>
                 </details>
 
-                <details className="rounded-md border border-stone-200 bg-white p-4">
+                <details className="rounded-md bg-white p-4 shadow-sm ring-1 ring-stone-200/80">
                   <summary className="cursor-pointer text-base font-semibold tracking-normal text-stone-900">
                     房间管理
                   </summary>
@@ -1645,7 +1645,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
           </section>
         ) : null}
 
-        <section className="grid gap-4 rounded-md border border-stone-200 bg-white p-4">
+        <section className="grid gap-4 rounded-md bg-white p-4 shadow-sm ring-1 ring-stone-200/80">
           <button
             className="flex items-center justify-between gap-3 text-left"
             onClick={() => {
@@ -1668,14 +1668,14 @@ export function RoomPage({ roomId }: RoomPageProps) {
 
           {isPlayerLedgerExpanded ? (
             playerLedger.length === 0 ? (
-              <p className="rounded-md border border-stone-200 bg-stone-50 p-4 text-base text-stone-600">
+              <p className="rounded-md bg-stone-100 p-4 text-base text-stone-600">
                 游戏开始后，玩家收支会显示在这里
               </p>
             ) : (
               <div className="grid gap-3">
                 {playerLedger.map((player) => (
                   <div
-                    className="grid gap-3 rounded-md border border-stone-200 bg-white p-4"
+                    className="grid gap-3 rounded-md bg-stone-100 p-4"
                     key={player.playerId}
                   >
                     <div className="flex items-start justify-between gap-4">
@@ -1727,7 +1727,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
         </section>
 
         {room !== undefined ? (
-          <details className="rounded-md border border-stone-200 bg-white p-4">
+          <details className="rounded-md bg-white p-4 shadow-sm ring-1 ring-stone-200/80">
             <summary className="cursor-pointer text-base font-semibold tracking-normal text-stone-900">
               邀请加入
             </summary>
