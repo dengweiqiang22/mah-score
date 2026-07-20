@@ -814,7 +814,6 @@ export function RoomPage({ roomId }: RoomPageProps) {
     [events, room],
   );
   const currentRoundNumber = replayState?.currentRound.number ?? 0;
-  const currentRoundWinnerCount = replayState?.currentRound.winnerIds.length ?? 0;
   const isCurrentRoundFinished = replayState?.currentRound.status === "FINISHED";
   const currentRoundResult = replayState?.currentRound.result;
   const settlement = useMemo(
@@ -906,28 +905,33 @@ export function RoomPage({ roomId }: RoomPageProps) {
   }, [roomId, currentRoundNumber]);
 
   return (
-    <main className="min-h-screen bg-stone-50 px-5 py-6 text-stone-950">
-      <section className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-md flex-col gap-8">
-        <div className="pt-8">
-          <p className="text-sm font-semibold text-emerald-700">房间</p>
-          <h1 className="mt-3 text-4xl font-semibold tracking-normal">{roomId}</h1>
-          <p className="mt-3 text-sm font-medium text-stone-500">
-            {room === undefined
-              ? "读取中"
-              : room.status === "WAITING"
-                ? "等待开始"
-                : room.status === "PLAYING"
-                  ? "游戏中"
-                  : "已结束"}
-          </p>
-          <p className="mt-2 text-xs font-medium text-stone-400">
-            {syncStatus === "syncing"
-              ? "同步中"
-              : syncStatus === "error"
-                ? "同步失败"
-                : `已同步 · v${room?.version ?? roomVersion}`}
-          </p>
-          <p className="mt-2 text-xs font-medium text-stone-500">
+    <main className="min-h-screen bg-stone-50 px-4 py-4 text-stone-950">
+      <section className="mx-auto flex min-h-[calc(100vh-2rem)] w-full max-w-md flex-col gap-4">
+        <div className="rounded-md border border-stone-200 bg-white px-3 py-2">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-medium text-stone-500">
+            <span>房间 {roomId}</span>
+            <span className="text-stone-300">·</span>
+            <span>第 {currentRoundNumber} 局</span>
+            <span className="text-stone-300">·</span>
+            <span>
+              {room === undefined
+                ? "读取中"
+                : room.status === "WAITING"
+                  ? "等待开始"
+                  : room.status === "PLAYING"
+                    ? "游戏中"
+                    : "已结束"}
+            </span>
+            <span className="text-stone-300">·</span>
+            <span>
+              {syncStatus === "syncing"
+                ? "同步中"
+                : syncStatus === "error"
+                  ? "同步失败"
+                  : `已同步 v${room?.version ?? roomVersion}`}
+            </span>
+          </div>
+          <p className="mt-1 truncate text-xs font-medium text-stone-400">
             {currentPlayer === undefined ? "公共视图" : `当前玩家 · ${currentPlayer.nickname}`}
           </p>
         </div>
@@ -939,39 +943,11 @@ export function RoomPage({ roomId }: RoomPageProps) {
         ) : null}
 
         {room !== undefined ? (
-          <section className="grid grid-cols-3 gap-3">
-            <div className="rounded-md border border-stone-200 bg-white p-3">
-              <p className="text-xs font-medium text-stone-500">玩家</p>
-              <p className="mt-2 text-xl font-semibold">{room.players.length}/4</p>
-            </div>
-            <div className="rounded-md border border-stone-200 bg-white p-3">
-              <p className="text-xs font-medium text-stone-500">当前局</p>
-              <p className="mt-2 text-xl font-semibold">第 {currentRoundNumber} 局</p>
-            </div>
-            <div className="rounded-md border border-stone-200 bg-white p-3">
-              <p className="text-xs font-medium text-stone-500">本局状态</p>
-              <p className="mt-2 text-xl font-semibold">
-                {replayState === undefined
-                  ? "读取中"
-                  : replayState.currentRound.status === "WAITING"
-                    ? "未开始"
-                    : replayState.currentRound.status === "ACTIVE"
-                      ? "进行中"
-                      : "待确认"}
-              </p>
-              <p className="mt-1 text-xs font-medium text-stone-400">
-                胡牌 {currentRoundWinnerCount}/3
-              </p>
-            </div>
-          </section>
-        ) : null}
-
-        {room !== undefined ? (
           <section className="grid gap-4 rounded-md border border-stone-200 bg-white p-4">
             <div className="flex items-center justify-between gap-3 border-b border-stone-200 pb-3">
               <div>
                 <h2 className="text-xl font-semibold tracking-normal">
-                  {isWaiting ? "玩家" : "快速录入"}
+                  {isWaiting ? "玩家与开局" : "记分"}
                 </h2>
                 <p className="mt-1 text-sm text-stone-500">
                   {isWaiting
