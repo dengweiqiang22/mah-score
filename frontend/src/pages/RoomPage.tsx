@@ -1367,23 +1367,24 @@ export function RoomPage({ roomId }: RoomPageProps) {
                   )}
                 </section>
 
-                <section className="grid gap-3 rounded-md border border-stone-200 bg-white p-4">
-                  <div>
-                    <h3 className="text-base font-semibold text-stone-900">历史局账单</h3>
-                    <p className="mt-1 text-sm text-stone-500">
+                <details className="rounded-md border border-stone-200 bg-white p-4">
+                  <summary className="cursor-pointer text-base font-semibold tracking-normal text-stone-900">
+                    历史局账单
+                  </summary>
+                  <div className="mt-3 grid gap-3">
+                    <p className="text-sm text-stone-500">
                       {historyRoundLedgers.length === 0
                         ? "确认本局账单后，会显示前面几局。"
-                        : "最近一局在上方"}
+                        : "最近一局在上方。"}
                     </p>
-                  </div>
 
-                  {historyRoundLedgers.length === 0 ? (
-                    <p className="rounded-md bg-stone-50 px-3 py-2 text-sm text-stone-600">
-                      暂无历史局账单。
-                    </p>
-                  ) : (
-                    <div className="grid gap-3">
-                      {historyRoundLedgers.map((roundLedger) => {
+                    {historyRoundLedgers.length === 0 ? (
+                      <p className="rounded-md bg-stone-50 px-3 py-2 text-sm text-stone-600">
+                        暂无历史局账单。
+                      </p>
+                    ) : (
+                      <div className="grid gap-3">
+                        {historyRoundLedgers.map((roundLedger) => {
                         const isRoundExpanded = expandedHistoryRoundNumberSet.has(
                           roundLedger.roundNumber,
                         );
@@ -1572,33 +1573,39 @@ export function RoomPage({ roomId }: RoomPageProps) {
                             ) : null}
                           </article>
                         );
-                      })}
-                    </div>
-                  )}
-                </section>
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </details>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    className="h-12 rounded-md border border-red-200 bg-red-50 px-4 text-base font-semibold text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={!canUndo || isUndoing || isScoring}
-                    onClick={() => {
-                      void handleUndoRoomEvent();
-                    }}
-                    type="button"
-                  >
-                    {isUndoing ? "撤销中..." : "撤销上一条"}
-                  </button>
-                  <button
-                    className="h-12 rounded-md border border-stone-300 bg-white px-4 text-base font-semibold text-stone-900 disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={isScoring || isFinishing}
-                    onClick={() => {
-                      openFinishConfirm();
-                    }}
-                    type="button"
-                  >
-                    结束游戏
-                  </button>
-                </div>
+                <details className="rounded-md border border-stone-200 bg-white p-4">
+                  <summary className="cursor-pointer text-base font-semibold tracking-normal text-stone-900">
+                    房间管理
+                  </summary>
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    <button
+                      className="h-12 rounded-md border border-red-200 bg-red-50 px-4 text-base font-semibold text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={!canUndo || isUndoing || isScoring}
+                      onClick={() => {
+                        void handleUndoRoomEvent();
+                      }}
+                      type="button"
+                    >
+                      {isUndoing ? "撤销中..." : "撤销上一条"}
+                    </button>
+                    <button
+                      className="h-12 rounded-md border border-stone-300 bg-white px-4 text-base font-semibold text-stone-900 disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={isScoring || isFinishing}
+                      onClick={() => {
+                        openFinishConfirm();
+                      }}
+                      type="button"
+                    >
+                      结束游戏
+                    </button>
+                  </div>
+                </details>
 
                 {isFinishConfirmOpen ? (
                   <div className="grid gap-3 rounded-md border border-amber-200 bg-amber-50 p-4">
