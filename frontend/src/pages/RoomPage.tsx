@@ -1156,7 +1156,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
                         }}
                         type="button"
                       >
-                        {isScoring ? "确认中..." : "确认账单"}
+                        {isScoring ? "确认中..." : "下一局"}
                       </button>
                     </div>
 
@@ -1294,6 +1294,19 @@ export function RoomPage({ roomId }: RoomPageProps) {
                       );
                     })}
                   </div>
+
+                  {isCurrentRoundFinished ? (
+                    <button
+                      className="h-12 rounded-md bg-emerald-700 px-4 text-base font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={isScoring || isFinishing}
+                      onClick={() => {
+                        void handleConfirmRound();
+                      }}
+                      type="button"
+                    >
+                      {isScoring ? "确认中..." : "确认本局，开始下一局"}
+                    </button>
+                  ) : null}
                 </section>
 
                 <section className="grid gap-3 rounded-md bg-white p-4 shadow-sm ring-1 ring-stone-200/80">
