@@ -539,7 +539,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
     }
   }
 
-  async function submitScoreRequest(scoreRequest: ScoreEventRequest) {
+  async function submitScoreRequest(scoreRequest: ScoreEventRequest, feedbackSummary = "已记录") {
     setIsScoring(true);
     setErrorMessage(undefined);
     setScoreFeedbackMessage(undefined);
@@ -553,7 +553,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
       }
 
       resetQuickScoreSelection();
-      setScoreFeedbackMessage("已记录");
+      setScoreFeedbackMessage(`已记录：${feedbackSummary}`);
       await loadRoom();
     } catch {
       setErrorMessage("记录计分失败，请稍后再试。");
@@ -650,7 +650,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
     return undefined;
   }
 
-  function handleSelectQuickScoreMode(mode: QuickScoreMode, kongType?: KongType) {
+  async function handleSelectQuickScoreMode(mode: QuickScoreMode, kongType?: KongType) {
     if (room?.status !== "PLAYING" || isScoring || isCurrentRoundFinished) {
       return;
     }
@@ -686,11 +686,20 @@ export function RoomPage({ roomId }: RoomPageProps) {
     }
 
     if (kongType === "SUPPLEMENT_KONG" || kongType === "CONCEALED_KONG") {
-      setEntryState({ actorId, kongType, type: "shared_kong_ready" });
+      await submitScoreRequest(
+        {
+          roomId,
+          action: "KONG",
+          operator: "room",
+          playerId: actorId,
+          kongType,
+        },
+        `${getPlayerNickname(replayState?.players ?? [], actorId)} ${getKongTypeLabel(kongType)}`,
+      );
     }
   }
 
-  function handleSelectRelatedPlayer(playerId: string) {
+  async function handleSelectRelatedPlayer(playerId: string) {
     if (
       entryState.type !== "waiting_for_discard_win_counterparty" &&
       entryState.type !== "waiting_for_discard_kong_counterparty"
@@ -713,11 +722,20 @@ export function RoomPage({ roomId }: RoomPageProps) {
     }
 
     if (entryState.type === "waiting_for_discard_kong_counterparty") {
-      setEntryState({
-        actorId: entryState.actorId,
-        counterpartyId: playerId,
-        type: "discard_kong_ready",
-      });
+      await submitScoreRequest(
+        {
+          roomId,
+          action: "KONG",
+          operator: "room",
+          playerId: entryState.actorId,
+          kongType: "DISCARD_KONG",
+          fromPlayerId: playerId,
+        },
+        `${getPlayerNickname(replayState?.players ?? [], entryState.actorId)} 直杠 · ${getPlayerNickname(
+          replayState?.players ?? [],
+          playerId,
+        )} 引杠`,
+      );
       return;
     }
 
@@ -798,23 +816,36 @@ export function RoomPage({ roomId }: RoomPageProps) {
     return undefined;
   }
 
-  function handleSelectFan(fan: ScoreFan) {
+  async function handleSelectFan(fan: ScoreFan) {
     if (entryState.type === "waiting_for_self_draw_fan") {
-      setEntryState({
-        actorId: entryState.actorId,
-        fan,
-        type: "self_draw_ready",
-      });
+      await submitScoreRequest(
+        {
+          roomId,
+          action: "SELF_DRAW",
+          operator: "room",
+          winnerId: entryState.actorId,
+          fan,
+        },
+        `${getPlayerNickname(replayState?.players ?? [], entryState.actorId)} 自摸 · ${fan} 番`,
+      );
       return;
     }
 
     if (entryState.type === "waiting_for_discard_win_fan") {
-      setEntryState({
-        actorId: entryState.actorId,
-        counterpartyId: entryState.counterpartyId,
-        fan,
-        type: "discard_win_ready",
-      });
+      await submitScoreRequest(
+        {
+          roomId,
+          action: "DISCARD_WIN",
+          operator: "room",
+          winnerId: entryState.actorId,
+          discarderId: entryState.counterpartyId,
+          fan,
+        },
+        `${getPlayerNickname(replayState?.players ?? [], entryState.actorId)} 胡牌 · ${getPlayerNickname(
+          replayState?.players ?? [],
+          entryState.counterpartyId,
+        )} 点炮 · ${fan} 番`,
+      );
     }
   }
 
@@ -825,7 +856,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
       return;
     }
 
-    await submitScoreRequest(scoreRequest);
+    await submitScoreRequest(scoreRequest, quickScoreSummary);
   }
 
   function openFinishConfirm() {
@@ -1245,7 +1276,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
                             disabled={isScoring}
                             key={`${option.mode}-${option.kongType ?? option.label}`}
                             onClick={() => {
-                              handleSelectQuickScoreMode(option.mode, option.kongType);
+                              void handleSelectQuickScoreMode(option.mode, option.kongType);
                             }}
                             type="button"
                           >
@@ -1285,7 +1316,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
                             }
                             nickname={player.nickname}
                             onClick={() => {
-                              handleSelectRelatedPlayer(player.id);
+                              void handleSelectRelatedPlayer(player.id);
                             }}
                             tone={currentRoundWinnerIds.has(player.id) ? "muted" : "default"}
                           />
@@ -1312,7 +1343,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
                             disabled={isScoring || !canSelectFan}
                             key={fan}
                             onClick={() => {
-                              handleSelectFan(fan);
+                              void handleSelectFan(fan);
                             }}
                             type="button"
                           >
@@ -1324,10 +1355,10 @@ export function RoomPage({ roomId }: RoomPageProps) {
                   </div>
 
                   <div className="grid min-h-24 gap-3 rounded-md bg-stone-50 p-3">
-                    {quickScoreMode !== undefined ? (
+                    {entryState.type === "draw_confirm" ? (
                       <>
                         <div>
-                          <p className="text-sm font-semibold text-stone-900">当前录入</p>
+                          <p className="text-sm font-semibold text-stone-900">流局确认</p>
                           <p className="mt-1 text-sm text-stone-600">
                             {quickScoreSummary ?? quickScoreMissingMessage}
                           </p>
@@ -1346,6 +1377,18 @@ export function RoomPage({ roomId }: RoomPageProps) {
                             {isScoring ? "记录中..." : "确认"}
                           </Button>
                         </div>
+                      </>
+                    ) : quickScoreMode !== undefined ? (
+                      <>
+                        <div>
+                          <p className="text-sm font-semibold text-stone-900">当前录入</p>
+                          <p className="mt-1 text-sm text-stone-600">
+                            {quickScoreSummary ?? quickScoreMissingMessage}
+                          </p>
+                        </div>
+                        <Button className="justify-self-start" disabled={isScoring} onClick={resetQuickScoreSelection}>
+                          取消
+                        </Button>
                       </>
                     ) : scoreFeedbackMessage !== undefined ? (
                       <p className="self-center text-sm font-semibold text-emerald-700">
