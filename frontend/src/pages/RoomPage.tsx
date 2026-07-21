@@ -16,6 +16,7 @@ import {
   createSettlement,
   replayRoomEvents,
 } from "@mah-score/shared";
+import { Copy, RefreshCw, Share2, Undo2 } from "lucide-react";
 import QRCode from "qrcode";
 
 import {
@@ -974,6 +975,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
                   void loadRoom();
                 }}
               >
+                <RefreshCw className="h-4 w-4" />
                 刷新
               </Button>
             </div>
@@ -1498,6 +1500,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
                       size="lg"
                       variant="danger"
                     >
+                      <Undo2 className="h-4 w-4" />
                       {isUndoing ? "撤销中..." : "撤销上一条"}
                     </Button>
                     <Button
@@ -1660,6 +1663,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
                   }}
                   variant="primary"
                 >
+                  <Share2 className="h-4 w-4" />
                   分享房间
                 </Button>
                 <Button
@@ -1667,6 +1671,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
                     void handleCopyInviteLink();
                   }}
                 >
+                  <Copy className="h-4 w-4" />
                   复制链接
                 </Button>
               </div>
@@ -1689,6 +1694,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
                   void handleCopySettlementText(settlement.text);
                 }}
               >
+                <Copy className="h-4 w-4" />
                 复制
               </Button>
             </div>

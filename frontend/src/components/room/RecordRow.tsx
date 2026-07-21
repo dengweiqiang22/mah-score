@@ -1,3 +1,5 @@
+import { Undo2 } from "lucide-react";
+
 import { Button } from "../ui/Button";
 import { cn } from "../../utils/className";
 
@@ -29,6 +31,7 @@ export function RecordRow({
           <span className="shrink-0 text-xs font-semibold text-stone-500">已撤销</span>
         ) : (
           <Button className="shrink-0" disabled={isUndoDisabled} onClick={onUndo} size="sm" variant="danger">
+            <Undo2 className="h-3.5 w-3.5" />
             撤销
           </Button>
         )}
