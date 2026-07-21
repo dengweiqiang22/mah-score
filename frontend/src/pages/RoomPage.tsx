@@ -247,6 +247,13 @@ function getEntryKongType(state: EntryState): KongType | undefined {
   return undefined;
 }
 
+function isWaitingForCounterparty(state: EntryState): boolean {
+  return (
+    state.type === "waiting_for_discard_win_counterparty" ||
+    state.type === "waiting_for_discard_kong_counterparty"
+  );
+}
+
 export function RoomPage({ roomId }: RoomPageProps) {
   const [editingPlayerId, setEditingPlayerId] = useState<string | undefined>();
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
@@ -585,7 +592,12 @@ export function RoomPage({ roomId }: RoomPageProps) {
     );
   }
 
-  function handleSelectPrimaryPlayer(playerId: string) {
+  async function handleSelectPlayer(playerId: string) {
+    if (isWaitingForCounterparty(entryState)) {
+      await handleSelectRelatedPlayer(playerId);
+      return;
+    }
+
     if (entryState.type === "draw_confirm" || !canSelectScorePlayer(playerId)) {
       return;
     }
@@ -1242,16 +1254,36 @@ export function RoomPage({ roomId }: RoomPageProps) {
                     <div className="grid grid-cols-2 gap-2">
                       {room.players.map((player) => {
                         const hasWon = currentRoundWinnerIds.has(player.id);
+                        const isCounterpartyStep = isWaitingForCounterparty(entryState);
+                        const isActor = selectedPrimaryPlayerId === player.id;
+                        const isCounterparty = selectedRelatedPlayerId === player.id;
+                        const disabled =
+                          hasWon ||
+                          isScoring ||
+                          (isCounterpartyStep && (selectedPrimaryPlayerId === undefined || isActor));
 
                         return (
                           <PlayerTile
-                            disabled={hasWon || isScoring}
-                            isSelected={selectedPrimaryPlayerId === player.id}
+                            disabled={disabled}
+                            isRelated={isCounterparty}
+                            isSelected={isActor}
                             key={`actor-${player.id}`}
-                            meta={hasWon ? "本局已胡牌" : `${getPlayerScore(player.id)}`}
+                            meta={
+                              hasWon
+                                ? "本局已胡牌"
+                                : isCounterpartyStep && isActor
+                                  ? "不能选择同一玩家"
+                                  : isCounterparty
+                                    ? quickScoreMode === "KONG"
+                                      ? "引杠玩家"
+                                      : "点炮玩家"
+                                    : isActor
+                                      ? `${getPlayerScore(player.id)} · 已选`
+                                      : `${getPlayerScore(player.id)}`
+                            }
                             nickname={player.nickname}
                             onClick={() => {
-                              handleSelectPrimaryPlayer(player.id);
+                              void handleSelectPlayer(player.id);
                             }}
                             tone={hasWon ? "muted" : "default"}
                           />
@@ -1282,44 +1314,6 @@ export function RoomPage({ roomId }: RoomPageProps) {
                           >
                             {option.label}
                           </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div className="grid gap-2">
-                    <p className="text-sm font-semibold text-stone-700">
-                      {quickScoreMode === "KONG" ? "引杠玩家" : "点炮玩家"}
-                    </p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {room.players.map((player) => {
-                        const isCounterpartyNeeded =
-                          quickScoreMode === "DISCARD_WIN" ||
-                          (quickScoreMode === "KONG" && selectedKongType === "DISCARD_KONG");
-                        const disabled =
-                          !isCounterpartyNeeded ||
-                          !canSelectScorePlayer(player.id) ||
-                          selectedPrimaryPlayerId === undefined ||
-                          selectedPrimaryPlayerId === player.id;
-
-                        return (
-                          <PlayerTile
-                            disabled={disabled}
-                            isRelated={selectedRelatedPlayerId === player.id}
-                            key={`counterparty-${player.id}`}
-                            meta={
-                              selectedPrimaryPlayerId === player.id
-                                ? "不能选择同一玩家"
-                                : currentRoundWinnerIds.has(player.id)
-                                  ? "本局已胡牌"
-                                  : `${getPlayerScore(player.id)}`
-                            }
-                            nickname={player.nickname}
-                            onClick={() => {
-                              void handleSelectRelatedPlayer(player.id);
-                            }}
-                            tone={currentRoundWinnerIds.has(player.id) ? "muted" : "default"}
-                          />
                         );
                       })}
                     </div>
