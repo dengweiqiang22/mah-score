@@ -16,7 +16,7 @@ import {
   createSettlement,
   replayRoomEvents,
 } from "@mah-score/shared";
-import { Copy, RefreshCw, Share2, Undo2 } from "lucide-react";
+import { Copy, Share2, Undo2 } from "lucide-react";
 import QRCode from "qrcode";
 
 import {
@@ -30,6 +30,9 @@ import {
 import { LedgerRow } from "../components/room/LedgerRow";
 import { PlayerTile } from "../components/room/PlayerTile";
 import { RecordRow } from "../components/room/RecordRow";
+import { FinishedRoomView } from "../components/room/FinishedRoomView";
+import { PlayingRoomView } from "../components/room/PlayingRoomView";
+import { WaitingRoomView } from "../components/room/WaitingRoomView";
 import { Button } from "../components/ui/Button";
 import { Disclosure } from "../components/ui/Disclosure";
 import { Notice } from "../components/ui/Notice";
@@ -116,10 +119,6 @@ function getPlayerNickname(players: readonly RoomPlayer[], playerId: string | un
   return players.find((player) => player.id === playerId)?.nickname ?? "未知玩家";
 }
 
-function getHistoryFlowLabel(delta: number): string {
-  return delta > 0 ? `收入 +${delta}` : `支出 ${delta}`;
-}
-
 function getScoreFlowLabel(delta: number): string {
   return delta > 0 ? `+${delta}` : `${delta}`;
 }
@@ -201,9 +200,6 @@ export function RoomPage({ roomId }: RoomPageProps) {
   const [expandedHistoryRoundNumbers, setExpandedHistoryRoundNumbers] = useState<readonly number[]>(
     [],
   );
-  const [expandedHistoryAllLedgerRoundNumbers, setExpandedHistoryAllLedgerRoundNumbers] = useState<
-    readonly number[]
-  >([]);
   const [isPlayerLedgerExpanded, setIsPlayerLedgerExpanded] = useState(false);
   const { events, isLoading, loadRoom, room, roomVersion, syncStatus } = useRoomSync(
     roomId,
@@ -219,14 +215,6 @@ export function RoomPage({ roomId }: RoomPageProps) {
 
   function toggleHistoryRound(roundNumber: number) {
     setExpandedHistoryRoundNumbers((currentValue) =>
-      currentValue.includes(roundNumber)
-        ? currentValue.filter((item) => item !== roundNumber)
-        : [...currentValue, roundNumber],
-    );
-  }
-
-  function toggleHistoryAllLedger(roundNumber: number) {
-    setExpandedHistoryAllLedgerRoundNumbers((currentValue) =>
       currentValue.includes(roundNumber)
         ? currentValue.filter((item) => item !== roundNumber)
         : [...currentValue, roundNumber],
@@ -861,7 +849,6 @@ export function RoomPage({ roomId }: RoomPageProps) {
     [replayState, scoreHistory],
   );
   const recentCurrentRoundEntries = currentRoundEntries.slice(0, 2);
-  const olderCurrentRoundEntries = currentRoundEntries.slice(2);
   const currentRoundLedger = useMemo(
     () => createPlayerLedger(currentRoundEntries, replayState?.players ?? []),
     [currentRoundEntries, replayState],
@@ -890,14 +877,8 @@ export function RoomPage({ roomId }: RoomPageProps) {
     () => new Set(expandedHistoryRoundNumbers),
     [expandedHistoryRoundNumbers],
   );
-  const expandedHistoryAllLedgerRoundNumberSet = useMemo(
-    () => new Set(expandedHistoryAllLedgerRoundNumbers),
-    [expandedHistoryAllLedgerRoundNumbers],
-  );
-
   useEffect(() => {
     setExpandedHistoryRoundNumbers([]);
-    setExpandedHistoryAllLedgerRoundNumbers([]);
   }, [roomId, currentRoundNumber]);
 
   function renderCurrentRoundEntry(item: (typeof currentRoundEntries)[number]) {
@@ -918,117 +899,81 @@ export function RoomPage({ roomId }: RoomPageProps) {
   return (
     <main className="min-h-screen bg-stone-100 px-4 py-4 text-stone-950">
       <section className="mx-auto flex min-h-[calc(100vh-2rem)] w-full max-w-md flex-col gap-3">
-        <div className="px-1 py-1">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-medium text-stone-500">
-            <span>房间 {roomId}</span>
-            <span className="text-stone-300">·</span>
-            <span>第 {currentRoundNumber} 局</span>
-            <span className="text-stone-300">·</span>
-            <span>
-              {room === undefined
-                ? "读取中"
-                : room.status === "WAITING"
-                  ? "等待开始"
-                  : room.status === "PLAYING"
-                    ? "游戏中"
-                    : "已结束"}
-            </span>
-            <span className="text-stone-300">·</span>
-            <span>
-              {syncStatus === "syncing"
-                ? "同步中"
-                : syncStatus === "error"
-                  ? "同步失败"
-                  : `已同步 v${room?.version ?? roomVersion}`}
-            </span>
-          </div>
-          <p className="mt-1 truncate text-xs font-medium text-stone-400">
-            {currentPlayer === undefined ? "公共视图" : `当前玩家 · ${currentPlayer.nickname}`}
-          </p>
+        <div className="flex items-center justify-between gap-3 px-1 text-xs font-medium text-stone-500">
+          <span>
+            {syncStatus === "syncing"
+              ? "同步中"
+              : syncStatus === "error"
+                ? "同步失败"
+                : `已同步 v${room?.version ?? roomVersion}`}
+          </span>
+          <span>{currentPlayer === undefined ? "公共视图" : currentPlayer.nickname}</span>
         </div>
 
-        {errorMessage !== undefined ? (
-          <Notice variant="danger">{errorMessage}</Notice>
+        {errorMessage !== undefined ? <Notice variant="danger">{errorMessage}</Notice> : null}
+        {isLoading && room === undefined ? (
+          <Section>
+            <p className="text-base text-stone-600">读取中...</p>
+          </Section>
         ) : null}
 
-        {room !== undefined ? (
-          <Section className="gap-4">
-            <div className="flex items-center justify-between gap-3 border-b border-stone-200 pb-3">
+        {room !== undefined && isWaiting ? (
+          <WaitingRoomView roomId={roomId}>
+            <Section className="gap-4">
               <div>
-                <h2 className="text-xl font-semibold tracking-normal">
-                  {isWaiting ? "玩家与开局" : "记分"}
-                </h2>
+                <p className="text-3xl font-semibold tabular-nums">{room.players.length} / 4</p>
                 <p className="mt-1 text-sm text-stone-500">
-                  {isWaiting
-                    ? `${room.players.length}/4 人 · 等待开始`
-                    : selectedPrimaryPlayerId === undefined
-                      ? "先选玩家"
-                      : quickScoreMode === undefined
-                        ? `已选 ${selectedPrimaryPlayerName} · 选择操作`
-                        : quickScoreMissingMessage === ""
-                          ? "正在记录"
-                          : quickScoreMissingMessage}
+                  {room.players.length < 2 ? "至少 2 名玩家才能开始游戏" : "可以开始游戏"}
                 </p>
               </div>
-              <Button
-                onClick={() => {
-                  void loadRoom();
-                }}
-              >
-                <RefreshCw className="h-4 w-4" />
-                刷新
-              </Button>
-            </div>
 
-            {isLoading ? <p className="text-base text-stone-600">读取中...</p> : null}
+              <div className="grid gap-2">
+                {room.players.length === 0 ? (
+                  <p className="rounded-md bg-stone-100 px-3 py-3 text-sm text-stone-600">
+                    等待玩家加入
+                  </p>
+                ) : (
+                  room.players.map((player) => (
+                    <div
+                      className="flex items-center justify-between gap-3 rounded-md bg-stone-100 px-3 py-3"
+                      key={player.id}
+                    >
+                      <p className="truncate text-base font-semibold">{player.nickname}</p>
+                      <span className="text-xs font-medium text-stone-400">玩家</span>
+                    </div>
+                  ))
+                )}
+              </div>
 
-            {!isLoading && room.players.length === 0 ? (
-              <p className="rounded-md bg-stone-100 p-4 text-base text-stone-600">
-                等待玩家加入
-              </p>
-            ) : null}
+              <div className="grid grid-cols-2 gap-3">
+                <Button
+                  onClick={() => {
+                    void handleShareInviteLink();
+                  }}
+                >
+                  <Share2 className="h-4 w-4" />
+                  分享邀请
+                </Button>
+                <Button
+                  disabled={!canStart || isStarting}
+                  onClick={() => {
+                    void handleStartRoom();
+                  }}
+                  variant="primary"
+                >
+                  {isStarting ? "开始中..." : "开始游戏"}
+                </Button>
+              </div>
+              {shareMessage !== undefined ? (
+                <p className="text-sm font-medium text-stone-500">{shareMessage}</p>
+              ) : null}
+            </Section>
 
-            <div className="grid grid-cols-2 gap-2">
-              {room.players.map((player) => {
-                const hasWon = currentRoundWinnerIds.has(player.id);
-
-                return (
-                  <PlayerTile
-                    disabled={hasWon || !isPlaying || isCurrentRoundFinished || isScoring}
-                    isRelated={selectedRelatedPlayerId === player.id}
-                    isSelected={selectedPrimaryPlayerId === player.id}
-                    key={player.id}
-                    meta={
-                      hasWon
-                        ? `已胡牌 · ${getPlayerScore(player.id)} 分`
-                        : selectedPrimaryPlayerId === player.id
-                          ? "当前玩家"
-                          : selectedRelatedPlayerId === player.id
-                            ? getModeRelatedPlayerLabel(quickScoreMode ?? "DISCARD_WIN")
-                            : `${getPlayerScore(player.id)} 分`
-                    }
-                    nickname={player.nickname}
-                    onClick={() => {
-                      void handleSelectPlayerCard(player.id);
-                    }}
-                    tone={hasWon ? "muted" : "default"}
-                  />
-                );
-              })}
-            </div>
-
-            {isWaiting && room.players.length < 2 ? (
-              <p className="text-sm leading-6 text-stone-500">至少 2 名玩家才能开始游戏</p>
-            ) : null}
-
-            {isWaiting ? (
+            <Disclosure summary="房间管理">
               <div className="grid gap-3">
                 {room.players.map((player) =>
                   editingPlayerId === player.id ? (
-                    <div
-                      className="grid gap-3 rounded-md border border-stone-200 bg-stone-50 p-3"
-                      key={player.id}
-                    >
+                    <div className="grid gap-3 rounded-md bg-stone-50 p-3" key={player.id}>
                       <input
                         className="h-12 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-emerald-700"
                         autoComplete="name"
@@ -1041,127 +986,143 @@ export function RoomPage({ roomId }: RoomPageProps) {
                         value={nicknameInput}
                       />
                       <div className="grid grid-cols-2 gap-3">
-                        <button
-                          className="h-11 rounded-md bg-emerald-700 px-3 text-sm font-semibold text-white"
+                        <Button
                           onClick={() => {
                             void handleRenamePlayer(player.id);
                           }}
-                          type="button"
+                          variant="primary"
                         >
                           保存
-                        </button>
-                        <button
-                          className="h-11 rounded-md border border-stone-300 bg-white px-3 text-sm font-semibold text-stone-900"
+                        </Button>
+                        <Button
                           onClick={() => {
                             setEditingPlayerId(undefined);
                             setNicknameInput("");
                           }}
-                          type="button"
                         >
                           取消
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   ) : (
                     <div className="grid grid-cols-2 gap-3" key={player.id}>
-                      <button
-                        className="h-10 rounded-md border border-stone-300 bg-white px-3 text-sm font-medium text-stone-900"
+                      <Button
                         onClick={() => {
                           setEditingPlayerId(player.id);
                           setNicknameInput(player.nickname);
                         }}
-                        type="button"
                       >
                         {player.nickname} 改名
-                      </button>
-                      <button
-                        className="h-10 rounded-md border border-red-200 bg-red-50 px-3 text-sm font-medium text-red-700"
+                      </Button>
+                      <Button
                         disabled={!isWaiting}
                         onClick={() => {
                           openRemovePlayerConfirm(player.id, player.nickname);
                         }}
-                        type="button"
+                        variant="danger"
                       >
                         删除
-                      </button>
+                      </Button>
                     </div>
                   ),
                 )}
-                <Button
-                  disabled={!canStart || isStarting}
-                  onClick={() => {
-                    void handleStartRoom();
-                  }}
-                  size="lg"
-                  variant="primary"
-                >
-                  {isStarting ? "开始中..." : "开始游戏"}
-                </Button>
               </div>
-            ) : null}
+            </Disclosure>
 
             {removePlayerTarget !== undefined ? (
               <section className="grid gap-3 rounded-md border border-amber-200 bg-amber-50 p-4">
-                <div className="grid gap-1">
-                  <h3 className="text-base font-semibold text-amber-900">
-                    确认删除玩家「{removePlayerTarget.nickname}」？
-                  </h3>
-                  <p className="text-sm leading-6 text-amber-800">
-                    删除只允许在房间等待开始阶段进行，确认后该玩家会从房间中移除。
-                  </p>
-                </div>
+                <p className="text-sm font-semibold text-amber-950">
+                  确认删除玩家「{removePlayerTarget.nickname}」？
+                </p>
                 <div className="grid grid-cols-2 gap-3">
-                  <button
-                    className="h-11 rounded-md border border-amber-300 bg-white px-4 text-sm font-semibold text-amber-900 disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={isStarting}
-                    onClick={() => {
-                      cancelRemovePlayer();
-                    }}
-                    type="button"
-                  >
+                  <Button disabled={isStarting} onClick={cancelRemovePlayer}>
                     取消
-                  </button>
-                  <button
-                    className="h-11 rounded-md bg-red-700 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                  </Button>
+                  <Button
                     disabled={isStarting}
                     onClick={() => {
                       void confirmRemovePlayer();
                     }}
-                    type="button"
+                    variant="danger"
                   >
                     确认删除
-                  </button>
+                  </Button>
                 </div>
               </section>
             ) : null}
+          </WaitingRoomView>
+        ) : null}
 
-            {isPlaying ? (
-              <div className="grid gap-3">
-                {isCurrentRoundFinished ? (
-                  <section className="grid gap-3 rounded-md border border-amber-200 bg-amber-50 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <h3 className="text-base font-semibold text-amber-900">本局已结束</h3>
-                        <p className="mt-1 text-sm leading-6 text-amber-800">
-                          {currentRoundResult === "DRAW"
-                            ? "本局流局，确认账单后进入下一局。"
-                            : "本局只剩 1 名玩家未胡牌，确认账单后进入下一局。"}
-                        </p>
-                      </div>
-                      <Button
-                        className="shrink-0"
-                        disabled={isScoring || isFinishing}
-                        onClick={() => {
-                          void handleConfirmRound();
-                        }}
-                        variant="primary"
-                      >
-                        {isScoring ? "确认中..." : "下一局"}
-                      </Button>
-                    </div>
-                  </section>
-                ) : null}
+        {room !== undefined && isPlaying ? (
+          <PlayingRoomView roomId={roomId} roundNumber={currentRoundNumber}>
+            <Section>
+              <div>
+                <h2 className="text-base font-semibold tracking-normal">当前比分</h2>
+                <p className="mt-1 text-sm text-stone-500">
+                  {selectedPrimaryPlayerId === undefined
+                    ? "先选玩家，再记录本次事件。"
+                    : quickScoreMode === undefined
+                      ? `已选 ${selectedPrimaryPlayerName}，请选择事件。`
+                      : quickScoreMissingMessage === ""
+                        ? "正在记录。"
+                        : quickScoreMissingMessage}
+                </p>
+              </div>
 
+              <div className="grid grid-cols-2 gap-2">
+                {room.players.map((player) => {
+                  const hasWon = currentRoundWinnerIds.has(player.id);
+
+                  return (
+                    <PlayerTile
+                      disabled={hasWon || isCurrentRoundFinished || isScoring}
+                      isRelated={selectedRelatedPlayerId === player.id}
+                      isSelected={selectedPrimaryPlayerId === player.id}
+                      key={player.id}
+                      meta={
+                        hasWon
+                          ? `已胡牌 · ${getPlayerScore(player.id)}`
+                          : selectedPrimaryPlayerId === player.id
+                            ? `${getPlayerScore(player.id)} · 已选`
+                            : selectedRelatedPlayerId === player.id
+                              ? getModeRelatedPlayerLabel(quickScoreMode ?? "DISCARD_WIN")
+                              : `${getPlayerScore(player.id)}`
+                      }
+                      nickname={player.nickname}
+                      onClick={() => {
+                        void handleSelectPlayerCard(player.id);
+                      }}
+                      tone={hasWon ? "muted" : "default"}
+                    />
+                  );
+                })}
+              </div>
+            </Section>
+
+            <Section>
+              <div>
+                <h2 className="text-lg font-semibold tracking-normal">发生了什么？</h2>
+                <p className="mt-1 text-sm text-stone-500">记录后会自动计算分数。</p>
+              </div>
+
+              {isCurrentRoundFinished ? (
+                <section className="grid gap-3 rounded-md border border-amber-200 bg-amber-50 p-3">
+                  <p className="text-sm leading-6 text-amber-900">
+                    {currentRoundResult === "DRAW"
+                      ? "本局流局，确认后进入下一局。"
+                      : "本局只剩 1 名玩家未胡牌，确认后进入下一局。"}
+                  </p>
+                  <Button
+                    disabled={isScoring || isFinishing}
+                    onClick={() => {
+                      void handleConfirmRound();
+                    }}
+                    variant="primary"
+                  >
+                    {isScoring ? "确认中..." : "确认本局，开始下一局"}
+                  </Button>
+                </section>
+              ) : (
                 <div className="grid grid-cols-3 gap-2">
                   {quickScoreModes.map((option) => (
                     <button
@@ -1170,7 +1131,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
                           ? "bg-emerald-700 text-white"
                           : "bg-stone-100 text-stone-900"
                       } disabled:cursor-not-allowed disabled:opacity-60`}
-                      disabled={isScoring || isCurrentRoundFinished}
+                      disabled={isScoring}
                       key={option.mode}
                       onClick={() => {
                         void handleSelectQuickScoreMode(option.mode);
@@ -1181,531 +1142,245 @@ export function RoomPage({ roomId }: RoomPageProps) {
                     </button>
                   ))}
                 </div>
+              )}
 
-                {quickScoreMode !== undefined &&
-                needsFan(quickScoreMode) &&
-                selectedPrimaryPlayerId !== undefined ? (
-                  <div className="grid gap-2">
-                    <p className="text-sm font-semibold text-stone-700">番数</p>
-                    <div className="grid grid-cols-4 gap-2">
-                      {scoreFans.map((fan) => (
-                        <button
-                          className={`h-11 rounded-md px-2 text-sm font-semibold ${
-                            selectedFan === fan
-                              ? "bg-stone-900 text-white"
-                              : "bg-stone-100 text-stone-900"
-                          }`}
-                          disabled={isScoring}
-                          key={fan}
-                          onClick={() => {
-                            void handleSelectFan(fan);
-                          }}
-                          type="button"
-                        >
-                          {fan} 番
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-
-                <Section>
-                  <div>
-                    <h3 className="text-base font-semibold text-stone-900">本局账单</h3>
-                    <p className="mt-1 text-sm text-stone-500">
-                      {currentRoundEntries.length === 0
-                        ? "本局暂无收支，所有玩家净变化为 0。"
-                        : "所有玩家本局收支，一起核对。"}
-                    </p>
-                  </div>
-
-                  <div className="grid gap-2">
-                    {currentRoundLedger.map((player) => {
-                      const isCurrentPlayer = currentPlayer?.id === player.playerId;
-
-                      return (
-                        <LedgerRow
-                          expense={player.expense}
-                          income={player.income}
-                          isCurrentPlayer={isCurrentPlayer}
-                          key={player.playerId}
-                          nickname={player.nickname}
-                          total={player.total}
-                        />
-                      );
-                    })}
-                  </div>
-
-                  {isCurrentRoundFinished ? (
-                    <Button
-                      disabled={isScoring || isFinishing}
-                      onClick={() => {
-                        void handleConfirmRound();
-                      }}
-                      size="lg"
-                      variant="primary"
-                    >
-                      {isScoring ? "确认中..." : "确认本局，开始下一局"}
-                    </Button>
-                  ) : null}
-                </Section>
-
-                <Section>
-                  <div>
-                    <h3 className="text-base font-semibold text-stone-900">最近记录</h3>
-                    <p className="mt-1 text-sm text-stone-500">
-                      {currentRoundEntries.length === 0
-                        ? "本局还没有计分事件。"
-                        : "只显示最近记录，完整明细可展开。"}
-                    </p>
-                  </div>
-
-                  {currentRoundEntries.length === 0 ? (
-                    <p className="rounded-md bg-white px-3 py-2 text-sm text-stone-600">
-                      录入点炮、自摸、杠牌或流局后会显示在这里。
-                    </p>
-                  ) : (
-                    <div className="grid gap-2">
-                      {recentCurrentRoundEntries.map((item) => renderCurrentRoundEntry(item))}
-                      {olderCurrentRoundEntries.length > 0 ? (
-                        <details className="rounded-md bg-stone-50 px-3 py-2">
-                          <summary className="cursor-pointer text-sm font-semibold text-stone-700">
-                            查看更早 {olderCurrentRoundEntries.length} 条
-                          </summary>
-                          <div className="mt-2 grid gap-2">
-                            {olderCurrentRoundEntries.map((item) => renderCurrentRoundEntry(item))}
-                          </div>
-                        </details>
-                      ) : null}
-                    </div>
-                  )}
-                </Section>
-
-                <Disclosure summary="历史局账单">
-                  <div className="grid gap-3">
-                    <p className="text-sm text-stone-500">
-                      {historyRoundLedgers.length === 0
-                        ? "确认本局账单后，会显示前面几局。"
-                        : "最近一局在上方。"}
-                    </p>
-
-                    {historyRoundLedgers.length === 0 ? (
-                      <p className="rounded-md bg-stone-50 px-3 py-2 text-sm text-stone-600">
-                        暂无历史局账单。
-                      </p>
-                    ) : (
-                      <div className="grid gap-3">
-                        {historyRoundLedgers.map((roundLedger) => {
-                        const isRoundExpanded = expandedHistoryRoundNumberSet.has(
-                          roundLedger.roundNumber,
-                        );
-                        const isAllLedgerExpanded = expandedHistoryAllLedgerRoundNumberSet.has(
-                          roundLedger.roundNumber,
-                        );
-                        const myRoundLedger =
-                          currentPlayer === undefined
-                            ? undefined
-                            : roundLedger.ledger.find(
-                                (player) => player.playerId === currentPlayer.id,
-                              );
-                        const myRoundEntries =
-                          myRoundLedger?.entries.filter((entry) => !entry.isUndone) ?? [];
-                        const myRoundTotal = myRoundLedger?.total ?? 0;
-
-                        return (
-                          <article
-                            className="grid gap-3 rounded-md bg-stone-100 p-3"
-                            key={roundLedger.roundNumber}
-                          >
-                            <button
-                              className="grid gap-3 text-left"
-                              onClick={() => {
-                                toggleHistoryRound(roundLedger.roundNumber);
-                              }}
-                              type="button"
-                            >
-                              <div className="flex items-start justify-between gap-3">
-                                <div>
-                                  <h4 className="text-base font-semibold text-stone-900">
-                                    第 {roundLedger.roundNumber} 局
-                                  </h4>
-                                  <p className="mt-1 text-sm text-stone-500">
-                                    {currentPlayer === undefined
-                                      ? "公共视图，展开查看该局事件"
-                                      : `我的收入 ${myRoundLedger?.income ?? 0} · 支出 ${
-                                          myRoundLedger?.expense ?? 0
-                                        }`}
-                                  </p>
-                                </div>
-                                <div className="text-right">
-                                  <p
-                                    className={`text-lg font-semibold tabular-nums ${
-                                      myRoundTotal >= 0 ? "text-emerald-700" : "text-red-700"
-                                    }`}
-                                  >
-                                    {currentPlayer === undefined
-                                      ? `${roundLedger.entries.length} 笔`
-                                      : myRoundTotal >= 0
-                                        ? `+${myRoundTotal}`
-                                        : myRoundTotal}
-                                  </p>
-                                  <p className="mt-1 text-xs font-medium text-stone-400">
-                                    {isRoundExpanded ? "收起" : "展开"}
-                                  </p>
-                                </div>
-                              </div>
-                            </button>
-
-                            {isRoundExpanded ? (
-                              <div className="grid gap-3">
-                                <div className="grid gap-2">
-                                  <p className="text-sm font-semibold text-stone-700">该局事件</p>
-                                  {roundLedger.entries.map((item) => (
-                                    <div
-                                      className={`grid gap-1 rounded-md border bg-white px-3 py-2 ${
-                                        item.isUndone
-                                          ? "border-stone-200 opacity-70"
-                                          : "border-stone-200"
-                                      }`}
-                                      key={item.event.id}
-                                    >
-                                      <div className="flex items-start justify-between gap-3">
-                                        <div className="min-w-0">
-                                          <p className="text-xs font-semibold text-stone-500">
-                                            第 {item.roundNumber} 局 · 第{" "}
-                                            {item.roundActionNumber} 笔
-                                          </p>
-                                          <p className="mt-1 truncate text-sm font-semibold text-stone-900">
-                                            {item.title}
-                                          </p>
-                                        </div>
-                                        <span
-                                          className={`shrink-0 rounded-md border px-2 py-1 text-xs font-semibold ${
-                                            item.isUndone
-                                              ? "border-stone-300 text-stone-500"
-                                              : "border-emerald-200 bg-emerald-50 text-emerald-700"
-                                          }`}
-                                        >
-                                          {item.isUndone ? "已撤销" : "有效"}
-                                        </span>
-                                      </div>
-                                      <p className="text-sm leading-6 text-stone-600">
-                                        {item.detail}
-                                      </p>
-                                      <p
-                                        className={`text-sm font-semibold ${
-                                          item.isUndone ? "text-stone-500" : "text-stone-900"
-                                        }`}
-                                      >
-                                        {item.isUndone ? "原变化：" : "分数变化："}
-                                        {formatScoreFlowSummary(item.flows)}
-                                      </p>
-                                    </div>
-                                  ))}
-                                </div>
-
-                                <div className="grid gap-2">
-                                  <p className="text-sm font-semibold text-stone-700">
-                                    我的该局账单
-                                  </p>
-                                  {currentPlayer === undefined ? (
-                                    <p className="rounded-md bg-white px-3 py-2 text-sm text-stone-600">
-                                      当前为公共视图，未识别本机玩家身份。
-                                    </p>
-                                  ) : myRoundEntries.length === 0 ? (
-                                    <p className="rounded-md bg-white px-3 py-2 text-sm text-stone-600">
-                                      该局暂无与你相关的收支。
-                                    </p>
-                                  ) : (
-                                    myRoundEntries.map((entry) => (
-                                      <div
-                                        className="flex items-center justify-between gap-3 rounded-md bg-white px-3 py-2"
-                                        key={`${roundLedger.roundNumber}-${entry.eventId}-${entry.version}`}
-                                      >
-                                        <div className="min-w-0">
-                                          <p className="truncate text-sm font-medium text-stone-700">
-                                            {entry.title}
-                                          </p>
-                                          <p className="mt-1 truncate text-xs text-stone-500">
-                                            {entry.detail}
-                                          </p>
-                                        </div>
-                                        <p
-                                          className={`shrink-0 text-sm font-semibold tabular-nums ${
-                                            entry.delta > 0 ? "text-emerald-700" : "text-red-700"
-                                          }`}
-                                        >
-                                          {getHistoryFlowLabel(entry.delta)}
-                                        </p>
-                                      </div>
-                                    ))
-                                  )}
-                                </div>
-
-                                <button
-                                  className="h-10 rounded-md border border-stone-300 bg-white px-4 text-sm font-semibold text-stone-900"
-                                  onClick={() => {
-                                    toggleHistoryAllLedger(roundLedger.roundNumber);
-                                  }}
-                                  type="button"
-                                >
-                                  {isAllLedgerExpanded ? "收起全员账单" : "查看全员账单"}
-                                </button>
-
-                                {isAllLedgerExpanded ? (
-                                  <div className="grid gap-2">
-                                    {roundLedger.ledger.map((player) => (
-                                      <div
-                                        className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md bg-white px-3 py-2"
-                                        key={`${roundLedger.roundNumber}-${player.playerId}`}
-                                      >
-                                        <div className="min-w-0">
-                                          <p className="truncate text-sm font-medium text-stone-700">
-                                            {player.nickname}
-                                          </p>
-                                          <p className="mt-1 text-xs text-stone-500">
-                                            收入 {player.income} · 支出 {player.expense}
-                                          </p>
-                                        </div>
-                                        <p
-                                          className={`shrink-0 text-sm font-semibold tabular-nums ${
-                                            player.total >= 0
-                                              ? "text-emerald-700"
-                                              : "text-red-700"
-                                          }`}
-                                        >
-                                          {player.total >= 0 ? `+${player.total}` : player.total}
-                                        </p>
-                                      </div>
-                                    ))}
-                                  </div>
-                                ) : null}
-                              </div>
-                            ) : null}
-                          </article>
-                        );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </Disclosure>
-
-                <Disclosure summary="房间管理">
-                  <div className="grid grid-cols-2 gap-3">
-                    <Button
-                      disabled={!canUndo || isUndoing || isScoring}
-                      onClick={() => {
-                        void handleUndoRoomEvent();
-                      }}
-                      size="lg"
-                      variant="danger"
-                    >
-                      <Undo2 className="h-4 w-4" />
-                      {isUndoing ? "撤销中..." : "撤销上一条"}
-                    </Button>
-                    <Button
-                      disabled={isScoring || isFinishing}
-                      onClick={() => {
-                        openFinishConfirm();
-                      }}
-                      size="lg"
-                    >
-                      结束游戏
-                    </Button>
-                  </div>
-                </Disclosure>
-
-                {isFinishConfirmOpen ? (
-                  <div className="grid gap-3 rounded-md border border-amber-200 bg-amber-50 p-4">
-                    <div className="grid gap-2">
-                      {getFinishConfirmLines().map((line) => (
-                        <p className="text-sm leading-6 text-amber-950" key={line}>
-                          {line}
-                        </p>
-                      ))}
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
+              {quickScoreMode !== undefined &&
+              needsFan(quickScoreMode) &&
+              selectedPrimaryPlayerId !== undefined ? (
+                <div className="grid gap-2">
+                  <p className="text-sm font-semibold text-stone-700">番数</p>
+                  <div className="grid grid-cols-4 gap-2">
+                    {scoreFans.map((fan) => (
                       <button
-                        className="h-11 rounded-md border border-amber-300 bg-white px-4 text-sm font-semibold text-amber-900 disabled:cursor-not-allowed disabled:opacity-60"
-                        disabled={isFinishing}
-                        onClick={() => {
-                          cancelFinishRoom();
-                        }}
-                        type="button"
-                      >
-                        取消
-                      </button>
-                      <button
-                        className="h-11 rounded-md bg-red-700 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-                        disabled={isFinishing}
-                        onClick={() => {
-                          void confirmFinishRoom();
-                        }}
-                        type="button"
-                      >
-                        {isFinishing ? "结束中..." : "确认结束"}
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-          </Section>
-        ) : null}
-
-        <section className="grid gap-4 rounded-md bg-white p-4 shadow-sm ring-1 ring-stone-200/80">
-          <button
-            className="flex items-center justify-between gap-3 text-left"
-            onClick={() => {
-              setIsPlayerLedgerExpanded((currentValue) => !currentValue);
-            }}
-            type="button"
-          >
-            <div>
-              <h2 className="text-xl font-semibold tracking-normal">玩家总账</h2>
-              <p className="mt-1 text-sm text-stone-500">
-                {playerLedger.length === 0
-                  ? "暂无玩家收支"
-                  : "展开后查看所有玩家累计收支"}
-              </p>
-            </div>
-            <p className="shrink-0 text-sm font-medium text-stone-400">
-              {isPlayerLedgerExpanded ? "收起" : "展开"}
-            </p>
-          </button>
-
-          {isPlayerLedgerExpanded ? (
-            playerLedger.length === 0 ? (
-              <p className="rounded-md bg-stone-100 p-4 text-base text-stone-600">
-                游戏开始后，玩家收支会显示在这里
-              </p>
-            ) : (
-              <div className="grid gap-3">
-                {playerLedger.map((player) => (
-                  <div
-                    className="grid gap-3 rounded-md bg-stone-100 p-4"
-                    key={player.playerId}
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="min-w-0">
-                        <p className="truncate text-base font-semibold">{player.nickname}</p>
-                        <p className="mt-1 text-sm text-stone-500">
-                          收入 {player.income} · 支出 {player.expense}
-                        </p>
-                      </div>
-                      <p
-                        className={`shrink-0 text-2xl font-semibold tabular-nums ${
-                          player.total >= 0 ? "text-emerald-700" : "text-red-700"
+                        className={`h-11 rounded-md px-2 text-sm font-semibold ${
+                          selectedFan === fan
+                            ? "bg-stone-900 text-white"
+                            : "bg-stone-100 text-stone-900"
                         }`}
+                        disabled={isScoring}
+                        key={fan}
+                        onClick={() => {
+                          void handleSelectFan(fan);
+                        }}
+                        type="button"
                       >
-                        {player.total >= 0 ? `+${player.total}` : player.total}
-                      </p>
-                    </div>
-                    <div className="grid gap-2">
-                      {player.entries.length === 0 ? (
-                        <p className="text-sm font-medium text-stone-500">暂无收支记录</p>
-                      ) : (
-                        player.entries.map((entry) => (
-                          <div
-                            className="flex items-center justify-between gap-3 rounded-md bg-stone-50 px-3 py-2"
-                            key={`${player.playerId}-${entry.eventId}`}
-                          >
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-medium text-stone-700">
-                                第 {entry.roundNumber} 局 · {entry.title}
-                              </p>
-                              <p className="mt-1 truncate text-xs text-stone-500">{entry.detail}</p>
-                            </div>
-                            <p
-                              className={`shrink-0 text-sm font-semibold tabular-nums ${
-                                entry.delta > 0 ? "text-emerald-700" : "text-red-700"
-                              }`}
-                            >
-                              {getHistoryFlowLabel(entry.delta)}
-                            </p>
-                          </div>
-                        ))
-                      )}
-                    </div>
+                        {fan} 番
+                      </button>
+                    ))}
                   </div>
-                ))}
-              </div>
-            )
-          ) : null}
-        </section>
-
-        {room !== undefined ? (
-          <Disclosure summary="邀请加入">
-            <div className="grid gap-3">
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-stone-500">房间号 {roomId}</p>
-                  <p className="mt-2 break-all rounded-md bg-stone-50 px-3 py-2 text-xs leading-5 text-stone-500">
-                    {inviteUrl}
-                  </p>
                 </div>
-                {qrCodeDataUrl !== undefined ? (
-                  <img
-                    alt={`房间 ${roomId} 邀请二维码`}
-                    className="h-24 w-24 shrink-0 rounded-md border border-stone-200"
-                    src={qrCodeDataUrl}
-                  />
+              ) : null}
+            </Section>
+
+            <Section>
+              <div>
+                <h2 className="text-base font-semibold tracking-normal">最近记录</h2>
+                <p className="mt-1 text-sm text-stone-500">最多显示最近两条。</p>
+              </div>
+
+              {recentCurrentRoundEntries.length === 0 ? (
+                <p className="rounded-md bg-stone-100 px-3 py-3 text-sm text-stone-600">
+                  本局还没有计分事件。
+                </p>
+              ) : (
+                <div className="grid gap-2">
+                  {recentCurrentRoundEntries.map((item) => renderCurrentRoundEntry(item))}
+                </div>
+              )}
+            </Section>
+
+            <Disclosure summary="本局详情">
+              <div className="grid gap-3">
+                <div className="grid gap-2">
+                  {currentRoundLedger.map((player) => (
+                    <LedgerRow
+                      expense={player.expense}
+                      income={player.income}
+                      isCurrentPlayer={currentPlayer?.id === player.playerId}
+                      key={player.playerId}
+                      nickname={player.nickname}
+                      total={player.total}
+                    />
+                  ))}
+                </div>
+                {currentRoundEntries.length === 0 ? (
+                  <p className="rounded-md bg-stone-50 px-3 py-2 text-sm text-stone-600">
+                    暂无本局明细。
+                  </p>
                 ) : (
-                  <div className="grid h-24 w-24 shrink-0 place-items-center rounded-md border border-stone-200 text-xs font-medium text-stone-400">
-                    生成中
+                  <div className="grid gap-2">
+                    {currentRoundEntries.map((item) => renderCurrentRoundEntry(item))}
                   </div>
                 )}
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <Button
+            </Disclosure>
+
+            <Disclosure summary="更多">
+              <div className="grid gap-4">
+                <div className="grid gap-3">
+                  <p className="text-sm font-semibold text-stone-700">邀请加入</p>
+                  <div className="flex items-start justify-between gap-4">
+                    <p className="min-w-0 break-all rounded-md bg-stone-50 px-3 py-2 text-xs leading-5 text-stone-500">
+                      {inviteUrl}
+                    </p>
+                    {qrCodeDataUrl !== undefined ? (
+                      <img
+                        alt={`房间 ${roomId} 邀请二维码`}
+                        className="h-20 w-20 shrink-0 rounded-md border border-stone-200"
+                        src={qrCodeDataUrl}
+                      />
+                    ) : null}
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button
+                      onClick={() => {
+                        void handleShareInviteLink();
+                      }}
+                    >
+                      <Share2 className="h-4 w-4" />
+                      分享
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        void handleCopyInviteLink();
+                      }}
+                    >
+                      <Copy className="h-4 w-4" />
+                      复制
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="grid gap-2">
+                  <p className="text-sm font-semibold text-stone-700">历史局</p>
+                  {historyRoundLedgers.length === 0 ? (
+                    <p className="rounded-md bg-stone-50 px-3 py-2 text-sm text-stone-600">
+                      暂无历史局。
+                    </p>
+                  ) : (
+                    historyRoundLedgers.map((roundLedger) => {
+                      const isRoundExpanded = expandedHistoryRoundNumberSet.has(
+                        roundLedger.roundNumber,
+                      );
+
+                      return (
+                        <article className="grid gap-2 rounded-md bg-stone-50 p-3" key={roundLedger.roundNumber}>
+                          <button
+                            className="flex items-center justify-between gap-3 text-left"
+                            onClick={() => {
+                              toggleHistoryRound(roundLedger.roundNumber);
+                            }}
+                            type="button"
+                          >
+                            <span className="text-sm font-semibold text-stone-900">
+                              第 {roundLedger.roundNumber} 局
+                            </span>
+                            <span className="text-xs font-medium text-stone-400">
+                              {isRoundExpanded ? "收起" : `${roundLedger.entries.length} 笔`}
+                            </span>
+                          </button>
+                          {isRoundExpanded ? (
+                            <div className="grid gap-2">
+                              {roundLedger.entries.map((item) => renderCurrentRoundEntry(item))}
+                            </div>
+                          ) : null}
+                        </article>
+                      );
+                    })
+                  )}
+                </div>
+
+                <button
+                  className="flex items-center justify-between gap-3 rounded-md bg-stone-50 px-3 py-3 text-left"
                   onClick={() => {
-                    void handleShareInviteLink();
+                    setIsPlayerLedgerExpanded((currentValue) => !currentValue);
                   }}
-                  variant="primary"
+                  type="button"
                 >
-                  <Share2 className="h-4 w-4" />
-                  分享房间
-                </Button>
-                <Button
-                  onClick={() => {
-                    void handleCopyInviteLink();
-                  }}
-                >
-                  <Copy className="h-4 w-4" />
-                  复制链接
-                </Button>
+                  <span className="text-sm font-semibold text-stone-900">玩家总账</span>
+                  <span className="text-xs font-medium text-stone-400">
+                    {isPlayerLedgerExpanded ? "收起" : "展开"}
+                  </span>
+                </button>
+                {isPlayerLedgerExpanded ? (
+                  <div className="grid gap-2">
+                    {playerLedger.map((player) => (
+                      <LedgerRow
+                        expense={player.expense}
+                        income={player.income}
+                        isCurrentPlayer={currentPlayer?.id === player.playerId}
+                        key={player.playerId}
+                        nickname={player.nickname}
+                        total={player.total}
+                      />
+                    ))}
+                  </div>
+                ) : null}
+
+                <div className="grid grid-cols-2 gap-3">
+                  <Button
+                    disabled={!canUndo || isUndoing || isScoring}
+                    onClick={() => {
+                      void handleUndoRoomEvent();
+                    }}
+                    variant="danger"
+                  >
+                    <Undo2 className="h-4 w-4" />
+                    {isUndoing ? "撤销中..." : "撤销上一条"}
+                  </Button>
+                  <Button
+                    disabled={isScoring || isFinishing}
+                    onClick={() => {
+                      openFinishConfirm();
+                    }}
+                  >
+                    结束整场
+                  </Button>
+                </div>
+
+                {shareMessage !== undefined ? (
+                  <p className="text-sm font-medium text-stone-500">{shareMessage}</p>
+                ) : null}
               </div>
-              {shareMessage !== undefined ? (
-                <p className="text-sm font-medium text-stone-500">{shareMessage}</p>
-              ) : null}
-            </div>
-          </Disclosure>
+            </Disclosure>
+
+            {isFinishConfirmOpen ? (
+              <section className="grid gap-3 rounded-md border border-amber-200 bg-amber-50 p-4">
+                <div className="grid gap-2">
+                  {getFinishConfirmLines().map((line) => (
+                    <p className="text-sm leading-6 text-amber-950" key={line}>
+                      {line}
+                    </p>
+                  ))}
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <Button disabled={isFinishing} onClick={cancelFinishRoom}>
+                    返回检查
+                  </Button>
+                  <Button
+                    disabled={isFinishing}
+                    onClick={() => {
+                      void confirmFinishRoom();
+                    }}
+                    variant="danger"
+                  >
+                    {isFinishing ? "结束中..." : "确认结束"}
+                  </Button>
+                </div>
+              </section>
+            ) : null}
+          </PlayingRoomView>
         ) : null}
 
         {isFinished && settlement !== undefined ? (
-          <section className="grid gap-4">
-            <div className="flex items-center justify-between gap-3 border-b border-stone-200 pb-3">
-              <div>
-                <h2 className="text-xl font-semibold tracking-normal">结算</h2>
-                <p className="mt-1 text-sm text-stone-500">共 {settlement.totalRounds} 局</p>
-              </div>
-              <Button
-                onClick={() => {
-                  void handleCopySettlementText(settlement.text);
-                }}
-              >
-                <Copy className="h-4 w-4" />
-                复制
-              </Button>
-            </div>
-
+          <FinishedRoomView roomId={roomId} totalRounds={settlement.totalRounds}>
             <div className="grid gap-3">
               {settlement.players.map((player) => (
                 <div
-                  className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-md border border-stone-200 bg-white p-4"
+                  className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-md bg-white p-4 shadow-sm ring-1 ring-stone-200/80"
                   key={player.playerId}
                 >
-                  <p className="grid h-9 w-9 place-items-center rounded-md bg-stone-100 text-sm font-semibold text-stone-700">
+                  <p className="grid h-10 w-10 place-items-center rounded-md bg-stone-100 text-sm font-semibold text-stone-700">
                     {player.rank}
                   </p>
                   <div className="min-w-0">
@@ -1714,23 +1389,34 @@ export function RoomPage({ roomId }: RoomPageProps) {
                       胡 {player.winCount} · 点炮 {player.discardCount} · 杠 {player.kongCount}
                     </p>
                   </div>
-                  <p className="text-2xl font-semibold tabular-nums">{player.total}</p>
+                  <p className="text-2xl font-semibold tabular-nums">
+                    {player.total >= 0 ? `+${player.total}` : player.total}
+                  </p>
                 </div>
               ))}
             </div>
-
-            <pre className="whitespace-pre-wrap rounded-md border border-stone-200 bg-white p-4 text-sm leading-6 text-stone-700">
-              {settlement.text}
-            </pre>
-
+            <div className="grid grid-cols-2 gap-3">
+              <Button
+                onClick={() => {
+                  void handleCopySettlementText(settlement.text);
+                }}
+                variant="primary"
+              >
+                <Copy className="h-4 w-4" />
+                复制战绩
+              </Button>
+              <Button
+                onClick={() => {
+                  window.location.assign("/");
+                }}
+              >
+                返回首页
+              </Button>
+            </div>
             {settlementCopyMessage !== undefined ? (
               <p className="text-sm font-medium text-stone-500">{settlementCopyMessage}</p>
             ) : null}
-          </section>
-        ) : null}
-
-        {isFinished ? (
-          <p className="pb-3 text-sm leading-6 text-stone-500">本房间已经结束</p>
+          </FinishedRoomView>
         ) : null}
       </section>
     </main>

@@ -8,6 +8,7 @@ import { savePlayerIdentity } from "../utils/playerIdentity";
 export function HomePage() {
   const [isCreatingRoom, setIsCreatingRoom] = useState(false);
   const [isJoiningRoom, setIsJoiningRoom] = useState(false);
+  const [isCreateRoomOpen, setIsCreateRoomOpen] = useState(false);
   const [createNickname, setCreateNickname] = useState("");
   const [joinNickname, setJoinNickname] = useState("");
   const [manualJoinRoomId, setManualJoinRoomId] = useState("");
@@ -169,30 +170,43 @@ export function HomePage() {
           </div>
 
           {!isInviteMode ? (
-            <div className="grid gap-3 rounded-md border border-stone-200 bg-white p-4">
-              <div>
-                <h2 className="text-lg font-semibold tracking-normal">创建房间</h2>
-                <p className="mt-1 text-sm text-stone-500">没有房间号时使用</p>
+            <div className="grid gap-3 px-1">
+              <div className="flex items-center justify-center gap-2 text-sm text-stone-500">
+                <span>没有房间？</span>
+                <button
+                  className="font-semibold text-emerald-700"
+                  onClick={() => {
+                    setIsCreateRoomOpen((currentValue) => !currentValue);
+                  }}
+                  type="button"
+                >
+                  创建房间
+                </button>
               </div>
-              <input
-                className="h-12 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-emerald-700"
-                autoComplete="name"
-                id="create-nickname"
-                maxLength={12}
-                name="createNickname"
-                onChange={(event) => {
-                  setCreateNickname(event.target.value);
-                }}
-                placeholder="房主昵称"
-                value={createNickname}
-              />
-              <HomeActionButton
-                disabled={isCreatingRoom || createNickname.trim().length === 0}
-                onClick={handleCreateRoom}
-                variant="secondary"
-              >
-                {isCreatingRoom ? "创建中..." : "创建房间"}
-              </HomeActionButton>
+
+              {isCreateRoomOpen ? (
+                <div className="grid gap-3 rounded-md border border-stone-200 bg-white p-4">
+                  <input
+                    className="h-12 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-emerald-700"
+                    autoComplete="name"
+                    id="create-nickname"
+                    maxLength={12}
+                    name="createNickname"
+                    onChange={(event) => {
+                      setCreateNickname(event.target.value);
+                    }}
+                    placeholder="房主昵称"
+                    value={createNickname}
+                  />
+                  <HomeActionButton
+                    disabled={isCreatingRoom || createNickname.trim().length === 0}
+                    onClick={handleCreateRoom}
+                    variant="secondary"
+                  >
+                    {isCreatingRoom ? "创建中..." : "确认创建"}
+                  </HomeActionButton>
+                </div>
+              ) : null}
             </div>
           ) : null}
         </div>
