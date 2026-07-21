@@ -1391,9 +1391,23 @@ export function RoomPage({ roomId }: RoomPageProps) {
                         </Button>
                       </>
                     ) : scoreFeedbackMessage !== undefined ? (
-                      <p className="self-center text-sm font-semibold text-emerald-700">
-                        {scoreFeedbackMessage}
-                      </p>
+                      <div className="flex items-center justify-between gap-3 self-center">
+                        <p className="min-w-0 text-sm font-semibold text-emerald-700">
+                          {scoreFeedbackMessage}
+                        </p>
+                        <Button
+                          className="shrink-0"
+                          disabled={!canUndo || isUndoing || isScoring}
+                          onClick={() => {
+                            void handleUndoRoomEvent();
+                          }}
+                          size="sm"
+                          variant="danger"
+                        >
+                          <Undo2 className="h-3.5 w-3.5" />
+                          撤销
+                        </Button>
+                      </div>
                     ) : (
                       <p className="self-center text-sm text-stone-500">最近记录会显示在下方。</p>
                     )}
