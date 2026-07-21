@@ -47,6 +47,36 @@ interface RoomPageProps {
 type QuickScoreMode =
   "SELF_DRAW" | "DISCARD_WIN" | "KONG" | "DRAW_GAME";
 
+type EntryState =
+  | { readonly type: "idle" }
+  | { readonly actorId: string; readonly type: "player_selected" }
+  | { readonly actorId: string; readonly type: "waiting_for_self_draw_fan" }
+  | { readonly actorId: string; readonly fan: ScoreFan; readonly type: "self_draw_ready" }
+  | { readonly actorId: string; readonly type: "waiting_for_discard_win_counterparty" }
+  | {
+      readonly actorId: string;
+      readonly counterpartyId: string;
+      readonly type: "waiting_for_discard_win_fan";
+    }
+  | {
+      readonly actorId: string;
+      readonly counterpartyId: string;
+      readonly fan: ScoreFan;
+      readonly type: "discard_win_ready";
+    }
+  | { readonly actorId: string; readonly type: "waiting_for_discard_kong_counterparty" }
+  | {
+      readonly actorId: string;
+      readonly counterpartyId: string;
+      readonly type: "discard_kong_ready";
+    }
+  | {
+      readonly actorId: string;
+      readonly kongType: "SUPPLEMENT_KONG" | "CONCEALED_KONG";
+      readonly type: "shared_kong_ready";
+    }
+  | { readonly type: "draw_confirm" };
+
 const fixedEventOptions: readonly {
   readonly kongType?: KongType;
   readonly label: string;
@@ -133,32 +163,8 @@ function formatScoreFlowSummary(flows: readonly { readonly nickname: string; rea
   return flows.map((flow) => `${flow.nickname} ${getScoreFlowLabel(flow.delta)}`).join("，");
 }
 
-function needsRelatedPlayer(mode: QuickScoreMode): boolean {
-  return mode === "DISCARD_WIN" || mode === "KONG";
-}
-
 function needsFan(mode: QuickScoreMode): boolean {
   return mode === "DISCARD_WIN" || mode === "SELF_DRAW";
-}
-
-function getModePrimaryPlayerLabel(mode: QuickScoreMode): string {
-  if (mode === "KONG") {
-    return "杠牌玩家";
-  }
-
-  if (mode === "DRAW_GAME") {
-    return "无需选择玩家";
-  }
-
-  return "胡牌玩家";
-}
-
-function getModeRelatedPlayerLabel(mode: QuickScoreMode): string {
-  if (mode === "KONG") {
-    return "引杠玩家";
-  }
-
-  return "点炮玩家";
 }
 
 function getKongTypeLabel(kongType: KongType | undefined): string {
@@ -175,6 +181,70 @@ function getKongTypeLabel(kongType: KongType | undefined): string {
   }
 
   return "杠牌";
+}
+
+function getEntryActorId(state: EntryState): string | undefined {
+  if (state.type === "idle" || state.type === "draw_confirm") {
+    return undefined;
+  }
+
+  return state.actorId;
+}
+
+function getEntryCounterpartyId(state: EntryState): string | undefined {
+  if (
+    state.type === "waiting_for_discard_win_fan" ||
+    state.type === "discard_win_ready" ||
+    state.type === "discard_kong_ready"
+  ) {
+    return state.counterpartyId;
+  }
+
+  return undefined;
+}
+
+function getEntryFan(state: EntryState): ScoreFan | undefined {
+  if (state.type === "self_draw_ready" || state.type === "discard_win_ready") {
+    return state.fan;
+  }
+
+  return undefined;
+}
+
+function getEntryMode(state: EntryState): QuickScoreMode | undefined {
+  if (state.type === "idle" || state.type === "player_selected") {
+    return undefined;
+  }
+
+  if (state.type === "draw_confirm") {
+    return "DRAW_GAME";
+  }
+
+  if (state.type === "waiting_for_self_draw_fan" || state.type === "self_draw_ready") {
+    return "SELF_DRAW";
+  }
+
+  if (
+    state.type === "waiting_for_discard_win_counterparty" ||
+    state.type === "waiting_for_discard_win_fan" ||
+    state.type === "discard_win_ready"
+  ) {
+    return "DISCARD_WIN";
+  }
+
+  return "KONG";
+}
+
+function getEntryKongType(state: EntryState): KongType | undefined {
+  if (state.type === "waiting_for_discard_kong_counterparty" || state.type === "discard_kong_ready") {
+    return "DISCARD_KONG";
+  }
+
+  if (state.type === "shared_kong_ready") {
+    return state.kongType;
+  }
+
+  return undefined;
 }
 
 export function RoomPage({ roomId }: RoomPageProps) {
@@ -195,11 +265,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
   const [shareMessage, setShareMessage] = useState<string | undefined>();
   const [settlementCopyMessage, setSettlementCopyMessage] = useState<string | undefined>();
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string | undefined>();
-  const [quickScoreMode, setQuickScoreMode] = useState<QuickScoreMode | undefined>();
-  const [selectedKongType, setSelectedKongType] = useState<KongType | undefined>();
-  const [selectedPrimaryPlayerId, setSelectedPrimaryPlayerId] = useState<string | undefined>();
-  const [selectedRelatedPlayerId, setSelectedRelatedPlayerId] = useState<string | undefined>();
-  const [selectedFan, setSelectedFan] = useState<ScoreFan | undefined>();
+  const [entryState, setEntryState] = useState<EntryState>({ type: "idle" });
   const [scoreFeedbackMessage, setScoreFeedbackMessage] = useState<string | undefined>();
   const [expandedHistoryRoundNumbers, setExpandedHistoryRoundNumbers] = useState<readonly number[]>(
     [],
@@ -211,11 +277,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
   );
 
   function resetQuickScoreSelection() {
-    setSelectedKongType(undefined);
-    setSelectedPrimaryPlayerId(undefined);
-    setSelectedRelatedPlayerId(undefined);
-    setSelectedFan(undefined);
-    setQuickScoreMode(undefined);
+    setEntryState({ type: "idle" });
   }
 
   function toggleHistoryRound(roundNumber: number) {
@@ -524,21 +586,18 @@ export function RoomPage({ roomId }: RoomPageProps) {
   }
 
   function handleSelectPrimaryPlayer(playerId: string) {
-    if (quickScoreMode === "DRAW_GAME" || !canSelectScorePlayer(playerId)) {
+    if (entryState.type === "draw_confirm" || !canSelectScorePlayer(playerId)) {
       return;
     }
 
     setErrorMessage(undefined);
-    setSelectedPrimaryPlayerId(playerId);
-    setSelectedRelatedPlayerId(undefined);
+    setEntryState(
+      getEntryActorId(entryState) === playerId ? { type: "idle" } : { actorId: playerId, type: "player_selected" },
+    );
   }
 
   function getQuickScoreRequest(): ScoreEventRequest | undefined {
-    if (quickScoreMode === undefined) {
-      return undefined;
-    }
-
-    if (quickScoreMode === "DRAW_GAME") {
+    if (entryState.type === "draw_confirm") {
       return {
         roomId,
         action: "DRAW_GAME",
@@ -546,65 +605,49 @@ export function RoomPage({ roomId }: RoomPageProps) {
       };
     }
 
-    if (selectedPrimaryPlayerId === undefined) {
-      return undefined;
-    }
-
-    if (quickScoreMode === "SELF_DRAW") {
-      if (selectedFan === undefined) {
-        return undefined;
-      }
-
+    if (entryState.type === "self_draw_ready") {
       return {
         roomId,
         action: "SELF_DRAW",
         operator: "room",
-        winnerId: selectedPrimaryPlayerId,
-        fan: selectedFan,
+        winnerId: entryState.actorId,
+        fan: entryState.fan,
       };
     }
 
-    if (quickScoreMode === "DISCARD_WIN") {
-      if (selectedRelatedPlayerId === undefined || selectedFan === undefined) {
-        return undefined;
-      }
-
+    if (entryState.type === "discard_win_ready") {
       return {
         roomId,
         action: "DISCARD_WIN",
         operator: "room",
-        winnerId: selectedPrimaryPlayerId,
-        discarderId: selectedRelatedPlayerId,
-        fan: selectedFan,
+        winnerId: entryState.actorId,
+        discarderId: entryState.counterpartyId,
+        fan: entryState.fan,
       };
     }
 
-    if (selectedKongType === undefined) {
-      return undefined;
-    }
-
-    if (selectedKongType === "DISCARD_KONG") {
-      if (selectedRelatedPlayerId === undefined) {
-        return undefined;
-      }
-
+    if (entryState.type === "discard_kong_ready") {
       return {
         roomId,
         action: "KONG",
         operator: "room",
-        playerId: selectedPrimaryPlayerId,
-        kongType: selectedKongType,
-        fromPlayerId: selectedRelatedPlayerId,
+        playerId: entryState.actorId,
+        kongType: "DISCARD_KONG",
+        fromPlayerId: entryState.counterpartyId,
       };
     }
 
-    return {
-      roomId,
-      action: "KONG",
-      operator: "room",
-      playerId: selectedPrimaryPlayerId,
-      kongType: selectedKongType,
-    };
+    if (entryState.type === "shared_kong_ready") {
+      return {
+        roomId,
+        action: "KONG",
+        operator: "room",
+        playerId: entryState.actorId,
+        kongType: entryState.kongType,
+      };
+    }
+
+    return undefined;
   }
 
   function handleSelectQuickScoreMode(mode: QuickScoreMode, kongType?: KongType) {
@@ -614,25 +657,52 @@ export function RoomPage({ roomId }: RoomPageProps) {
 
     setErrorMessage(undefined);
     setScoreFeedbackMessage(undefined);
-    setQuickScoreMode(mode);
-    setSelectedKongType(kongType);
-    setSelectedRelatedPlayerId(undefined);
-    setSelectedFan(undefined);
-  }
 
-  function handleSelectRelatedPlayer(playerId: string) {
-    if (quickScoreMode === undefined || !needsRelatedPlayer(quickScoreMode)) {
+    if (mode === "DRAW_GAME") {
+      setEntryState({ type: "draw_confirm" });
       return;
     }
 
-    if (selectedPrimaryPlayerId === undefined) {
+    const actorId = getEntryActorId(entryState);
+
+    if (actorId === undefined) {
       setErrorMessage("请先选择玩家。");
       return;
     }
 
-    if (selectedPrimaryPlayerId === playerId) {
+    if (mode === "SELF_DRAW") {
+      setEntryState({ actorId, type: "waiting_for_self_draw_fan" });
+      return;
+    }
+
+    if (mode === "DISCARD_WIN") {
+      setEntryState({ actorId, type: "waiting_for_discard_win_counterparty" });
+      return;
+    }
+
+    if (kongType === "DISCARD_KONG") {
+      setEntryState({ actorId, type: "waiting_for_discard_kong_counterparty" });
+      return;
+    }
+
+    if (kongType === "SUPPLEMENT_KONG" || kongType === "CONCEALED_KONG") {
+      setEntryState({ actorId, kongType, type: "shared_kong_ready" });
+    }
+  }
+
+  function handleSelectRelatedPlayer(playerId: string) {
+    if (
+      entryState.type !== "waiting_for_discard_win_counterparty" &&
+      entryState.type !== "waiting_for_discard_kong_counterparty"
+    ) {
+      return;
+    }
+
+    if (entryState.actorId === playerId) {
       setErrorMessage(
-        quickScoreMode === "KONG" ? "引杠玩家不能和杠牌玩家相同。" : "点炮玩家不能和胡牌玩家相同。",
+        entryState.type === "waiting_for_discard_kong_counterparty"
+          ? "引杠玩家不能和杠牌玩家相同。"
+          : "点炮玩家不能和胡牌玩家相同。",
       );
       return;
     }
@@ -642,7 +712,20 @@ export function RoomPage({ roomId }: RoomPageProps) {
       return;
     }
 
-    setSelectedRelatedPlayerId(playerId);
+    if (entryState.type === "waiting_for_discard_kong_counterparty") {
+      setEntryState({
+        actorId: entryState.actorId,
+        counterpartyId: playerId,
+        type: "discard_kong_ready",
+      });
+      return;
+    }
+
+    setEntryState({
+      actorId: entryState.actorId,
+      counterpartyId: playerId,
+      type: "waiting_for_discard_win_fan",
+    });
   }
 
   function getQuickScoreMissingMessage(): string {
@@ -650,98 +733,89 @@ export function RoomPage({ roomId }: RoomPageProps) {
       return "本局已结束，请先确认账单。";
     }
 
-    if (quickScoreMode === undefined) {
+    if (entryState.type === "idle") {
       return "请选择事件。";
     }
 
-    if (quickScoreMode === "KONG" && selectedKongType === undefined) {
-      return "请选择杠牌类型。";
+    if (entryState.type === "player_selected") {
+      return `已选择 ${getPlayerNickname(replayState?.players ?? [], entryState.actorId)}，请选择事件。`;
     }
 
-    if (quickScoreMode !== "DRAW_GAME" && selectedPrimaryPlayerId === undefined) {
-      return `请选择${getModePrimaryPlayerLabel(quickScoreMode)}。`;
+    if (entryState.type === "waiting_for_self_draw_fan") {
+      return `${getPlayerNickname(replayState?.players ?? [], entryState.actorId)} 自摸，请选择番数。`;
     }
 
-    if (
-      quickScoreMode === "DISCARD_WIN" &&
-      selectedRelatedPlayerId === undefined
-    ) {
-      return `请选择${getModeRelatedPlayerLabel(quickScoreMode)}。`;
+    if (entryState.type === "waiting_for_discard_win_counterparty") {
+      return `${getPlayerNickname(replayState?.players ?? [], entryState.actorId)} 已胡牌，请选择点炮玩家。`;
     }
 
-    if (
-      quickScoreMode === "KONG" &&
-      selectedKongType === "DISCARD_KONG" &&
-      selectedRelatedPlayerId === undefined
-    ) {
-      return "请选择引杠玩家。";
+    if (entryState.type === "waiting_for_discard_win_fan") {
+      return `${getPlayerNickname(
+        replayState?.players ?? [],
+        entryState.actorId,
+      )} 胡牌，${getPlayerNickname(replayState?.players ?? [], entryState.counterpartyId)} 点炮，请选择番数。`;
     }
 
-    if (needsFan(quickScoreMode) && selectedFan === undefined) {
-      return "请选择番数。";
+    if (entryState.type === "waiting_for_discard_kong_counterparty") {
+      return `${getPlayerNickname(replayState?.players ?? [], entryState.actorId)} 直杠，请选择引杠玩家。`;
     }
 
     return "";
   }
 
   function getQuickScoreSummary(): string | undefined {
-    if (quickScoreMode === undefined) {
-      return undefined;
-    }
-
-    if (quickScoreMode === "DRAW_GAME") {
+    if (entryState.type === "draw_confirm") {
       return `确认记录第 ${currentRoundNumber} 局流局`;
     }
 
-    if (quickScoreMode === "SELF_DRAW") {
-      if (selectedPrimaryPlayerId === undefined || selectedFan === undefined) {
-        return undefined;
-      }
-
-      return `${getPlayerNickname(replayState?.players ?? [], selectedPrimaryPlayerId)} 自摸 · ${selectedFan} 番`;
+    if (entryState.type === "self_draw_ready") {
+      return `${getPlayerNickname(replayState?.players ?? [], entryState.actorId)} 自摸 · ${entryState.fan} 番`;
     }
 
-    if (quickScoreMode === "DISCARD_WIN") {
-      if (
-        selectedPrimaryPlayerId === undefined ||
-        selectedRelatedPlayerId === undefined ||
-        selectedFan === undefined
-      ) {
-        return undefined;
-      }
-
+    if (entryState.type === "discard_win_ready") {
       return `${getPlayerNickname(
         replayState?.players ?? [],
-        selectedPrimaryPlayerId,
+        entryState.actorId,
       )} 胡牌 · ${getPlayerNickname(
         replayState?.players ?? [],
-        selectedRelatedPlayerId,
-      )} 点炮 · ${selectedFan} 番`;
+        entryState.counterpartyId,
+      )} 点炮 · ${entryState.fan} 番`;
     }
 
-    if (selectedKongType === undefined || selectedPrimaryPlayerId === undefined) {
-      return undefined;
-    }
-
-    if (selectedKongType === "DISCARD_KONG") {
-      if (selectedRelatedPlayerId === undefined) {
-        return undefined;
-      }
-
+    if (entryState.type === "discard_kong_ready") {
       return `${getPlayerNickname(
         replayState?.players ?? [],
-        selectedPrimaryPlayerId,
-      )} 直杠 · ${getPlayerNickname(replayState?.players ?? [], selectedRelatedPlayerId)} 引杠`;
+        entryState.actorId,
+      )} 直杠 · ${getPlayerNickname(replayState?.players ?? [], entryState.counterpartyId)} 引杠`;
     }
 
-    return `${getPlayerNickname(
-      replayState?.players ?? [],
-      selectedPrimaryPlayerId,
-    )} ${getKongTypeLabel(selectedKongType)}`;
+    if (entryState.type === "shared_kong_ready") {
+      return `${getPlayerNickname(replayState?.players ?? [], entryState.actorId)} ${getKongTypeLabel(
+        entryState.kongType,
+      )}`;
+    }
+
+    return undefined;
   }
 
   function handleSelectFan(fan: ScoreFan) {
-    setSelectedFan(fan);
+    if (entryState.type === "waiting_for_self_draw_fan") {
+      setEntryState({
+        actorId: entryState.actorId,
+        fan,
+        type: "self_draw_ready",
+      });
+      return;
+    }
+
+    if (entryState.type === "waiting_for_discard_win_fan") {
+      setEntryState({
+        actorId: entryState.actorId,
+        counterpartyId: entryState.counterpartyId,
+        fan,
+        type: "discard_win_ready",
+      });
+    }
   }
 
   async function handleSubmitQuickScore() {
@@ -918,6 +992,11 @@ export function RoomPage({ roomId }: RoomPageProps) {
   const canUndo = useMemo(() => scoreHistory.some((item) => !item.isUndone), [scoreHistory]);
   const quickScoreMissingMessage = getQuickScoreMissingMessage();
   const quickScoreSummary = getQuickScoreSummary();
+  const quickScoreMode = getEntryMode(entryState);
+  const selectedKongType = getEntryKongType(entryState);
+  const selectedPrimaryPlayerId = getEntryActorId(entryState);
+  const selectedRelatedPlayerId = getEntryCounterpartyId(entryState);
+  const selectedFan = getEntryFan(entryState);
   const expandedHistoryRoundNumberSet = useMemo(
     () => new Set(expandedHistoryRoundNumbers),
     [expandedHistoryRoundNumbers],
