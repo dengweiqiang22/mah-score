@@ -59,6 +59,7 @@ interface RoomPageProps {
 }
 
 type QuickScoreMode = "SELF_DRAW" | "DISCARD_WIN" | "KONG" | "DRAW_GAME";
+type RoundViewMode = "round_active" | "round_settlement";
 
 const fixedEventOptions: readonly {
   readonly eventType: EntryEventType;
@@ -145,7 +146,9 @@ function getScoreFlowLabel(delta: number): string {
   return delta > 0 ? `+${delta}` : `${delta}`;
 }
 
-function formatScoreFlowSummary(flows: readonly { readonly nickname: string; readonly delta: number }[]): string {
+function formatScoreFlowSummary(
+  flows: readonly { readonly nickname: string; readonly delta: number }[],
+): string {
   if (flows.length === 0) {
     return "无分数变化";
   }
@@ -173,10 +176,7 @@ function getKongTypeLabel(kongType: KongType | undefined): string {
   return "杠牌";
 }
 
-function createScoreRequestFromDraft(
-  roomId: string,
-  draft: EntrySubmitDraft,
-): ScoreEventRequest {
+function createScoreRequestFromDraft(roomId: string, draft: EntrySubmitDraft): ScoreEventRequest {
   if (draft.action === "DRAW_GAME") {
     return {
       roomId,
@@ -565,18 +565,18 @@ export function RoomPage({ roomId }: RoomPageProps) {
   }
 
   async function handleSelectPlayer(playerId: string) {
-    if (entryState.type === "liuju_mode" || (!isWaitingForCounterparty(entryState) && !canSelectScorePlayer(playerId))) {
+    if (
+      entryState.type === "liuju_mode" ||
+      (!isWaitingForCounterparty(entryState) && !canSelectScorePlayer(playerId))
+    ) {
       return;
     }
 
     setErrorMessage(undefined);
-    const transition = selectEntryPlayer(
-      entryState,
-      playerId,
-      Array.from(currentRoundWinnerIds),
-    );
+    const transition = selectEntryPlayer(entryState, playerId, Array.from(currentRoundWinnerIds));
     const feedbackSummary =
-      transition.submitDraft?.action === "KONG" && transition.submitDraft.kongType === "DISCARD_KONG"
+      transition.submitDraft?.action === "KONG" &&
+      transition.submitDraft.kongType === "DISCARD_KONG"
         ? `${getPlayerNickname(
             replayState?.players ?? [],
             transition.submitDraft.playerId,
@@ -621,7 +621,8 @@ export function RoomPage({ roomId }: RoomPageProps) {
 
     const transition = selectEntryEvent(entryState, eventType);
     const feedbackSummary =
-      transition.submitDraft?.action === "KONG" && transition.submitDraft.kongType !== "DISCARD_KONG"
+      transition.submitDraft?.action === "KONG" &&
+      transition.submitDraft.kongType !== "DISCARD_KONG"
         ? `${getPlayerNickname(
             replayState?.players ?? [],
             transition.submitDraft.playerId,
@@ -676,11 +677,19 @@ export function RoomPage({ roomId }: RoomPageProps) {
       return `确认第 ${currentRoundNumber} 局流局，确认后本局结束。`;
     }
 
-    if (entryState.type === "selecting_fan" && entryState.eventType === "zimo" && entryState.fan !== undefined) {
+    if (
+      entryState.type === "selecting_fan" &&
+      entryState.eventType === "zimo" &&
+      entryState.fan !== undefined
+    ) {
       return `${getPlayerNickname(replayState?.players ?? [], entryState.actorId)} 自摸 · ${entryState.fan} 番`;
     }
 
-    if (entryState.type === "selecting_fan" && entryState.eventType === "dianpao" && entryState.fan !== undefined) {
+    if (
+      entryState.type === "selecting_fan" &&
+      entryState.eventType === "dianpao" &&
+      entryState.fan !== undefined
+    ) {
       return `${getPlayerNickname(
         replayState?.players ?? [],
         entryState.actorId,
@@ -769,7 +778,12 @@ export function RoomPage({ roomId }: RoomPageProps) {
   }
 
   function getFinishConfirmLines(): readonly string[] {
-    const lines = ["确认结束游戏后：", "房间会进入已结束状态", "结束后不能继续计分", "会生成最终结算"];
+    const lines = [
+      "确认结束游戏后：",
+      "房间会进入已结束状态",
+      "结束后不能继续计分",
+      "会生成最终结算",
+    ];
 
     if (
       replayState?.currentRound.status === "ACTIVE" &&
@@ -893,6 +907,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
         : replayState?.players.find((player) => player.id === storedPlayerIdentity.playerId),
     [replayState, storedPlayerIdentity],
   );
+  const roundViewMode: RoundViewMode = isCurrentRoundFinished ? "round_settlement" : "round_active";
   const canUndo = useMemo(() => scoreHistory.some((item) => !item.isUndone), [scoreHistory]);
   const quickScoreMissingMessage = getQuickScoreMissingMessage();
   const quickScoreSummary = getQuickScoreSummary();
@@ -1083,271 +1098,336 @@ export function RoomPage({ roomId }: RoomPageProps) {
 
         {room !== undefined && isPlaying ? (
           <PlayingRoomView roomId={roomId} roundNumber={currentRoundNumber}>
-            <Section className="gap-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <h2 className="text-lg font-semibold tracking-normal">高频记录</h2>
-                  <p className="mt-1 text-sm text-stone-500">
-                    {quickScoreMissingMessage === "" ? "确认后记录本次事件。" : quickScoreMissingMessage}
-                  </p>
-                </div>
-                <Button
-                  className={entryState.type === "idle" ? "invisible shrink-0 whitespace-nowrap" : "shrink-0 whitespace-nowrap"}
-                  disabled={isScoring || entryState.type === "idle"}
-                  onClick={resetQuickScoreSelection}
-                  size="sm"
-                  variant="ghost"
-                >
-                  取消当前录入
-                </Button>
-              </div>
+            {roundViewMode === "round_settlement" ? (
+              <>
+                <Section className="gap-4">
+                  <div>
+                    <h2 className="text-lg font-semibold tracking-normal">本局结算</h2>
+                    <p className="mt-1 text-sm leading-6 text-stone-500">
+                      {currentRoundResult === "DRAW"
+                        ? "本局已流局，请核对最终分数。"
+                        : "本局只剩 1 名玩家未胡牌，请核对最终分数。"}
+                    </p>
+                  </div>
 
-              {isCurrentRoundFinished ? (
-                <section className="grid gap-3 rounded-md border border-amber-200 bg-amber-50 p-3">
-                  <p className="text-sm leading-6 text-amber-900">
-                    {currentRoundResult === "DRAW"
-                      ? "本局流局，确认后进入下一局。"
-                      : "本局只剩 1 名玩家未胡牌，确认后进入下一局。"}
-                  </p>
+                  <div className="grid gap-2">
+                    {currentRoundLedger.map((player) => (
+                      <LedgerRow
+                        expense={player.expense}
+                        income={player.income}
+                        isCurrentPlayer={currentPlayer?.id === player.playerId}
+                        key={player.playerId}
+                        nickname={player.nickname}
+                        total={player.total}
+                      />
+                    ))}
+                  </div>
+
                   <Button
                     disabled={isScoring || isFinishing}
                     onClick={() => {
                       void handleConfirmRound();
                     }}
+                    size="lg"
                     variant="primary"
                   >
                     {isScoring ? "确认中..." : "确认本局，开始下一局"}
                   </Button>
-                </section>
-              ) : (
-                <div className="grid gap-4">
-                  <div className="grid gap-2">
-                    <p className="text-sm font-semibold text-stone-700">玩家</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {room.players.map((player) => {
-                        const hasWon = currentRoundWinnerIds.has(player.id);
-                        const isCounterpartyStep = isWaitingForCounterparty(entryState);
-                        const isEntryLocked = isSelectingFan(entryState) || entryState.type === "liuju_mode";
-                        const isActor = selectedPrimaryPlayerId === player.id;
-                        const isCounterparty = selectedRelatedPlayerId === player.id;
-                        const disabled =
-                          hasWon ||
-                          isScoring ||
-                          isEntryLocked ||
-                          (isCounterpartyStep && (selectedPrimaryPlayerId === undefined || isActor));
-                        const roleLabel = isCounterparty
-                          ? quickScoreMode === "KONG"
-                            ? "引杠玩家"
-                            : "点炮玩家"
-                          : isActor
+                </Section>
+
+                <Disclosure summary="查看事件明细">
+                  <div className="grid gap-3">
+                    {currentRoundEntries.length === 0 ? (
+                      <p className="rounded-md bg-stone-50 px-3 py-2 text-sm text-stone-600">
+                        暂无本局明细。
+                      </p>
+                    ) : (
+                      <div className="grid gap-2">
+                        {currentRoundEntries.map((item) => renderCurrentRoundEntry(item))}
+                      </div>
+                    )}
+
+                    <Button
+                      className="justify-self-start"
+                      disabled={!canUndo || isUndoing || isScoring}
+                      onClick={() => {
+                        void handleUndoRoomEvent();
+                      }}
+                      size="sm"
+                      variant="danger"
+                    >
+                      <Undo2 className="h-3.5 w-3.5" />
+                      {isUndoing ? "撤销中..." : "撤销上一条"}
+                    </Button>
+                  </div>
+                </Disclosure>
+              </>
+            ) : (
+              <>
+                <Section className="gap-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h2 className="text-lg font-semibold tracking-normal">高频记录</h2>
+                      <p className="mt-1 text-sm text-stone-500">
+                        {quickScoreMissingMessage === ""
+                          ? "确认后记录本次事件。"
+                          : quickScoreMissingMessage}
+                      </p>
+                    </div>
+                    <Button
+                      className={
+                        entryState.type === "idle"
+                          ? "invisible shrink-0 whitespace-nowrap"
+                          : "shrink-0 whitespace-nowrap"
+                      }
+                      disabled={isScoring || entryState.type === "idle"}
+                      onClick={resetQuickScoreSelection}
+                      size="sm"
+                      variant="ghost"
+                    >
+                      取消当前录入
+                    </Button>
+                  </div>
+
+                  <div className="grid gap-4">
+                    <div className="grid gap-2">
+                      <p className="text-sm font-semibold text-stone-700">玩家</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {room.players.map((player) => {
+                          const hasWon = currentRoundWinnerIds.has(player.id);
+                          const isCounterpartyStep = isWaitingForCounterparty(entryState);
+                          const isEntryLocked =
+                            isSelectingFan(entryState) || entryState.type === "liuju_mode";
+                          const isActor = selectedPrimaryPlayerId === player.id;
+                          const isCounterparty = selectedRelatedPlayerId === player.id;
+                          const disabled =
+                            hasWon ||
+                            isScoring ||
+                            isEntryLocked ||
+                            (isCounterpartyStep &&
+                              (selectedPrimaryPlayerId === undefined || isActor));
+                          const roleLabel = isCounterparty
                             ? quickScoreMode === "KONG"
-                              ? "杠牌玩家"
-                              : quickScoreMode === "DISCARD_WIN"
-                                ? "胡牌者"
-                                : quickScoreMode === "SELF_DRAW"
-                                  ? "自摸玩家"
-                                  : "已选玩家"
-                            : undefined;
-                        const visualState = hasWon
-                          ? "disabled"
-                          : isCounterparty
-                            ? "counterparty"
+                              ? "引杠玩家"
+                              : "点炮玩家"
                             : isActor
-                              ? "actor"
-                              : disabled
-                                ? "disabled"
-                                : "default";
+                              ? quickScoreMode === "KONG"
+                                ? "杠牌玩家"
+                                : quickScoreMode === "DISCARD_WIN"
+                                  ? "胡牌者"
+                                  : quickScoreMode === "SELF_DRAW"
+                                    ? "自摸玩家"
+                                    : "已选玩家"
+                              : undefined;
+                          const visualState = hasWon
+                            ? "disabled"
+                            : isCounterparty
+                              ? "counterparty"
+                              : isActor
+                                ? "actor"
+                                : disabled
+                                  ? "disabled"
+                                  : "default";
 
-                        return (
-                          <PlayerTile
-                            disabled={disabled}
-                            key={player.id}
-                            meta={
-                              hasWon
-                                ? "本局已胡牌"
-                                : isCounterpartyStep && isActor
-                                  ? "不能选择同一玩家"
-                                  : isCounterparty
-                                    ? quickScoreMode === "KONG"
-                                      ? "引杠玩家"
-                                      : "点炮玩家"
-                                    : isActor
-                                      ? `${getPlayerScore(player.id)} · 已选`
-                                      : isEntryLocked
-                                        ? "等待完成当前录入"
-                                      : `${getPlayerScore(player.id)}`
-                            }
-                            nickname={player.nickname}
-                            onClick={() => {
-                              void handleSelectPlayer(player.id);
-                            }}
-                            roleLabel={roleLabel}
-                            visualState={visualState}
-                          />
-                        );
-                      })}
+                          return (
+                            <PlayerTile
+                              disabled={disabled}
+                              key={player.id}
+                              meta={
+                                hasWon
+                                  ? "本局已胡牌"
+                                  : isCounterpartyStep && isActor
+                                    ? "不能选择同一玩家"
+                                    : isCounterparty
+                                      ? quickScoreMode === "KONG"
+                                        ? "引杠玩家"
+                                        : "点炮玩家"
+                                      : isActor
+                                        ? `${getPlayerScore(player.id)} · 已选`
+                                        : isEntryLocked
+                                          ? "等待完成当前录入"
+                                          : `${getPlayerScore(player.id)}`
+                              }
+                              nickname={player.nickname}
+                              onClick={() => {
+                                void handleSelectPlayer(player.id);
+                              }}
+                              roleLabel={roleLabel}
+                              visualState={visualState}
+                            />
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="grid gap-2">
-                    <p className="text-sm font-semibold text-stone-700">事件</p>
-                    <div className="grid grid-cols-3 gap-2">
-                      {fixedEventOptions.map((option) => {
-                        const isSelected =
-                          quickScoreMode === option.mode &&
-                          (option.mode !== "KONG" || selectedKongType === option.kongType);
+                    <div className="grid gap-2">
+                      <p className="text-sm font-semibold text-stone-700">事件</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        {fixedEventOptions.map((option) => {
+                          const isSelected =
+                            quickScoreMode === option.mode &&
+                            (option.mode !== "KONG" || selectedKongType === option.kongType);
 
-                        return (
-                          <button
-                            className={`h-12 rounded-md px-2 text-sm font-semibold ${
-                              isSelected ? "bg-emerald-700 text-white" : "bg-stone-100 text-stone-900"
-                            } disabled:cursor-not-allowed disabled:opacity-60`}
+                          return (
+                            <button
+                              className={`h-12 rounded-md px-2 text-sm font-semibold ${
+                                isSelected
+                                  ? "bg-emerald-700 text-white"
+                                  : "bg-stone-100 text-stone-900"
+                              } disabled:cursor-not-allowed disabled:opacity-60`}
+                              disabled={isScoring}
+                              key={`${option.mode}-${option.kongType ?? option.label}`}
+                              onClick={() => {
+                                void handleSelectQuickScoreEvent(option.eventType);
+                              }}
+                              type="button"
+                            >
+                              {option.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="grid gap-2">
+                      <p className="text-sm font-semibold text-stone-700">番数</p>
+                      <div className="grid grid-cols-4 gap-2">
+                        {scoreFans.map((fan) => {
+                          const canSelectFan =
+                            isSelectingFan(entryState) &&
+                            quickScoreMode !== undefined &&
+                            needsFan(quickScoreMode);
+
+                          return (
+                            <button
+                              className={`h-11 rounded-md px-2 text-sm font-semibold ${
+                                selectedFan === fan
+                                  ? "bg-stone-900 text-white"
+                                  : "bg-stone-100 text-stone-900"
+                              } disabled:cursor-not-allowed disabled:opacity-50`}
+                              disabled={isScoring || !canSelectFan}
+                              key={fan}
+                              onClick={() => {
+                                void handleSelectFan(fan);
+                              }}
+                              type="button"
+                            >
+                              {fan} 番
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="grid min-h-24 gap-3 rounded-md bg-stone-50 p-3">
+                      {entryState.type === "liuju_mode" ? (
+                        <>
+                          <div>
+                            <p className="text-sm font-semibold text-stone-900">流局确认</p>
+                            <p className="mt-1 text-sm text-stone-600">
+                              {quickScoreSummary ?? quickScoreMissingMessage}
+                            </p>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <Button disabled={isScoring} onClick={resetQuickScoreSelection}>
+                              取消
+                            </Button>
+                            <Button
+                              disabled={isScoring || quickScoreSummary === undefined}
+                              onClick={() => {
+                                void handleSubmitQuickScore();
+                              }}
+                              variant="primary"
+                            >
+                              {isScoring ? "记录中..." : "确认流局"}
+                            </Button>
+                          </div>
+                        </>
+                      ) : quickScoreMode !== undefined ? (
+                        <>
+                          <div>
+                            <p className="text-sm font-semibold text-stone-900">当前录入</p>
+                            <p className="mt-1 text-sm text-stone-600">
+                              {quickScoreSummary ?? quickScoreMissingMessage}
+                            </p>
+                          </div>
+                          <Button
+                            className="justify-self-start"
                             disabled={isScoring}
-                            key={`${option.mode}-${option.kongType ?? option.label}`}
-                            onClick={() => {
-                              void handleSelectQuickScoreEvent(option.eventType);
-                            }}
-                            type="button"
+                            onClick={resetQuickScoreSelection}
                           >
-                            {option.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div className="grid gap-2">
-                    <p className="text-sm font-semibold text-stone-700">番数</p>
-                    <div className="grid grid-cols-4 gap-2">
-                      {scoreFans.map((fan) => {
-                        const canSelectFan =
-                          isSelectingFan(entryState) &&
-                          quickScoreMode !== undefined &&
-                          needsFan(quickScoreMode);
-
-                        return (
-                          <button
-                            className={`h-11 rounded-md px-2 text-sm font-semibold ${
-                              selectedFan === fan ? "bg-stone-900 text-white" : "bg-stone-100 text-stone-900"
-                            } disabled:cursor-not-allowed disabled:opacity-50`}
-                            disabled={isScoring || !canSelectFan}
-                            key={fan}
-                            onClick={() => {
-                              void handleSelectFan(fan);
-                            }}
-                            type="button"
-                          >
-                            {fan} 番
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div className="grid min-h-24 gap-3 rounded-md bg-stone-50 p-3">
-                    {entryState.type === "liuju_mode" ? (
-                      <>
-                        <div>
-                          <p className="text-sm font-semibold text-stone-900">流局确认</p>
-                          <p className="mt-1 text-sm text-stone-600">
-                            {quickScoreSummary ?? quickScoreMissingMessage}
-                          </p>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <Button disabled={isScoring} onClick={resetQuickScoreSelection}>
                             取消
                           </Button>
+                        </>
+                      ) : scoreFeedbackMessage !== undefined ? (
+                        <div className="flex items-center justify-between gap-3 self-center">
+                          <p className="min-w-0 text-sm font-semibold text-emerald-700">
+                            {scoreFeedbackMessage}
+                          </p>
                           <Button
-                            disabled={isScoring || quickScoreSummary === undefined}
+                            className="shrink-0"
+                            disabled={!canUndo || isUndoing || isScoring}
                             onClick={() => {
-                              void handleSubmitQuickScore();
+                              void handleUndoRoomEvent();
                             }}
-                            variant="primary"
+                            size="sm"
+                            variant="danger"
                           >
-                            {isScoring ? "记录中..." : "确认流局"}
+                            <Undo2 className="h-3.5 w-3.5" />
+                            撤销
                           </Button>
                         </div>
-                      </>
-                    ) : quickScoreMode !== undefined ? (
-                      <>
-                        <div>
-                          <p className="text-sm font-semibold text-stone-900">当前录入</p>
-                          <p className="mt-1 text-sm text-stone-600">
-                            {quickScoreSummary ?? quickScoreMissingMessage}
-                          </p>
-                        </div>
-                        <Button className="justify-self-start" disabled={isScoring} onClick={resetQuickScoreSelection}>
-                          取消
-                        </Button>
-                      </>
-                    ) : scoreFeedbackMessage !== undefined ? (
-                      <div className="flex items-center justify-between gap-3 self-center">
-                        <p className="min-w-0 text-sm font-semibold text-emerald-700">
-                          {scoreFeedbackMessage}
-                        </p>
-                        <Button
-                          className="shrink-0"
-                          disabled={!canUndo || isUndoing || isScoring}
-                          onClick={() => {
-                            void handleUndoRoomEvent();
-                          }}
-                          size="sm"
-                          variant="danger"
-                        >
-                          <Undo2 className="h-3.5 w-3.5" />
-                          撤销
-                        </Button>
-                      </div>
+                      ) : (
+                        <p className="self-center text-sm text-stone-500">最近记录会显示在下方。</p>
+                      )}
+                    </div>
+                  </div>
+                </Section>
+
+                <Section>
+                  <div>
+                    <h2 className="text-base font-semibold tracking-normal">最近记录</h2>
+                    <p className="mt-1 text-sm text-stone-500">最多显示最近两条。</p>
+                  </div>
+
+                  {recentCurrentRoundEntries.length === 0 ? (
+                    <p className="rounded-md bg-stone-100 px-3 py-3 text-sm text-stone-600">
+                      本局还没有计分事件。
+                    </p>
+                  ) : (
+                    <div className="grid gap-2">
+                      {recentCurrentRoundEntries.map((item) => renderCurrentRoundEntry(item))}
+                    </div>
+                  )}
+                </Section>
+
+                <Disclosure summary="本局详情">
+                  <div className="grid gap-3">
+                    <div className="grid gap-2">
+                      {currentRoundLedger.map((player) => (
+                        <LedgerRow
+                          expense={player.expense}
+                          income={player.income}
+                          isCurrentPlayer={currentPlayer?.id === player.playerId}
+                          key={player.playerId}
+                          nickname={player.nickname}
+                          total={player.total}
+                        />
+                      ))}
+                    </div>
+                    {currentRoundEntries.length === 0 ? (
+                      <p className="rounded-md bg-stone-50 px-3 py-2 text-sm text-stone-600">
+                        暂无本局明细。
+                      </p>
                     ) : (
-                      <p className="self-center text-sm text-stone-500">最近记录会显示在下方。</p>
+                      <div className="grid gap-2">
+                        {currentRoundEntries.map((item) => renderCurrentRoundEntry(item))}
+                      </div>
                     )}
                   </div>
-                </div>
-              )}
-            </Section>
-
-            <Section>
-              <div>
-                <h2 className="text-base font-semibold tracking-normal">最近记录</h2>
-                <p className="mt-1 text-sm text-stone-500">最多显示最近两条。</p>
-              </div>
-
-              {recentCurrentRoundEntries.length === 0 ? (
-                <p className="rounded-md bg-stone-100 px-3 py-3 text-sm text-stone-600">
-                  本局还没有计分事件。
-                </p>
-              ) : (
-                <div className="grid gap-2">
-                  {recentCurrentRoundEntries.map((item) => renderCurrentRoundEntry(item))}
-                </div>
-              )}
-            </Section>
-
-            <Disclosure summary="本局详情">
-              <div className="grid gap-3">
-                <div className="grid gap-2">
-                  {currentRoundLedger.map((player) => (
-                    <LedgerRow
-                      expense={player.expense}
-                      income={player.income}
-                      isCurrentPlayer={currentPlayer?.id === player.playerId}
-                      key={player.playerId}
-                      nickname={player.nickname}
-                      total={player.total}
-                    />
-                  ))}
-                </div>
-                {currentRoundEntries.length === 0 ? (
-                  <p className="rounded-md bg-stone-50 px-3 py-2 text-sm text-stone-600">
-                    暂无本局明细。
-                  </p>
-                ) : (
-                  <div className="grid gap-2">
-                    {currentRoundEntries.map((item) => renderCurrentRoundEntry(item))}
-                  </div>
-                )}
-              </div>
-            </Disclosure>
+                </Disclosure>
+              </>
+            )}
 
             <Disclosure summary="更多">
               <div className="grid gap-4">
@@ -1398,7 +1478,10 @@ export function RoomPage({ roomId }: RoomPageProps) {
                       );
 
                       return (
-                        <article className="grid gap-2 rounded-md bg-stone-50 p-3" key={roundLedger.roundNumber}>
+                        <article
+                          className="grid gap-2 rounded-md bg-stone-50 p-3"
+                          key={roundLedger.roundNumber}
+                        >
                           <button
                             className="flex items-center justify-between gap-3 text-left"
                             onClick={() => {
