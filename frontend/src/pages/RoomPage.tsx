@@ -752,7 +752,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
     }
 
     if (entryState.type === "idle") {
-      return "请选择事件。";
+      return "请选择玩家。";
     }
 
     if (entryState.type === "player_selected") {
@@ -783,7 +783,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
 
   function getQuickScoreSummary(): string | undefined {
     if (entryState.type === "draw_confirm") {
-      return `确认记录第 ${currentRoundNumber} 局流局`;
+      return `确认第 ${currentRoundNumber} 局流局，确认后本局结束。`;
     }
 
     if (entryState.type === "self_draw_ready") {
@@ -1374,7 +1374,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
                             }}
                             variant="primary"
                           >
-                            {isScoring ? "记录中..." : "确认"}
+                            {isScoring ? "记录中..." : "确认流局"}
                           </Button>
                         </div>
                       </>
