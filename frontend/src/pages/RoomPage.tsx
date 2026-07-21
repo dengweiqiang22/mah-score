@@ -26,6 +26,9 @@ import {
   startRoom,
   undoRoomEvent,
 } from "../api/roomApi";
+import { LedgerRow } from "../components/room/LedgerRow";
+import { PlayerTile } from "../components/room/PlayerTile";
+import { RecordRow } from "../components/room/RecordRow";
 import { Button } from "../components/ui/Button";
 import { Disclosure } from "../components/ui/Disclosure";
 import { Notice } from "../components/ui/Notice";
@@ -898,40 +901,16 @@ export function RoomPage({ roomId }: RoomPageProps) {
 
   function renderCurrentRoundEntry(item: (typeof currentRoundEntries)[number]) {
     return (
-      <article
-        className={`rounded-md bg-stone-100 px-3 py-2 ${item.isUndone ? "opacity-70" : ""}`}
+      <RecordRow
+        flowSummary={formatScoreFlowSummary(item.flows)}
+        isUndone={item.isUndone}
+        isUndoDisabled={isUndoing || isScoring}
         key={item.event.id}
-      >
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-stone-900">
-              {item.roundActionNumber}. {item.title}
-            </p>
-            <p
-              className={`mt-1 truncate text-xs font-semibold ${
-                item.isUndone ? "text-stone-500" : "text-stone-700"
-              }`}
-            >
-              {formatScoreFlowSummary(item.flows)}
-            </p>
-          </div>
-          {item.isUndone ? (
-            <span className="shrink-0 text-xs font-semibold text-stone-500">已撤销</span>
-          ) : (
-            <Button
-              className="shrink-0"
-              disabled={isUndoing || isScoring}
-              onClick={() => {
-                void handleUndoRoomEvent(item.event.id);
-              }}
-              size="sm"
-              variant="danger"
-            >
-              撤销
-            </Button>
-          )}
-        </div>
-      </article>
+        onUndo={() => {
+          void handleUndoRoomEvent(item.event.id);
+        }}
+        title={`${item.roundActionNumber}. ${item.title}`}
+      />
     );
   }
 
@@ -1008,54 +987,32 @@ export function RoomPage({ roomId }: RoomPageProps) {
             ) : null}
 
             <div className="grid grid-cols-2 gap-2">
-              {room.players.map((player) => (
-                currentRoundWinnerIds.has(player.id) ? (
-                  <button
-                    className="min-h-16 rounded-md bg-stone-100 px-3 py-2 text-left text-stone-400 disabled:cursor-not-allowed"
-                    disabled
+              {room.players.map((player) => {
+                const hasWon = currentRoundWinnerIds.has(player.id);
+
+                return (
+                  <PlayerTile
+                    disabled={hasWon || !isPlaying || isCurrentRoundFinished || isScoring}
+                    isRelated={selectedRelatedPlayerId === player.id}
+                    isSelected={selectedPrimaryPlayerId === player.id}
                     key={player.id}
-                    type="button"
-                  >
-                    <span className="block truncate text-base font-semibold">{player.nickname}</span>
-                    <span className="mt-1 block text-sm font-medium text-stone-400">
-                      已胡牌 · {getPlayerScore(player.id)} 分
-                    </span>
-                  </button>
-                ) : (
-                  <button
-                    className={`min-h-16 rounded-md px-3 py-2 text-left ${
-                      selectedPrimaryPlayerId === player.id
-                        ? "bg-emerald-50 ring-2 ring-emerald-500"
-                        : selectedRelatedPlayerId === player.id
-                          ? "bg-red-50 ring-2 ring-red-300"
-                          : "bg-stone-100"
-                    } disabled:cursor-not-allowed disabled:opacity-60`}
-                    disabled={!isPlaying || isCurrentRoundFinished || isScoring}
-                    key={player.id}
+                    meta={
+                      hasWon
+                        ? `已胡牌 · ${getPlayerScore(player.id)} 分`
+                        : selectedPrimaryPlayerId === player.id
+                          ? "当前玩家"
+                          : selectedRelatedPlayerId === player.id
+                            ? getModeRelatedPlayerLabel(quickScoreMode ?? "DISCARD_WIN")
+                            : `${getPlayerScore(player.id)} 分`
+                    }
+                    nickname={player.nickname}
                     onClick={() => {
                       void handleSelectPlayerCard(player.id);
                     }}
-                    type="button"
-                  >
-                    <span className="block truncate text-base font-semibold">{player.nickname}</span>
-                    <span
-                      className={`mt-1 block text-sm font-medium ${
-                        selectedPrimaryPlayerId === player.id
-                          ? "text-emerald-700"
-                          : selectedRelatedPlayerId === player.id
-                            ? "text-red-700"
-                            : "text-stone-500"
-                      }`}
-                    >
-                      {selectedPrimaryPlayerId === player.id
-                        ? "当前玩家"
-                        : selectedRelatedPlayerId === player.id
-                          ? getModeRelatedPlayerLabel(quickScoreMode ?? "DISCARD_WIN")
-                          : `${getPlayerScore(player.id)} 分`}
-                    </span>
-                  </button>
-                )
-              ))}
+                    tone={hasWon ? "muted" : "default"}
+                  />
+                );
+              })}
             </div>
 
             {isWaiting && room.players.length < 2 ? (
@@ -1265,40 +1222,14 @@ export function RoomPage({ roomId }: RoomPageProps) {
                       const isCurrentPlayer = currentPlayer?.id === player.playerId;
 
                       return (
-                        <div
-                          className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md px-3 py-2 ${
-                            isCurrentPlayer
-                              ? "bg-emerald-50 ring-1 ring-emerald-100"
-                              : "bg-stone-50"
-                          }`}
+                        <LedgerRow
+                          expense={player.expense}
+                          income={player.income}
+                          isCurrentPlayer={isCurrentPlayer}
                           key={player.playerId}
-                        >
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <p className="truncate text-sm font-semibold text-stone-900">
-                                {player.nickname}
-                              </p>
-                              {isCurrentPlayer ? (
-                                <span className="shrink-0 rounded-md bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">
-                                  我
-                                </span>
-                              ) : null}
-                            </div>
-                            <p className="mt-1 text-xs text-stone-500">
-                              收入 {player.income} · 支出 {player.expense}
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <p
-                              className={`text-lg font-semibold tabular-nums ${
-                                player.total >= 0 ? "text-emerald-700" : "text-red-700"
-                              }`}
-                            >
-                              {player.total >= 0 ? `+${player.total}` : player.total}
-                            </p>
-                            <p className="mt-1 text-xs font-medium text-stone-400">净变化</p>
-                          </div>
-                        </div>
+                          nickname={player.nickname}
+                          total={player.total}
+                        />
                       );
                     })}
                   </div>
