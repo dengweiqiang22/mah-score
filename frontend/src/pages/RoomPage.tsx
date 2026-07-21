@@ -1,4 +1,7 @@
 import type {
+  EntryEventType,
+  EntryState,
+  EntrySubmitDraft,
   KongType,
   RoomEvent,
   RoomPlayer,
@@ -14,7 +17,18 @@ import {
   createRoundLedgers,
   createScoreHistory,
   createSettlement,
+  confirmDrawGame,
+  getEntryActorId,
+  getEntryCounterpartyId,
+  getEntryFan,
+  getEntryKongType,
+  getEntryMode,
+  isSelectingFan,
+  isWaitingForCounterparty,
   replayRoomEvents,
+  selectEntryEvent,
+  selectEntryFan,
+  selectEntryPlayer,
 } from "@mah-score/shared";
 import { Copy, Share2, Undo2 } from "lucide-react";
 import QRCode from "qrcode";
@@ -44,68 +58,44 @@ interface RoomPageProps {
   readonly roomId: string;
 }
 
-type QuickScoreMode =
-  "SELF_DRAW" | "DISCARD_WIN" | "KONG" | "DRAW_GAME";
-
-type EntryState =
-  | { readonly type: "idle" }
-  | { readonly actorId: string; readonly type: "player_selected" }
-  | { readonly actorId: string; readonly type: "waiting_for_self_draw_fan" }
-  | { readonly actorId: string; readonly fan: ScoreFan; readonly type: "self_draw_ready" }
-  | { readonly actorId: string; readonly type: "waiting_for_discard_win_counterparty" }
-  | {
-      readonly actorId: string;
-      readonly counterpartyId: string;
-      readonly type: "waiting_for_discard_win_fan";
-    }
-  | {
-      readonly actorId: string;
-      readonly counterpartyId: string;
-      readonly fan: ScoreFan;
-      readonly type: "discard_win_ready";
-    }
-  | { readonly actorId: string; readonly type: "waiting_for_discard_kong_counterparty" }
-  | {
-      readonly actorId: string;
-      readonly counterpartyId: string;
-      readonly type: "discard_kong_ready";
-    }
-  | {
-      readonly actorId: string;
-      readonly kongType: "SUPPLEMENT_KONG" | "CONCEALED_KONG";
-      readonly type: "shared_kong_ready";
-    }
-  | { readonly type: "draw_confirm" };
+type QuickScoreMode = "SELF_DRAW" | "DISCARD_WIN" | "KONG" | "DRAW_GAME";
 
 const fixedEventOptions: readonly {
+  readonly eventType: EntryEventType;
   readonly kongType?: KongType;
   readonly label: string;
   readonly mode: QuickScoreMode;
 }[] = [
   {
+    eventType: "DISCARD_KONG",
     kongType: "DISCARD_KONG",
     label: "直杠",
     mode: "KONG",
   },
   {
+    eventType: "SUPPLEMENT_KONG",
     kongType: "SUPPLEMENT_KONG",
     label: "补杠",
     mode: "KONG",
   },
   {
+    eventType: "CONCEALED_KONG",
     kongType: "CONCEALED_KONG",
     label: "暗杠",
     mode: "KONG",
   },
   {
+    eventType: "DISCARD_WIN",
     label: "点炮",
     mode: "DISCARD_WIN",
   },
   {
+    eventType: "SELF_DRAW",
     label: "自摸",
     mode: "SELF_DRAW",
   },
   {
+    eventType: "DRAW_GAME",
     label: "流局",
     mode: "DRAW_GAME",
   },
@@ -183,75 +173,57 @@ function getKongTypeLabel(kongType: KongType | undefined): string {
   return "杠牌";
 }
 
-function getEntryActorId(state: EntryState): string | undefined {
-  if (state.type === "idle" || state.type === "draw_confirm") {
-    return undefined;
+function createScoreRequestFromDraft(
+  roomId: string,
+  draft: EntrySubmitDraft,
+): ScoreEventRequest {
+  if (draft.action === "DRAW_GAME") {
+    return {
+      roomId,
+      action: "DRAW_GAME",
+      operator: "room",
+    };
   }
 
-  return state.actorId;
-}
-
-function getEntryCounterpartyId(state: EntryState): string | undefined {
-  if (
-    state.type === "waiting_for_discard_win_fan" ||
-    state.type === "discard_win_ready" ||
-    state.type === "discard_kong_ready"
-  ) {
-    return state.counterpartyId;
+  if (draft.action === "SELF_DRAW") {
+    return {
+      roomId,
+      action: "SELF_DRAW",
+      operator: "room",
+      winnerId: draft.winnerId,
+      fan: draft.fan,
+    };
   }
 
-  return undefined;
-}
-
-function getEntryFan(state: EntryState): ScoreFan | undefined {
-  if (state.type === "self_draw_ready" || state.type === "discard_win_ready") {
-    return state.fan;
+  if (draft.action === "DISCARD_WIN") {
+    return {
+      roomId,
+      action: "DISCARD_WIN",
+      operator: "room",
+      winnerId: draft.winnerId,
+      discarderId: draft.discarderId,
+      fan: draft.fan,
+    };
   }
 
-  return undefined;
-}
-
-function getEntryMode(state: EntryState): QuickScoreMode | undefined {
-  if (state.type === "idle" || state.type === "player_selected") {
-    return undefined;
+  if (draft.kongType === "DISCARD_KONG") {
+    return {
+      roomId,
+      action: "KONG",
+      operator: "room",
+      playerId: draft.playerId,
+      kongType: "DISCARD_KONG",
+      fromPlayerId: draft.fromPlayerId,
+    };
   }
 
-  if (state.type === "draw_confirm") {
-    return "DRAW_GAME";
-  }
-
-  if (state.type === "waiting_for_self_draw_fan" || state.type === "self_draw_ready") {
-    return "SELF_DRAW";
-  }
-
-  if (
-    state.type === "waiting_for_discard_win_counterparty" ||
-    state.type === "waiting_for_discard_win_fan" ||
-    state.type === "discard_win_ready"
-  ) {
-    return "DISCARD_WIN";
-  }
-
-  return "KONG";
-}
-
-function getEntryKongType(state: EntryState): KongType | undefined {
-  if (state.type === "waiting_for_discard_kong_counterparty" || state.type === "discard_kong_ready") {
-    return "DISCARD_KONG";
-  }
-
-  if (state.type === "shared_kong_ready") {
-    return state.kongType;
-  }
-
-  return undefined;
-}
-
-function isWaitingForCounterparty(state: EntryState): boolean {
-  return (
-    state.type === "waiting_for_discard_win_counterparty" ||
-    state.type === "waiting_for_discard_kong_counterparty"
-  );
+  return {
+    roomId,
+    action: "KONG",
+    operator: "room",
+    playerId: draft.playerId,
+    kongType: draft.kongType,
+  };
 }
 
 export function RoomPage({ roomId }: RoomPageProps) {
@@ -593,76 +565,53 @@ export function RoomPage({ roomId }: RoomPageProps) {
   }
 
   async function handleSelectPlayer(playerId: string) {
-    if (isWaitingForCounterparty(entryState)) {
-      await handleSelectRelatedPlayer(playerId);
-      return;
-    }
-
-    if (entryState.type === "draw_confirm" || !canSelectScorePlayer(playerId)) {
+    if (entryState.type === "draw_confirm" || (!isWaitingForCounterparty(entryState) && !canSelectScorePlayer(playerId))) {
       return;
     }
 
     setErrorMessage(undefined);
-    setEntryState(
-      getEntryActorId(entryState) === playerId ? { type: "idle" } : { actorId: playerId, type: "player_selected" },
+    const transition = selectEntryPlayer(
+      entryState,
+      playerId,
+      Array.from(currentRoundWinnerIds),
+    );
+    const feedbackSummary =
+      transition.submitDraft?.action === "KONG" && transition.submitDraft.kongType === "DISCARD_KONG"
+        ? `${getPlayerNickname(
+            replayState?.players ?? [],
+            transition.submitDraft.playerId,
+          )} 直杠 · ${getPlayerNickname(replayState?.players ?? [], transition.submitDraft.fromPlayerId)} 引杠`
+        : undefined;
+
+    await applyEntryTransition(
+      transition.state,
+      transition.submitDraft,
+      feedbackSummary,
+      transition.errorMessage,
     );
   }
 
-  function getQuickScoreRequest(): ScoreEventRequest | undefined {
-    if (entryState.type === "draw_confirm") {
-      return {
-        roomId,
-        action: "DRAW_GAME",
-        operator: "room",
-      };
+  async function applyEntryTransition(
+    nextState: EntryState,
+    submitDraft: EntrySubmitDraft | undefined,
+    feedbackSummary: string | undefined,
+    transitionErrorMessage?: string,
+  ) {
+    if (transitionErrorMessage !== undefined) {
+      setErrorMessage(transitionErrorMessage);
+      return;
     }
 
-    if (entryState.type === "self_draw_ready") {
-      return {
-        roomId,
-        action: "SELF_DRAW",
-        operator: "room",
-        winnerId: entryState.actorId,
-        fan: entryState.fan,
-      };
+    setEntryState(nextState);
+
+    if (submitDraft === undefined) {
+      return;
     }
 
-    if (entryState.type === "discard_win_ready") {
-      return {
-        roomId,
-        action: "DISCARD_WIN",
-        operator: "room",
-        winnerId: entryState.actorId,
-        discarderId: entryState.counterpartyId,
-        fan: entryState.fan,
-      };
-    }
-
-    if (entryState.type === "discard_kong_ready") {
-      return {
-        roomId,
-        action: "KONG",
-        operator: "room",
-        playerId: entryState.actorId,
-        kongType: "DISCARD_KONG",
-        fromPlayerId: entryState.counterpartyId,
-      };
-    }
-
-    if (entryState.type === "shared_kong_ready") {
-      return {
-        roomId,
-        action: "KONG",
-        operator: "room",
-        playerId: entryState.actorId,
-        kongType: entryState.kongType,
-      };
-    }
-
-    return undefined;
+    await submitScoreRequest(createScoreRequestFromDraft(roomId, submitDraft), feedbackSummary);
   }
 
-  async function handleSelectQuickScoreMode(mode: QuickScoreMode, kongType?: KongType) {
+  async function handleSelectQuickScoreEvent(eventType: EntryEventType) {
     if (room?.status !== "PLAYING" || isScoring || isCurrentRoundFinished) {
       return;
     }
@@ -670,92 +619,21 @@ export function RoomPage({ roomId }: RoomPageProps) {
     setErrorMessage(undefined);
     setScoreFeedbackMessage(undefined);
 
-    if (mode === "DRAW_GAME") {
-      setEntryState({ type: "draw_confirm" });
-      return;
-    }
+    const transition = selectEntryEvent(entryState, eventType);
+    const feedbackSummary =
+      transition.submitDraft?.action === "KONG" && transition.submitDraft.kongType !== "DISCARD_KONG"
+        ? `${getPlayerNickname(
+            replayState?.players ?? [],
+            transition.submitDraft.playerId,
+          )} ${getKongTypeLabel(transition.submitDraft.kongType)}`
+        : undefined;
 
-    const actorId = getEntryActorId(entryState);
-
-    if (actorId === undefined) {
-      setErrorMessage("请先选择玩家。");
-      return;
-    }
-
-    if (mode === "SELF_DRAW") {
-      setEntryState({ actorId, type: "waiting_for_self_draw_fan" });
-      return;
-    }
-
-    if (mode === "DISCARD_WIN") {
-      setEntryState({ actorId, type: "waiting_for_discard_win_counterparty" });
-      return;
-    }
-
-    if (kongType === "DISCARD_KONG") {
-      setEntryState({ actorId, type: "waiting_for_discard_kong_counterparty" });
-      return;
-    }
-
-    if (kongType === "SUPPLEMENT_KONG" || kongType === "CONCEALED_KONG") {
-      await submitScoreRequest(
-        {
-          roomId,
-          action: "KONG",
-          operator: "room",
-          playerId: actorId,
-          kongType,
-        },
-        `${getPlayerNickname(replayState?.players ?? [], actorId)} ${getKongTypeLabel(kongType)}`,
-      );
-    }
-  }
-
-  async function handleSelectRelatedPlayer(playerId: string) {
-    if (
-      entryState.type !== "waiting_for_discard_win_counterparty" &&
-      entryState.type !== "waiting_for_discard_kong_counterparty"
-    ) {
-      return;
-    }
-
-    if (entryState.actorId === playerId) {
-      setErrorMessage(
-        entryState.type === "waiting_for_discard_kong_counterparty"
-          ? "引杠玩家不能和杠牌玩家相同。"
-          : "点炮玩家不能和胡牌玩家相同。",
-      );
-      return;
-    }
-
-    if (currentRoundWinnerIds.has(playerId)) {
-      setErrorMessage("已胡牌玩家不能继续作为操作对象。");
-      return;
-    }
-
-    if (entryState.type === "waiting_for_discard_kong_counterparty") {
-      await submitScoreRequest(
-        {
-          roomId,
-          action: "KONG",
-          operator: "room",
-          playerId: entryState.actorId,
-          kongType: "DISCARD_KONG",
-          fromPlayerId: playerId,
-        },
-        `${getPlayerNickname(replayState?.players ?? [], entryState.actorId)} 直杠 · ${getPlayerNickname(
-          replayState?.players ?? [],
-          playerId,
-        )} 引杠`,
-      );
-      return;
-    }
-
-    setEntryState({
-      actorId: entryState.actorId,
-      counterpartyId: playerId,
-      type: "waiting_for_discard_win_fan",
-    });
+    await applyEntryTransition(
+      transition.state,
+      transition.submitDraft,
+      feedbackSummary,
+      transition.errorMessage,
+    );
   }
 
   function getQuickScoreMissingMessage(): string {
@@ -829,46 +707,31 @@ export function RoomPage({ roomId }: RoomPageProps) {
   }
 
   async function handleSelectFan(fan: ScoreFan) {
-    if (entryState.type === "waiting_for_self_draw_fan") {
-      await submitScoreRequest(
-        {
-          roomId,
-          action: "SELF_DRAW",
-          operator: "room",
-          winnerId: entryState.actorId,
-          fan,
-        },
-        `${getPlayerNickname(replayState?.players ?? [], entryState.actorId)} 自摸 · ${fan} 番`,
-      );
-      return;
-    }
+    const transition = selectEntryFan(entryState, fan);
+    const feedbackSummary =
+      transition.submitDraft?.action === "SELF_DRAW"
+        ? `${getPlayerNickname(replayState?.players ?? [], transition.submitDraft.winnerId)} 自摸 · ${fan} 番`
+        : transition.submitDraft?.action === "DISCARD_WIN"
+          ? `${getPlayerNickname(
+              replayState?.players ?? [],
+              transition.submitDraft.winnerId,
+            )} 胡牌 · ${getPlayerNickname(
+              replayState?.players ?? [],
+              transition.submitDraft.discarderId,
+            )} 点炮 · ${fan} 番`
+          : undefined;
 
-    if (entryState.type === "waiting_for_discard_win_fan") {
-      await submitScoreRequest(
-        {
-          roomId,
-          action: "DISCARD_WIN",
-          operator: "room",
-          winnerId: entryState.actorId,
-          discarderId: entryState.counterpartyId,
-          fan,
-        },
-        `${getPlayerNickname(replayState?.players ?? [], entryState.actorId)} 胡牌 · ${getPlayerNickname(
-          replayState?.players ?? [],
-          entryState.counterpartyId,
-        )} 点炮 · ${fan} 番`,
-      );
-    }
+    await applyEntryTransition(transition.state, transition.submitDraft, feedbackSummary);
   }
 
   async function handleSubmitQuickScore() {
-    const scoreRequest = getQuickScoreRequest();
-    if (scoreRequest === undefined) {
+    const transition = confirmDrawGame(entryState);
+    if (transition.submitDraft === undefined) {
       setErrorMessage(getQuickScoreMissingMessage());
       return;
     }
 
-    await submitScoreRequest(scoreRequest, quickScoreSummary);
+    await applyEntryTransition(transition.state, transition.submitDraft, quickScoreSummary);
   }
 
   function openFinishConfirm() {
@@ -1261,12 +1124,32 @@ export function RoomPage({ roomId }: RoomPageProps) {
                           hasWon ||
                           isScoring ||
                           (isCounterpartyStep && (selectedPrimaryPlayerId === undefined || isActor));
+                        const roleLabel = isCounterparty
+                          ? quickScoreMode === "KONG"
+                            ? "引杠玩家"
+                            : "点炮玩家"
+                          : isActor
+                            ? quickScoreMode === "KONG"
+                              ? "杠牌玩家"
+                              : quickScoreMode === "DISCARD_WIN"
+                                ? "胡牌者"
+                                : quickScoreMode === "SELF_DRAW"
+                                  ? "自摸玩家"
+                                  : "已选玩家"
+                            : undefined;
+                        const visualState = hasWon
+                          ? "disabled"
+                          : isCounterparty
+                            ? "counterparty"
+                            : isActor
+                              ? "actor"
+                              : disabled
+                                ? "disabled"
+                                : "default";
 
                         return (
                           <PlayerTile
                             disabled={disabled}
-                            isRelated={isCounterparty}
-                            isSelected={isActor}
                             key={`actor-${player.id}`}
                             meta={
                               hasWon
@@ -1285,7 +1168,8 @@ export function RoomPage({ roomId }: RoomPageProps) {
                             onClick={() => {
                               void handleSelectPlayer(player.id);
                             }}
-                            tone={hasWon ? "muted" : "default"}
+                            roleLabel={roleLabel}
+                            visualState={visualState}
                           />
                         );
                       })}
@@ -1308,7 +1192,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
                             disabled={isScoring}
                             key={`${option.mode}-${option.kongType ?? option.label}`}
                             onClick={() => {
-                              void handleSelectQuickScoreMode(option.mode, option.kongType);
+                              void handleSelectQuickScoreEvent(option.eventType);
                             }}
                             type="button"
                           >
@@ -1324,10 +1208,9 @@ export function RoomPage({ roomId }: RoomPageProps) {
                     <div className="grid grid-cols-4 gap-2">
                       {scoreFans.map((fan) => {
                         const canSelectFan =
+                          isSelectingFan(entryState) &&
                           quickScoreMode !== undefined &&
-                          needsFan(quickScoreMode) &&
-                          selectedPrimaryPlayerId !== undefined &&
-                          (quickScoreMode !== "DISCARD_WIN" || selectedRelatedPlayerId !== undefined);
+                          needsFan(quickScoreMode);
 
                         return (
                           <button
