@@ -565,7 +565,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
   }
 
   async function handleSelectPlayer(playerId: string) {
-    if (entryState.type === "draw_confirm" || (!isWaitingForCounterparty(entryState) && !canSelectScorePlayer(playerId))) {
+    if (entryState.type === "liuju_mode" || (!isWaitingForCounterparty(entryState) && !canSelectScorePlayer(playerId))) {
       return;
     }
 
@@ -645,26 +645,26 @@ export function RoomPage({ roomId }: RoomPageProps) {
       return "请选择玩家。";
     }
 
-    if (entryState.type === "player_selected") {
+    if (entryState.type === "actor_selected") {
       return `已选择 ${getPlayerNickname(replayState?.players ?? [], entryState.actorId)}，请选择事件。`;
     }
 
-    if (entryState.type === "waiting_for_self_draw_fan") {
+    if (entryState.type === "selecting_fan" && entryState.eventType === "zimo") {
       return `${getPlayerNickname(replayState?.players ?? [], entryState.actorId)} 自摸，请选择番数。`;
     }
 
-    if (entryState.type === "waiting_for_discard_win_counterparty") {
+    if (entryState.type === "selecting_counterparty" && entryState.eventType === "dianpao") {
       return `${getPlayerNickname(replayState?.players ?? [], entryState.actorId)} 已胡牌，请选择点炮玩家。`;
     }
 
-    if (entryState.type === "waiting_for_discard_win_fan") {
+    if (entryState.type === "selecting_fan" && entryState.eventType === "dianpao") {
       return `${getPlayerNickname(
         replayState?.players ?? [],
         entryState.actorId,
       )} 胡牌，${getPlayerNickname(replayState?.players ?? [], entryState.counterpartyId)} 点炮，请选择番数。`;
     }
 
-    if (entryState.type === "waiting_for_discard_kong_counterparty") {
+    if (entryState.type === "selecting_counterparty" && entryState.eventType === "zhigang") {
       return `${getPlayerNickname(replayState?.players ?? [], entryState.actorId)} 直杠，请选择引杠玩家。`;
     }
 
@@ -672,15 +672,15 @@ export function RoomPage({ roomId }: RoomPageProps) {
   }
 
   function getQuickScoreSummary(): string | undefined {
-    if (entryState.type === "draw_confirm") {
+    if (entryState.type === "liuju_mode") {
       return `确认第 ${currentRoundNumber} 局流局，确认后本局结束。`;
     }
 
-    if (entryState.type === "self_draw_ready") {
+    if (entryState.type === "selecting_fan" && entryState.eventType === "zimo" && entryState.fan !== undefined) {
       return `${getPlayerNickname(replayState?.players ?? [], entryState.actorId)} 自摸 · ${entryState.fan} 番`;
     }
 
-    if (entryState.type === "discard_win_ready") {
+    if (entryState.type === "selecting_fan" && entryState.eventType === "dianpao" && entryState.fan !== undefined) {
       return `${getPlayerNickname(
         replayState?.players ?? [],
         entryState.actorId,
@@ -690,17 +690,15 @@ export function RoomPage({ roomId }: RoomPageProps) {
       )} 点炮 · ${entryState.fan} 番`;
     }
 
-    if (entryState.type === "discard_kong_ready") {
+    if (
+      entryState.type === "selecting_counterparty" &&
+      entryState.eventType === "zhigang" &&
+      entryState.counterpartyId !== undefined
+    ) {
       return `${getPlayerNickname(
         replayState?.players ?? [],
         entryState.actorId,
       )} 直杠 · ${getPlayerNickname(replayState?.players ?? [], entryState.counterpartyId)} 引杠`;
-    }
-
-    if (entryState.type === "shared_kong_ready") {
-      return `${getPlayerNickname(replayState?.players ?? [], entryState.actorId)} ${getKongTypeLabel(
-        entryState.kongType,
-      )}`;
     }
 
     return undefined;
@@ -1086,11 +1084,22 @@ export function RoomPage({ roomId }: RoomPageProps) {
         {room !== undefined && isPlaying ? (
           <PlayingRoomView roomId={roomId} roundNumber={currentRoundNumber}>
             <Section className="gap-4">
-              <div>
-                <h2 className="text-lg font-semibold tracking-normal">高频记录</h2>
-                <p className="mt-1 text-sm text-stone-500">
-                  {quickScoreMissingMessage === "" ? "确认后记录本次事件。" : quickScoreMissingMessage}
-                </p>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="text-lg font-semibold tracking-normal">高频记录</h2>
+                  <p className="mt-1 text-sm text-stone-500">
+                    {quickScoreMissingMessage === "" ? "确认后记录本次事件。" : quickScoreMissingMessage}
+                  </p>
+                </div>
+                <Button
+                  className={entryState.type === "idle" ? "invisible shrink-0 whitespace-nowrap" : "shrink-0 whitespace-nowrap"}
+                  disabled={isScoring || entryState.type === "idle"}
+                  onClick={resetQuickScoreSelection}
+                  size="sm"
+                  variant="ghost"
+                >
+                  取消当前录入
+                </Button>
               </div>
 
               {isCurrentRoundFinished ? (
@@ -1118,11 +1127,13 @@ export function RoomPage({ roomId }: RoomPageProps) {
                       {room.players.map((player) => {
                         const hasWon = currentRoundWinnerIds.has(player.id);
                         const isCounterpartyStep = isWaitingForCounterparty(entryState);
+                        const isEntryLocked = isSelectingFan(entryState) || entryState.type === "liuju_mode";
                         const isActor = selectedPrimaryPlayerId === player.id;
                         const isCounterparty = selectedRelatedPlayerId === player.id;
                         const disabled =
                           hasWon ||
                           isScoring ||
+                          isEntryLocked ||
                           (isCounterpartyStep && (selectedPrimaryPlayerId === undefined || isActor));
                         const roleLabel = isCounterparty
                           ? quickScoreMode === "KONG"
@@ -1150,7 +1161,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
                         return (
                           <PlayerTile
                             disabled={disabled}
-                            key={`actor-${player.id}`}
+                            key={player.id}
                             meta={
                               hasWon
                                 ? "本局已胡牌"
@@ -1162,6 +1173,8 @@ export function RoomPage({ roomId }: RoomPageProps) {
                                       : "点炮玩家"
                                     : isActor
                                       ? `${getPlayerScore(player.id)} · 已选`
+                                      : isEntryLocked
+                                        ? "等待完成当前录入"
                                       : `${getPlayerScore(player.id)}`
                             }
                             nickname={player.nickname}
@@ -1232,7 +1245,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
                   </div>
 
                   <div className="grid min-h-24 gap-3 rounded-md bg-stone-50 p-3">
-                    {entryState.type === "draw_confirm" ? (
+                    {entryState.type === "liuju_mode" ? (
                       <>
                         <div>
                           <p className="text-sm font-semibold text-stone-900">流局确认</p>

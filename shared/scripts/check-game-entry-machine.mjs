@@ -16,7 +16,7 @@ const idle = { type: "idle" };
 
 const selectedPlayer = selectEntryPlayer(idle, "player_1", []);
 assert.deepEqual(selectedPlayer, {
-  state: { actorId: "player_1", type: "player_selected" },
+  state: { actorId: "player_1", type: "actor_selected" },
 });
 assert.equal(getEntryActorId(selectedPlayer.state), "player_1");
 
@@ -25,13 +25,13 @@ assert.deepEqual(toggledPlayer, { state: { type: "idle" } });
 
 const selfDraw = selectEntryEvent(selectedPlayer.state, "SELF_DRAW");
 assert.deepEqual(selfDraw, {
-  state: { actorId: "player_1", type: "waiting_for_self_draw_fan" },
+  state: { actorId: "player_1", eventType: "zimo", type: "selecting_fan" },
 });
 assert.equal(isSelectingFan(selfDraw.state), true);
 
 const selfDrawSubmitted = selectEntryFan(selfDraw.state, 3);
 assert.deepEqual(selfDrawSubmitted, {
-  state: { actorId: "player_1", fan: 3, type: "self_draw_ready" },
+  state: { actorId: "player_1", eventType: "zimo", fan: 3, type: "selecting_fan" },
   submitDraft: {
     action: "SELF_DRAW",
     fan: 3,
@@ -41,7 +41,7 @@ assert.deepEqual(selfDrawSubmitted, {
 
 const discardWin = selectEntryEvent(selectedPlayer.state, "DISCARD_WIN");
 assert.deepEqual(discardWin, {
-  state: { actorId: "player_1", type: "waiting_for_discard_win_counterparty" },
+  state: { actorId: "player_1", eventType: "dianpao", type: "selecting_counterparty" },
 });
 assert.equal(isWaitingForCounterparty(discardWin.state), true);
 
@@ -56,7 +56,8 @@ assert.deepEqual(discardWinCounterparty, {
   state: {
     actorId: "player_1",
     counterpartyId: "player_2",
-    type: "waiting_for_discard_win_fan",
+    eventType: "dianpao",
+    type: "selecting_fan",
   },
 });
 assert.equal(getEntryCounterpartyId(discardWinCounterparty.state), "player_2");
@@ -67,8 +68,9 @@ assert.deepEqual(discardWinSubmitted, {
   state: {
     actorId: "player_1",
     counterpartyId: "player_2",
+    eventType: "dianpao",
     fan: 2,
-    type: "discard_win_ready",
+    type: "selecting_fan",
   },
   submitDraft: {
     action: "DISCARD_WIN",
@@ -83,8 +85,7 @@ const supplementKong = selectEntryEvent(selectedPlayer.state, "SUPPLEMENT_KONG")
 assert.deepEqual(supplementKong, {
   state: {
     actorId: "player_1",
-    kongType: "SUPPLEMENT_KONG",
-    type: "shared_kong_ready",
+    type: "actor_selected",
   },
   submitDraft: {
     action: "KONG",
@@ -95,7 +96,7 @@ assert.deepEqual(supplementKong, {
 
 const discardKong = selectEntryEvent(selectedPlayer.state, "DISCARD_KONG");
 assert.deepEqual(discardKong, {
-  state: { actorId: "player_1", type: "waiting_for_discard_kong_counterparty" },
+  state: { actorId: "player_1", eventType: "zhigang", type: "selecting_counterparty" },
 });
 assert.equal(isWaitingForCounterparty(discardKong.state), true);
 
@@ -110,7 +111,8 @@ assert.deepEqual(discardKongSubmitted, {
   state: {
     actorId: "player_1",
     counterpartyId: "player_3",
-    type: "discard_kong_ready",
+    eventType: "zhigang",
+    type: "selecting_counterparty",
   },
   submitDraft: {
     action: "KONG",
@@ -130,11 +132,14 @@ const blockedPlayer = selectEntryPlayer(idle, "player_4", ["player_4"]);
 assert.deepEqual(blockedPlayer, { state: idle });
 
 const drawConfirm = selectEntryEvent(idle, "DRAW_GAME");
-assert.deepEqual(drawConfirm, { state: { type: "draw_confirm" } });
+assert.deepEqual(drawConfirm, { state: { type: "liuju_mode" } });
 assert.deepEqual(confirmDrawGame(drawConfirm.state), {
-  state: { type: "draw_confirm" },
+  state: { type: "liuju_mode" },
   submitDraft: { action: "DRAW_GAME" },
 });
 
 const noFanBeforeEvent = selectEntryFan(selectedPlayer.state, 4);
 assert.deepEqual(noFanBeforeEvent, { state: selectedPlayer.state });
+
+const noPlayerChangeWhenSelectingFan = selectEntryPlayer(discardWinCounterparty.state, "player_3", []);
+assert.deepEqual(noPlayerChangeWhenSelectingFan, { state: discardWinCounterparty.state });
