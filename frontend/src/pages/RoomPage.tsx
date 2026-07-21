@@ -26,6 +26,10 @@ import {
   startRoom,
   undoRoomEvent,
 } from "../api/roomApi";
+import { Button } from "../components/ui/Button";
+import { Disclosure } from "../components/ui/Disclosure";
+import { Notice } from "../components/ui/Notice";
+import { Section } from "../components/ui/Section";
 import { useRoomSync } from "../hooks/useRoomSync";
 import { readPlayerIdentity, type StoredPlayerIdentity } from "../utils/playerIdentity";
 
@@ -914,16 +918,17 @@ export function RoomPage({ roomId }: RoomPageProps) {
           {item.isUndone ? (
             <span className="shrink-0 text-xs font-semibold text-stone-500">已撤销</span>
           ) : (
-            <button
-              className="h-8 shrink-0 rounded-md bg-red-50 px-3 text-xs font-semibold text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+            <Button
+              className="shrink-0"
               disabled={isUndoing || isScoring}
               onClick={() => {
                 void handleUndoRoomEvent(item.event.id);
               }}
-              type="button"
+              size="sm"
+              variant="danger"
             >
               撤销
-            </button>
+            </Button>
           )}
         </div>
       </article>
@@ -963,13 +968,11 @@ export function RoomPage({ roomId }: RoomPageProps) {
         </div>
 
         {errorMessage !== undefined ? (
-          <p className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-700">
-            {errorMessage}
-          </p>
+          <Notice variant="danger">{errorMessage}</Notice>
         ) : null}
 
         {room !== undefined ? (
-          <section className="grid gap-4 rounded-md bg-white p-4 shadow-sm ring-1 ring-stone-200/80">
+          <Section className="gap-4">
             <div className="flex items-center justify-between gap-3 border-b border-stone-200 pb-3">
               <div>
                 <h2 className="text-xl font-semibold tracking-normal">
@@ -987,15 +990,13 @@ export function RoomPage({ roomId }: RoomPageProps) {
                           : quickScoreMissingMessage}
                 </p>
               </div>
-              <button
-                className="h-10 rounded-md bg-stone-100 px-3 text-sm font-medium text-stone-900 active:bg-stone-200"
+              <Button
                 onClick={() => {
                   void loadRoom();
                 }}
-                type="button"
               >
                 刷新
-              </button>
+              </Button>
             </div>
 
             {isLoading ? <p className="text-base text-stone-600">读取中...</p> : null}
@@ -1127,16 +1128,16 @@ export function RoomPage({ roomId }: RoomPageProps) {
                     </div>
                   ),
                 )}
-                <button
-                  className="h-14 rounded-md bg-emerald-700 px-4 text-base font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                <Button
                   disabled={!canStart || isStarting}
                   onClick={() => {
                     void handleStartRoom();
                   }}
-                  type="button"
+                  size="lg"
+                  variant="primary"
                 >
                   {isStarting ? "开始中..." : "开始游戏"}
-                </button>
+                </Button>
               </div>
             ) : null}
 
@@ -1188,16 +1189,16 @@ export function RoomPage({ roomId }: RoomPageProps) {
                             : "本局只剩 1 名玩家未胡牌，确认账单后进入下一局。"}
                         </p>
                       </div>
-                      <button
-                        className="h-10 shrink-0 rounded-md bg-emerald-700 px-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                      <Button
+                        className="shrink-0"
                         disabled={isScoring || isFinishing}
                         onClick={() => {
                           void handleConfirmRound();
                         }}
-                        type="button"
+                        variant="primary"
                       >
                         {isScoring ? "确认中..." : "下一局"}
-                      </button>
+                      </Button>
                     </div>
                   </section>
                 ) : null}
@@ -1249,7 +1250,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
                   </div>
                 ) : null}
 
-                <section className="grid gap-3 rounded-md bg-white p-4 shadow-sm ring-1 ring-stone-200/80">
+                <Section>
                   <div>
                     <h3 className="text-base font-semibold text-stone-900">本局账单</h3>
                     <p className="mt-1 text-sm text-stone-500">
@@ -1303,20 +1304,20 @@ export function RoomPage({ roomId }: RoomPageProps) {
                   </div>
 
                   {isCurrentRoundFinished ? (
-                    <button
-                      className="h-12 rounded-md bg-emerald-700 px-4 text-base font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                    <Button
                       disabled={isScoring || isFinishing}
                       onClick={() => {
                         void handleConfirmRound();
                       }}
-                      type="button"
+                      size="lg"
+                      variant="primary"
                     >
                       {isScoring ? "确认中..." : "确认本局，开始下一局"}
-                    </button>
+                    </Button>
                   ) : null}
-                </section>
+                </Section>
 
-                <section className="grid gap-3 rounded-md bg-white p-4 shadow-sm ring-1 ring-stone-200/80">
+                <Section>
                   <div>
                     <h3 className="text-base font-semibold text-stone-900">最近记录</h3>
                     <p className="mt-1 text-sm text-stone-500">
@@ -1345,13 +1346,10 @@ export function RoomPage({ roomId }: RoomPageProps) {
                       ) : null}
                     </div>
                   )}
-                </section>
+                </Section>
 
-                <details className="rounded-md bg-white p-4 shadow-sm ring-1 ring-stone-200/80">
-                  <summary className="cursor-pointer text-base font-semibold tracking-normal text-stone-900">
-                    历史局账单
-                  </summary>
-                  <div className="mt-3 grid gap-3">
+                <Disclosure summary="历史局账单">
+                  <div className="grid gap-3">
                     <p className="text-sm text-stone-500">
                       {historyRoundLedgers.length === 0
                         ? "确认本局账单后，会显示前面几局。"
@@ -1557,35 +1555,31 @@ export function RoomPage({ roomId }: RoomPageProps) {
                       </div>
                     )}
                   </div>
-                </details>
+                </Disclosure>
 
-                <details className="rounded-md bg-white p-4 shadow-sm ring-1 ring-stone-200/80">
-                  <summary className="cursor-pointer text-base font-semibold tracking-normal text-stone-900">
-                    房间管理
-                  </summary>
-                  <div className="mt-3 grid grid-cols-2 gap-3">
-                    <button
-                      className="h-12 rounded-md border border-red-200 bg-red-50 px-4 text-base font-semibold text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                <Disclosure summary="房间管理">
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button
                       disabled={!canUndo || isUndoing || isScoring}
                       onClick={() => {
                         void handleUndoRoomEvent();
                       }}
-                      type="button"
+                      size="lg"
+                      variant="danger"
                     >
                       {isUndoing ? "撤销中..." : "撤销上一条"}
-                    </button>
-                    <button
-                      className="h-12 rounded-md border border-stone-300 bg-white px-4 text-base font-semibold text-stone-900 disabled:cursor-not-allowed disabled:opacity-60"
+                    </Button>
+                    <Button
                       disabled={isScoring || isFinishing}
                       onClick={() => {
                         openFinishConfirm();
                       }}
-                      type="button"
+                      size="lg"
                     >
                       结束游戏
-                    </button>
+                    </Button>
                   </div>
-                </details>
+                </Disclosure>
 
                 {isFinishConfirmOpen ? (
                   <div className="grid gap-3 rounded-md border border-amber-200 bg-amber-50 p-4">
@@ -1622,7 +1616,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
                 ) : null}
               </div>
             ) : null}
-          </section>
+          </Section>
         ) : null}
 
         <section className="grid gap-4 rounded-md bg-white p-4 shadow-sm ring-1 ring-stone-200/80">
@@ -1707,11 +1701,8 @@ export function RoomPage({ roomId }: RoomPageProps) {
         </section>
 
         {room !== undefined ? (
-          <details className="rounded-md bg-white p-4 shadow-sm ring-1 ring-stone-200/80">
-            <summary className="cursor-pointer text-base font-semibold tracking-normal text-stone-900">
-              邀请加入
-            </summary>
-            <div className="mt-4 grid gap-3">
+          <Disclosure summary="邀请加入">
+            <div className="grid gap-3">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-stone-500">房间号 {roomId}</p>
@@ -1732,30 +1723,27 @@ export function RoomPage({ roomId }: RoomPageProps) {
                 )}
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <button
-                  className="h-11 rounded-md bg-emerald-700 px-3 text-sm font-semibold text-white"
+                <Button
                   onClick={() => {
                     void handleShareInviteLink();
                   }}
-                  type="button"
+                  variant="primary"
                 >
                   分享房间
-                </button>
-                <button
-                  className="h-11 rounded-md border border-stone-300 bg-white px-3 text-sm font-semibold text-stone-900"
+                </Button>
+                <Button
                   onClick={() => {
                     void handleCopyInviteLink();
                   }}
-                  type="button"
                 >
                   复制链接
-                </button>
+                </Button>
               </div>
               {shareMessage !== undefined ? (
                 <p className="text-sm font-medium text-stone-500">{shareMessage}</p>
               ) : null}
             </div>
-          </details>
+          </Disclosure>
         ) : null}
 
         {isFinished && settlement !== undefined ? (
@@ -1765,15 +1753,13 @@ export function RoomPage({ roomId }: RoomPageProps) {
                 <h2 className="text-xl font-semibold tracking-normal">结算</h2>
                 <p className="mt-1 text-sm text-stone-500">共 {settlement.totalRounds} 局</p>
               </div>
-              <button
-                className="h-10 rounded-md border border-stone-300 bg-white px-3 text-sm font-semibold text-stone-900"
+              <Button
                 onClick={() => {
                   void handleCopySettlementText(settlement.text);
                 }}
-                type="button"
               >
                 复制
-              </button>
+              </Button>
             </div>
 
             <div className="grid gap-3">
