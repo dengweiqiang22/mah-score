@@ -436,7 +436,7 @@ assert.deepEqual(state.currentRound, {
   number: 1,
   status: "FINISHED",
   result: "WIN",
-  winnerIds: ["player_1", "player_2", "player_3"],
+  winnerIds: ["player_1", "player_2"],
 });
 assert.deepEqual(state.players, [
   {
@@ -455,7 +455,7 @@ assert.deepEqual(state.players, [
 assert.deepEqual(state.scores, [
   {
     playerId: "player_1",
-    total: 0,
+    total: 1,
   },
   {
     playerId: "player_2",
@@ -463,12 +463,12 @@ assert.deepEqual(state.scores, [
   },
   {
     playerId: "player_3",
-    total: 0,
+    total: -1,
   },
 ]);
 assert.deepEqual(
   state.rounds.map((round) => round.eventId),
-  ["event_6", "event_8", "event_9"],
+  ["event_6", "event_8"],
 );
 assert.deepEqual(
   state.events.map((event) => event.id),
@@ -480,7 +480,6 @@ assert.deepEqual(
     "event_5",
     "event_6",
     "event_8",
-    "event_9",
     "event_11",
   ],
 );
@@ -1100,6 +1099,126 @@ const multiWinRoundSettlement = createSettlement(
 
 assert.equal(multiWinRoundState.currentRound.status, "FINISHED");
 assert.equal(multiWinRoundSettlement.totalRounds, 1);
+
+const twoPlayerRoundState = replayRoomEvents([
+  {
+    ...baseEvent,
+    id: "two_player_1",
+    type: "PLAYER_JOINED",
+    version: 1,
+    payload: {
+      playerId: "player_1",
+      nickname: "张三",
+    },
+  },
+  {
+    ...baseEvent,
+    id: "two_player_2",
+    type: "PLAYER_JOINED",
+    version: 2,
+    payload: {
+      playerId: "player_2",
+      nickname: "李四",
+    },
+  },
+  {
+    ...baseEvent,
+    id: "two_player_3",
+    type: "GAME_STARTED",
+    version: 3,
+    payload: {},
+  },
+  {
+    ...baseEvent,
+    id: "two_player_4",
+    type: "DISCARD_WIN",
+    version: 4,
+    payload: {
+      winnerId: "player_1",
+      discarderId: "player_2",
+    },
+  },
+]);
+
+assert.deepEqual(twoPlayerRoundState.currentRound, {
+  number: 1,
+  status: "FINISHED",
+  result: "WIN",
+  winnerIds: ["player_1"],
+});
+
+const threePlayerOneWinnerRoundState = replayRoomEvents([
+  {
+    ...baseEvent,
+    id: "three_player_1",
+    type: "PLAYER_JOINED",
+    version: 1,
+    payload: {
+      playerId: "player_1",
+      nickname: "张三",
+    },
+  },
+  {
+    ...baseEvent,
+    id: "three_player_2",
+    type: "PLAYER_JOINED",
+    version: 2,
+    payload: {
+      playerId: "player_2",
+      nickname: "李四",
+    },
+  },
+  {
+    ...baseEvent,
+    id: "three_player_3",
+    type: "PLAYER_JOINED",
+    version: 3,
+    payload: {
+      playerId: "player_3",
+      nickname: "王五",
+    },
+  },
+  {
+    ...baseEvent,
+    id: "three_player_4",
+    type: "GAME_STARTED",
+    version: 4,
+    payload: {},
+  },
+  {
+    ...baseEvent,
+    id: "three_player_5",
+    type: "SELF_DRAW",
+    version: 5,
+    payload: {
+      winnerId: "player_1",
+    },
+  },
+]);
+
+assert.equal(threePlayerOneWinnerRoundState.currentRound.status, "ACTIVE");
+assert.deepEqual(threePlayerOneWinnerRoundState.currentRound.winnerIds, ["player_1"]);
+
+const threePlayerTwoWinnerRoundState = replayRoomEvents([
+  ...threePlayerOneWinnerRoundState.events,
+  {
+    ...baseEvent,
+    id: "three_player_6",
+    type: "DISCARD_WIN",
+    version: 6,
+    payload: {
+      winnerId: "player_2",
+      discarderId: "player_3",
+    },
+  },
+]);
+
+assert.deepEqual(threePlayerTwoWinnerRoundState.currentRound, {
+  number: 1,
+  status: "FINISHED",
+  result: "WIN",
+  winnerIds: ["player_1", "player_2"],
+});
 
 const drawGameSettlement = createSettlement(
   drawGameState.roomId,

@@ -206,6 +206,10 @@ function getActivePlayers(state: MutableReplayState): readonly RoomPlayer[] {
   return state.players.filter((player) => !winnerIds.has(player.id));
 }
 
+function getWinnerCountToFinishRound(playerCount: number): number {
+  return Math.max(playerCount - 1, 1);
+}
+
 function ensureActiveRound(state: MutableReplayState): MutableReplayState {
   if (state.currentRound.number > 0) {
     return state;
@@ -284,7 +288,7 @@ function recordRoundWinner(state: MutableReplayState, winnerId: string): Mutable
     },
   };
 
-  if (winnerIds.size >= 3) {
+  if (winnerIds.size >= getWinnerCountToFinishRound(nextState.players.length)) {
     return finishCurrentRound(nextState, "WIN");
   }
 

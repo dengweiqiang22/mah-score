@@ -852,6 +852,8 @@ export function RoomPage({ roomId }: RoomPageProps) {
         : scoreHistory.filter((item) => item.roundNumber === replayState.currentRound.number),
     [replayState, scoreHistory],
   );
+  const recentCurrentRoundEntries = currentRoundEntries.slice(0, 2);
+  const olderCurrentRoundEntries = currentRoundEntries.slice(2);
   const currentRoundLedger = useMemo(
     () => createPlayerLedger(currentRoundEntries, replayState?.players ?? []),
     [currentRoundEntries, replayState],
@@ -889,6 +891,44 @@ export function RoomPage({ roomId }: RoomPageProps) {
     setExpandedHistoryRoundNumbers([]);
     setExpandedHistoryAllLedgerRoundNumbers([]);
   }, [roomId, currentRoundNumber]);
+
+  function renderCurrentRoundEntry(item: (typeof currentRoundEntries)[number]) {
+    return (
+      <article
+        className={`rounded-md bg-stone-100 px-3 py-2 ${item.isUndone ? "opacity-70" : ""}`}
+        key={item.event.id}
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-stone-900">
+              {item.roundActionNumber}. {item.title}
+            </p>
+            <p
+              className={`mt-1 truncate text-xs font-semibold ${
+                item.isUndone ? "text-stone-500" : "text-stone-700"
+              }`}
+            >
+              {formatScoreFlowSummary(item.flows)}
+            </p>
+          </div>
+          {item.isUndone ? (
+            <span className="shrink-0 text-xs font-semibold text-stone-500">已撤销</span>
+          ) : (
+            <button
+              className="h-8 shrink-0 rounded-md bg-red-50 px-3 text-xs font-semibold text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={isUndoing || isScoring}
+              onClick={() => {
+                void handleUndoRoomEvent(item.event.id);
+              }}
+              type="button"
+            >
+              撤销
+            </button>
+          )}
+        </div>
+      </article>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-stone-100 px-4 py-4 text-stone-950">
@@ -1145,7 +1185,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
                         <p className="mt-1 text-sm leading-6 text-amber-800">
                           {currentRoundResult === "DRAW"
                             ? "本局流局，确认账单后进入下一局。"
-                            : "本局已有 3 家胡牌，确认账单后进入下一局。"}
+                            : "本局只剩 1 名玩家未胡牌，确认账单后进入下一局。"}
                         </p>
                       </div>
                       <button
@@ -1158,39 +1198,6 @@ export function RoomPage({ roomId }: RoomPageProps) {
                       >
                         {isScoring ? "确认中..." : "下一局"}
                       </button>
-                    </div>
-
-                    <div className="grid gap-2">
-                      {currentRoundLedger.some((player) => player.entries.length > 0) ? (
-                        currentRoundLedger
-                          .filter((player) => player.entries.length > 0)
-                          .map((player) => (
-                            <div
-                              className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md bg-white px-3 py-2"
-                              key={player.playerId}
-                            >
-                              <div className="min-w-0">
-                                <p className="truncate text-sm font-medium text-stone-700">
-                                  {player.nickname}
-                                </p>
-                                <p className="mt-1 text-xs text-stone-500">
-                                  收入 {player.income} · 支出 {player.expense}
-                                </p>
-                              </div>
-                              <p
-                                className={`shrink-0 text-sm font-semibold tabular-nums ${
-                                  player.total >= 0 ? "text-emerald-700" : "text-red-700"
-                                }`}
-                              >
-                                {player.total >= 0 ? `+${player.total}` : player.total}
-                              </p>
-                            </div>
-                          ))
-                      ) : (
-                        <p className="rounded-md bg-white px-3 py-2 text-sm text-stone-600">
-                          本局流局，无收支变化。
-                        </p>
-                      )}
                     </div>
                   </section>
                 ) : null}
@@ -1311,11 +1318,11 @@ export function RoomPage({ roomId }: RoomPageProps) {
 
                 <section className="grid gap-3 rounded-md bg-white p-4 shadow-sm ring-1 ring-stone-200/80">
                   <div>
-                    <h3 className="text-base font-semibold text-stone-900">本局明细</h3>
+                    <h3 className="text-base font-semibold text-stone-900">最近记录</h3>
                     <p className="mt-1 text-sm text-stone-500">
                       {currentRoundEntries.length === 0
                         ? "本局还没有计分事件。"
-                        : "用于核对本局账单，最新事件在上方。"}
+                        : "只显示最近记录，完整明细可展开。"}
                     </p>
                   </div>
 
@@ -1325,48 +1332,17 @@ export function RoomPage({ roomId }: RoomPageProps) {
                     </p>
                   ) : (
                     <div className="grid gap-2">
-                      {currentRoundEntries.map((item) => (
-                        <article
-                          className={`rounded-md bg-stone-100 px-3 py-2 ${
-                            item.isUndone ? "opacity-70" : ""
-                          }`}
-                          key={item.event.id}
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-semibold text-stone-900">
-                                {item.roundActionNumber}. {item.title}
-                              </p>
-                              <p className="mt-1 truncate text-xs text-stone-500">
-                                {item.detail}
-                              </p>
-                            </div>
-                            {item.isUndone ? (
-                              <span className="shrink-0 text-xs font-semibold text-stone-500">
-                                已撤销
-                              </span>
-                            ) : (
-                              <button
-                                className="h-8 shrink-0 rounded-md bg-red-50 px-3 text-xs font-semibold text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
-                                disabled={isUndoing || isScoring}
-                                onClick={() => {
-                                  void handleUndoRoomEvent(item.event.id);
-                                }}
-                                type="button"
-                              >
-                                撤销
-                              </button>
-                            )}
+                      {recentCurrentRoundEntries.map((item) => renderCurrentRoundEntry(item))}
+                      {olderCurrentRoundEntries.length > 0 ? (
+                        <details className="rounded-md bg-stone-50 px-3 py-2">
+                          <summary className="cursor-pointer text-sm font-semibold text-stone-700">
+                            查看更早 {olderCurrentRoundEntries.length} 条
+                          </summary>
+                          <div className="mt-2 grid gap-2">
+                            {olderCurrentRoundEntries.map((item) => renderCurrentRoundEntry(item))}
                           </div>
-                          <p
-                            className={`mt-2 truncate text-xs font-semibold ${
-                              item.isUndone ? "text-stone-500" : "text-stone-700"
-                            }`}
-                          >
-                            {formatScoreFlowSummary(item.flows)}
-                          </p>
-                        </article>
-                      ))}
+                        </details>
+                      ) : null}
                     </div>
                   )}
                 </section>
