@@ -177,6 +177,30 @@ function getKongTypeLabel(kongType: KongType | undefined): string {
   return "杠牌";
 }
 
+function getRoundFinishWinnerCount(playerCount: number): number {
+  return Math.max(playerCount - 1, 1);
+}
+
+function getChineseCountLabel(count: number): string {
+  if (count === 1) {
+    return "一";
+  }
+
+  if (count === 2) {
+    return "两";
+  }
+
+  if (count === 3) {
+    return "三";
+  }
+
+  return `${count}`;
+}
+
+function getRoundWinResultLabel(playerCount: number): string {
+  return `${getChineseCountLabel(getRoundFinishWinnerCount(playerCount))}家胡牌`;
+}
+
 function createScoreRequestFromDraft(roomId: string, draft: EntrySubmitDraft): ScoreEventRequest {
   if (draft.action === "DRAW_GAME") {
     return {
@@ -791,7 +815,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
       currentRoundEntries.some((item) => !item.isUndone)
     ) {
       lines.push("当前局尚未流局");
-      lines.push("当前局尚未达到三家胡牌");
+      lines.push(`当前局尚未达到${getRoundWinResultLabel(replayState.players.length)}`);
       lines.push("当前局未确认账单");
     }
 
@@ -1117,7 +1141,9 @@ export function RoomPage({ roomId }: RoomPageProps) {
                     <div>
                       <p className="text-xs font-medium text-stone-400">结果</p>
                       <p className="mt-1 truncate text-sm font-semibold text-stone-800">
-                        {currentRoundResult === "DRAW" ? "流局" : "三家胡牌"}
+                        {currentRoundResult === "DRAW"
+                          ? "流局"
+                          : getRoundWinResultLabel(room.players.length)}
                       </p>
                     </div>
                     <div>
