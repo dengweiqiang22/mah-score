@@ -35,6 +35,7 @@ import {
 } from "@mah-score/shared";
 import {
   ArrowRightLeft,
+  Ban,
   CircleSlash,
   Crosshair,
   EyeOff,
@@ -42,7 +43,6 @@ import {
   Plus,
   Share2,
   Undo2,
-  X,
 } from "lucide-react";
 import QRCode from "qrcode";
 
@@ -92,6 +92,7 @@ interface RoomPageProps {
 
 type QuickScoreMode = "SELF_DRAW" | "DISCARD_WIN" | "KONG" | "DRAW_GAME";
 type RoundViewMode = "round_active" | "round_settlement";
+type DrawGameStep = "flower_pig" | "not_ready" | "ready_fan";
 
 const fixedEventOptions: readonly {
   readonly emphasis?: "default" | "primary" | "muted";
@@ -206,6 +207,18 @@ function formatScoreHistorySummary(item: {
   return item.flows.length === 0 ? item.detail : formatScoreFlowSummary(item.flows);
 }
 
+function getDrawGameStepLabel(step: DrawGameStep): string {
+  if (step === "flower_pig") {
+    return "花猪";
+  }
+
+  if (step === "not_ready") {
+    return "未叫";
+  }
+
+  return "有叫";
+}
+
 function needsFan(mode: QuickScoreMode): boolean {
   return mode === "DISCARD_WIN" || mode === "SELF_DRAW";
 }
@@ -296,9 +309,11 @@ export function RoomPage({ roomId }: RoomPageProps) {
     { readonly playerId: string; readonly nickname: string } | undefined
   >();
   const [avatarInput, setAvatarInput] = useState(defaultAvatarId);
+  const [drawGameStep, setDrawGameStep] = useState<DrawGameStep>("flower_pig");
   const [drawFlowerPigPlayerIds, setDrawFlowerPigPlayerIds] = useState<readonly string[]>([]);
   const [drawNotReadyPlayerIds, setDrawNotReadyPlayerIds] = useState<readonly string[]>([]);
   const [drawReadyFans, setDrawReadyFans] = useState<Readonly<Record<string, ScoreFan>>>({});
+  const [selectedDrawReadyFan, setSelectedDrawReadyFan] = useState<ScoreFan>(1);
   const [nicknameInput, setNicknameInput] = useState("");
   const [storedPlayerIdentity, setStoredPlayerIdentity] = useState<
     StoredPlayerIdentity | undefined
@@ -317,9 +332,11 @@ export function RoomPage({ roomId }: RoomPageProps) {
   );
 
   function resetDrawGameSettlement() {
+    setDrawGameStep("flower_pig");
     setDrawFlowerPigPlayerIds([]);
     setDrawNotReadyPlayerIds([]);
     setDrawReadyFans({});
+    setSelectedDrawReadyFan(1);
   }
 
   function resetQuickScoreSelection() {
@@ -653,16 +670,48 @@ export function RoomPage({ roomId }: RoomPageProps) {
   }
 
   async function handleSelectPlayer(playerId: string) {
-    if (
-      entryState.type === "liuju_mode" ||
-      (!isWaitingForCounterparty(entryState) && !canSelectScorePlayer(playerId))
-    ) {
+    if (entryState.type === "liuju_mode") {
+      handleSelectDrawGamePlayer(playerId);
+      return;
+    }
+
+    if (!isWaitingForCounterparty(entryState) && !canSelectScorePlayer(playerId)) {
       return;
     }
 
     setErrorMessage(undefined);
     const transition = selectEntryPlayer(entryState, playerId, Array.from(currentRoundWinnerIds));
     await applyEntryTransition(transition.state, transition.submitDraft, transition.errorMessage);
+  }
+
+  function handleSelectDrawGamePlayer(playerId: string) {
+    if (currentRoundWinnerIds.has(playerId)) {
+      return;
+    }
+
+    setErrorMessage(undefined);
+
+    if (drawGameStep === "flower_pig") {
+      handleToggleDrawFlowerPig(playerId);
+      return;
+    }
+
+    if (drawGameStep === "not_ready") {
+      if (drawFlowerPigPlayerIds.includes(playerId)) {
+        setErrorMessage("花猪不参与查叫。");
+        return;
+      }
+
+      handleToggleDrawNotReady(playerId);
+      return;
+    }
+
+    if (drawFlowerPigPlayerIds.includes(playerId)) {
+      setErrorMessage("花猪不参与查叫。");
+      return;
+    }
+
+    handleSelectDrawReadyFan(playerId, selectedDrawReadyFan);
   }
 
   async function applyEntryTransition(
@@ -690,6 +739,10 @@ export function RoomPage({ roomId }: RoomPageProps) {
     }
 
     setErrorMessage(undefined);
+
+    if (eventType === "DRAW_GAME") {
+      resetDrawGameSettlement();
+    }
 
     const transition = selectEntryEvent(entryState, eventType);
     await applyEntryTransition(transition.state, transition.submitDraft, transition.errorMessage);
@@ -787,7 +840,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
     }
 
     if (entryState.type === "liuju_mode") {
-      return "请确认流局";
+      return `流局结算 · 标记${getDrawGameStepLabel(drawGameStep)}`;
     }
 
     return "确认后记录本次事件";
@@ -1050,8 +1103,8 @@ export function RoomPage({ roomId }: RoomPageProps) {
     isCurrentPlayer: currentPlayer?.id === player.playerId,
     isTopPlayer: currentRoundTopScore > 0 && player.total === currentRoundTopScore,
   }));
-  const drawGamePlayers =
-    replayState?.players.filter((player) => !currentRoundWinnerIds.has(player.id)) ?? [];
+  const drawReadyPlayerCount = Object.keys(drawReadyFans).length;
+  const drawGameSettlementSummary = `花猪 ${drawFlowerPigPlayerIds.length} · 未叫 ${drawNotReadyPlayerIds.length} · 有叫 ${drawReadyPlayerCount}`;
   const roundViewMode: RoundViewMode = isCurrentRoundFinished ? "round_settlement" : "round_active";
   const canUndo = useMemo(() => scoreHistory.some((item) => !item.isUndone), [scoreHistory]);
   const quickScoreMissingMessage = getQuickScoreMissingMessage();
@@ -1085,6 +1138,51 @@ export function RoomPage({ roomId }: RoomPageProps) {
         }}
         title={item.title}
       />
+    );
+  }
+
+  function renderDrawGamePlayerBadge(playerId: string) {
+    const badgeBaseClass =
+      "inline-flex h-7 items-center rounded-full px-2 text-xs font-semibold ring-1";
+
+    if (currentRoundWinnerIds.has(playerId)) {
+      return (
+        <span className={`${badgeBaseClass} bg-stone-100 text-stone-500 ring-stone-200`}>
+          已胡
+        </span>
+      );
+    }
+
+    if (drawFlowerPigPlayerIds.includes(playerId)) {
+      return (
+        <span className={`${badgeBaseClass} bg-red-50 text-red-700 ring-red-100`}>
+          🐷 花猪
+        </span>
+      );
+    }
+
+    if (drawNotReadyPlayerIds.includes(playerId)) {
+      return (
+        <span className={`${badgeBaseClass} bg-amber-50 text-amber-800 ring-amber-100`}>
+          未叫
+        </span>
+      );
+    }
+
+    const readyFan = drawReadyFans[playerId];
+
+    if (readyFan !== undefined) {
+      return (
+        <span className={`${badgeBaseClass} bg-emerald-50 text-emerald-700 ring-emerald-100`}>
+          听 {readyFan} 番
+        </span>
+      );
+    }
+
+    return (
+      <span className={`${badgeBaseClass} bg-stone-50 text-stone-500 ring-stone-200`}>
+        未标记
+      </span>
     );
   }
 
@@ -1304,14 +1402,15 @@ export function RoomPage({ roomId }: RoomPageProps) {
                     {entryState.type !== "idle" ? (
                       <Button
                         aria-label="取消当前录入"
-                        className="h-9 w-9 shrink-0 px-0 text-stone-500"
+                        className="shrink-0 text-stone-700"
                         disabled={isScoring}
                         onClick={resetQuickScoreSelection}
-                        size="sm"
+                        size="md"
                         title="取消当前录入"
-                        variant="ghost"
+                        variant="secondary"
                       >
-                        <X className="h-4 w-4" />
+                        <Ban className="h-4 w-4" />
+                        取消
                       </Button>
                     ) : null}
                   </div>
@@ -1322,9 +1421,9 @@ export function RoomPage({ roomId }: RoomPageProps) {
                       <div className="grid grid-cols-2 gap-2">
                         {room.players.map((player) => {
                           const hasWon = currentRoundWinnerIds.has(player.id);
+                          const isDrawGameMode = entryState.type === "liuju_mode";
                           const isCounterpartyStep = isWaitingForCounterparty(entryState);
-                          const isEntryLocked =
-                            isSelectingFan(entryState) || entryState.type === "liuju_mode";
+                          const isEntryLocked = isSelectingFan(entryState) && !isDrawGameMode;
                           const isActor = selectedPrimaryPlayerId === player.id;
                           const isCounterparty = selectedRelatedPlayerId === player.id;
                           const disabled =
@@ -1355,6 +1454,9 @@ export function RoomPage({ roomId }: RoomPageProps) {
                                 : disabled
                                   ? "disabled"
                                   : "default";
+                          const drawRoleLabel = isDrawGameMode
+                            ? `${getDrawGameStepLabel(drawGameStep)}模式`
+                            : undefined;
 
                           return (
                             <PlayerTile
@@ -1365,7 +1467,10 @@ export function RoomPage({ roomId }: RoomPageProps) {
                               onClick={() => {
                                 void handleSelectPlayer(player.id);
                               }}
-                              roleLabel={roleLabel}
+                              rightBadge={
+                                isDrawGameMode ? renderDrawGamePlayerBadge(player.id) : undefined
+                              }
+                              roleLabel={drawRoleLabel ?? roleLabel}
                               visualState={visualState}
                             />
                           );
@@ -1373,124 +1478,92 @@ export function RoomPage({ roomId }: RoomPageProps) {
                       </div>
                     </div>
 
-                    <div className="grid gap-2">
-                      <p className="text-sm font-semibold text-stone-700">事件</p>
-                      <div className="grid grid-cols-3 gap-2">
-                        {fixedEventOptions.map((option) => {
-                          const isSelected =
-                            quickScoreMode === option.mode &&
-                            (option.mode !== "KONG" || selectedKongType === option.kongType);
-
-                          return (
-                            <EventAction
+                    {entryState.type === "liuju_mode" ? (
+                      <div className="grid gap-2">
+                        <p className="text-sm font-semibold text-stone-700">流局状态</p>
+                        <div className="grid grid-cols-3 gap-2 rounded-md bg-stone-100 p-1">
+                          {(["flower_pig", "not_ready", "ready_fan"] as const).map((step) => (
+                            <button
+                              className={`h-10 rounded-md text-sm font-semibold ${
+                                drawGameStep === step
+                                  ? "bg-white text-stone-950 shadow-sm"
+                                  : "text-stone-500 active:bg-stone-50"
+                              }`}
                               disabled={isScoring}
-                              emphasis={option.emphasis}
-                              icon={option.icon}
-                              isSelected={isSelected}
-                              key={`${option.mode}-${option.kongType ?? option.label}`}
+                              key={step}
                               onClick={() => {
-                                void handleSelectQuickScoreEvent(option.eventType);
+                                setDrawGameStep(step);
                               }}
+                              type="button"
                             >
-                              {option.label}
-                            </EventAction>
-                          );
-                        })}
+                              {getDrawGameStepLabel(step)}
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                    </div>
+                    ) : (
+                      <div className="grid gap-2">
+                        <p className="text-sm font-semibold text-stone-700">事件</p>
+                        <div className="grid grid-cols-3 gap-2">
+                          {fixedEventOptions.map((option) => {
+                            const isSelected =
+                              quickScoreMode === option.mode &&
+                              (option.mode !== "KONG" || selectedKongType === option.kongType);
+
+                            return (
+                              <EventAction
+                                disabled={isScoring}
+                                emphasis={option.emphasis}
+                                icon={option.icon}
+                                isSelected={isSelected}
+                                key={`${option.mode}-${option.kongType ?? option.label}`}
+                                onClick={() => {
+                                  void handleSelectQuickScoreEvent(option.eventType);
+                                }}
+                              >
+                                {option.label}
+                              </EventAction>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
 
                     <div className="grid gap-2">
-                      <p className="text-sm font-semibold text-stone-700">番数</p>
+                      <p className="text-sm font-semibold text-stone-700">
+                        {entryState.type === "liuju_mode" ? "最大番数" : "番数"}
+                      </p>
                       <FanSelector
                         disabled={
                           isScoring ||
-                          !(
-                            isSelectingFan(entryState) &&
-                            quickScoreMode !== undefined &&
-                            needsFan(quickScoreMode)
-                          )
+                          (entryState.type === "liuju_mode"
+                            ? drawGameStep !== "ready_fan"
+                            : !(
+                                isSelectingFan(entryState) &&
+                                quickScoreMode !== undefined &&
+                                needsFan(quickScoreMode)
+                              ))
                         }
                         fans={scoreFans}
                         onSelectFan={(fan) => {
+                          if (entryState.type === "liuju_mode") {
+                            setSelectedDrawReadyFan(fan);
+                            return;
+                          }
+
                           void handleSelectFan(fan);
                         }}
-                        selectedFan={selectedFan}
+                        selectedFan={
+                          entryState.type === "liuju_mode" ? selectedDrawReadyFan : selectedFan
+                        }
                       />
                     </div>
 
                     {entryState.type === "liuju_mode" ? (
                       <div className="grid gap-3 rounded-md bg-stone-50 p-3">
                         <EntryStatus title="流局确认" variant="warning">
-                          {quickScoreSummary ?? quickScoreMissingMessage}
+                          {quickScoreSummary ?? quickScoreMissingMessage} · {drawGameSettlementSummary}
                         </EntryStatus>
-                        <div className="grid gap-2">
-                          {drawGamePlayers.map((player) => {
-                            const isFlowerPig = drawFlowerPigPlayerIds.includes(player.id);
-                            const isNotReady = drawNotReadyPlayerIds.includes(player.id);
-                            const readyFan = drawReadyFans[player.id];
-
-                            return (
-                              <div
-                                className="grid gap-2 rounded-md bg-white px-3 py-3 ring-1 ring-stone-200"
-                                key={player.id}
-                              >
-                                <div className="flex items-center justify-between gap-3">
-                                  <span className="min-w-0 truncate text-sm font-semibold text-stone-900">
-                                    {player.nickname}
-                                  </span>
-                                  <div className="flex shrink-0 items-center gap-2">
-                                    <button
-                                      className={`h-8 rounded-md px-2 text-xs font-semibold ${
-                                        isFlowerPig
-                                          ? "bg-red-100 text-red-700"
-                                          : "bg-stone-100 text-stone-600"
-                                      }`}
-                                      onClick={() => {
-                                        handleToggleDrawFlowerPig(player.id);
-                                      }}
-                                      type="button"
-                                    >
-                                      花猪
-                                    </button>
-                                    <button
-                                      className={`h-8 rounded-md px-2 text-xs font-semibold ${
-                                        isNotReady
-                                          ? "bg-amber-100 text-amber-800"
-                                          : "bg-stone-100 text-stone-600"
-                                      }`}
-                                      disabled={isFlowerPig}
-                                      onClick={() => {
-                                        handleToggleDrawNotReady(player.id);
-                                      }}
-                                      type="button"
-                                    >
-                                      未叫
-                                    </button>
-                                  </div>
-                                </div>
-                                <div className="grid grid-cols-4 gap-1.5">
-                                  {scoreFans.map((fan) => (
-                                    <button
-                                      className={`h-8 rounded-md text-xs font-semibold ${
-                                        readyFan === fan
-                                          ? "bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200"
-                                          : "bg-stone-100 text-stone-500"
-                                      }`}
-                                      disabled={isFlowerPig || isNotReady}
-                                      key={fan}
-                                      onClick={() => {
-                                        handleSelectDrawReadyFan(player.id, fan);
-                                      }}
-                                      type="button"
-                                    >
-                                      听 {fan} 番
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
                         <div className="grid grid-cols-2 gap-3">
                           <Button disabled={isScoring} onClick={resetQuickScoreSelection}>
                             取消

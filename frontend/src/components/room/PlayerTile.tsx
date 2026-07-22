@@ -11,6 +11,7 @@ interface PlayerTileProps {
   readonly meta?: ReactNode;
   readonly nickname: string;
   readonly onClick?: () => void;
+  readonly rightBadge?: ReactNode;
   readonly roleLabel?: string;
   readonly visualState?: PlayerVisualState;
 }
@@ -21,6 +22,7 @@ export function PlayerTile({
   meta,
   nickname,
   onClick,
+  rightBadge,
   roleLabel,
   visualState,
 }: PlayerTileProps) {
@@ -42,50 +44,53 @@ export function PlayerTile({
       onClick={onClick}
       type="button"
     >
-      <span className="flex items-start gap-2">
-        <PlayerAvatar avatarId={avatarId} nickname={nickname} size="sm" />
-        <span className="min-w-0">
-          <span
-            className={cn(
-              "block truncate text-base",
-              actualVisualState === "actor" || actualVisualState === "counterparty"
-                ? "font-bold"
-                : "font-semibold",
-            )}
-          >
-            {nickname}
-          </span>
-          {roleLabel !== undefined ? (
+      <span className="flex items-start justify-between gap-2">
+        <span className="flex min-w-0 items-start gap-2">
+          <PlayerAvatar avatarId={avatarId} nickname={nickname} size="sm" />
+          <span className="min-w-0">
             <span
               className={cn(
-                "mt-1 block truncate text-xs font-semibold",
-                actualVisualState === "actor"
-                  ? "text-emerald-700"
-                  : actualVisualState === "counterparty"
-                    ? "text-red-700"
-                    : "text-stone-500",
+                "block truncate text-base",
+                actualVisualState === "actor" || actualVisualState === "counterparty"
+                  ? "font-bold"
+                  : "font-semibold",
               )}
             >
-              {roleLabel}
+              {nickname}
             </span>
-          ) : null}
-          {meta !== undefined ? (
-            <span
-              className={cn(
-                "mt-1 block truncate text-xs font-medium",
-                actualVisualState === "actor"
-                  ? "text-emerald-700"
-                  : actualVisualState === "counterparty"
-                    ? "text-red-700"
-                    : actualVisualState === "disabled"
-                      ? "text-stone-500"
+            {roleLabel !== undefined ? (
+              <span
+                className={cn(
+                  "mt-1 block truncate text-xs font-semibold",
+                  actualVisualState === "actor"
+                    ? "text-emerald-700"
+                    : actualVisualState === "counterparty"
+                      ? "text-red-700"
                       : "text-stone-500",
-              )}
-            >
-              {meta}
-            </span>
-          ) : null}
+                )}
+              >
+                {roleLabel}
+              </span>
+            ) : null}
+            {meta !== undefined ? (
+              <span
+                className={cn(
+                  "mt-1 block truncate text-xs font-medium",
+                  actualVisualState === "actor"
+                    ? "text-emerald-700"
+                    : actualVisualState === "counterparty"
+                      ? "text-red-700"
+                      : actualVisualState === "disabled"
+                        ? "text-stone-500"
+                        : "text-stone-500",
+                )}
+              >
+                {meta}
+              </span>
+            ) : null}
+          </span>
         </span>
+        {rightBadge !== undefined ? <span className="shrink-0">{rightBadge}</span> : null}
       </span>
     </button>
   );
