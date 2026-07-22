@@ -34,6 +34,7 @@ export interface ScoreHistoryItem {
   readonly title: string;
   readonly isUndone: boolean;
   readonly detail: string;
+  readonly displayFlows?: readonly HistoryFlowItem[];
   readonly flows: readonly HistoryFlowItem[];
   readonly taxRefunds?: readonly HistoryTaxRefundItem[];
 }
@@ -409,6 +410,16 @@ function createScoreHistoryItem(
       currentRoundEvents,
       settlementPayload,
     );
+    const displayFlows = createDrawGameSettlementFlows(
+      players,
+      roundWinnerIds,
+      currentRoundEvents,
+      settlementPayload,
+      { includeKongTaxRefund: false },
+    ).map((flow) => ({
+      ...flow,
+      nickname: getPlayerNickname(players, flow.playerId),
+    }));
 
     return {
       event,
@@ -425,6 +436,7 @@ function createScoreHistoryItem(
         ...flow,
         nickname: getPlayerNickname(players, flow.playerId),
       })),
+      displayFlows,
       taxRefunds: createHistoryTaxRefunds(
         players,
         currentRoundEvents,

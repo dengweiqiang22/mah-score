@@ -639,6 +639,26 @@ assert.deepEqual(
   ],
 );
 assert.deepEqual(
+  settledDrawGameHistory.find((item) => item.event.id === "settled_draw_7")?.displayFlows,
+  [
+    {
+      playerId: "player_3",
+      nickname: "赵六",
+      delta: -18,
+    },
+    {
+      playerId: "player_1",
+      nickname: "王五",
+      delta: 7,
+    },
+    {
+      playerId: "player_2",
+      nickname: "李四",
+      delta: 11,
+    },
+  ],
+);
+assert.deepEqual(
   settledDrawGameHistory.find((item) => item.event.id === "settled_draw_7")?.taxRefunds,
   [
     {
@@ -653,6 +673,38 @@ assert.deepEqual(
     },
   ],
 );
+
+const fallbackTaxRefundState = replayRoomEvents([
+  ...events.slice(0, 5),
+  {
+    ...baseEvent,
+    id: "fallback_refund_6",
+    type: "KONG",
+    version: 6,
+    payload: {
+      playerId: "player_1",
+      kongType: "SUPPLEMENT_KONG",
+    },
+  },
+  {
+    ...baseEvent,
+    id: "fallback_refund_7",
+    type: "DRAW_GAME",
+    version: 7,
+    payload: {
+      flowerPigPlayerIds: ["player_3"],
+      readyHands: [
+        {
+          playerId: "player_2",
+          maxFan: 2,
+        },
+      ],
+      notReadyPlayerIds: ["player_1"],
+    },
+  },
+]);
+
+assert.deepEqual(fallbackTaxRefundState.scores, settledDrawGameState.scores);
 
 const confirmedRoundState = replayRoomEvents([
   ...events.slice(0, 6),

@@ -21,6 +21,10 @@ export interface DrawGameSettlementFlow {
   readonly playerId: string;
 }
 
+export interface DrawGameSettlementFlowOptions {
+  readonly includeKongTaxRefund?: boolean;
+}
+
 export interface DrawGameKongTaxRefundDetail {
   readonly delta: number;
   readonly kongType: KongType;
@@ -88,10 +92,19 @@ function isKongType(value: string | undefined): value is KongType {
 export function getDrawGameSettlementPayload(
   payload: RoomEvent["payload"],
 ): DrawGameSettlementPayload {
+  const flowerPigPlayerIds = getPayloadStringArray(payload, "flowerPigPlayerIds");
+  const notReadyPlayerIds = getPayloadStringArray(payload, "notReadyPlayerIds");
+  const fallbackTaxRefundPlayerIds = Array.from(
+    new Set([...flowerPigPlayerIds, ...notReadyPlayerIds]),
+  );
+
   return {
-    flowerPigPlayerIds: getPayloadStringArray(payload, "flowerPigPlayerIds"),
-    kongTaxRefundPlayerIds: getPayloadStringArray(payload, "kongTaxRefundPlayerIds"),
-    notReadyPlayerIds: getPayloadStringArray(payload, "notReadyPlayerIds"),
+    flowerPigPlayerIds,
+    kongTaxRefundPlayerIds:
+      "kongTaxRefundPlayerIds" in payload
+        ? getPayloadStringArray(payload, "kongTaxRefundPlayerIds")
+        : fallbackTaxRefundPlayerIds,
+    notReadyPlayerIds,
     readyHands: getReadyHands(payload),
   };
 }
@@ -245,19 +258,24 @@ export function createDrawGameSettlementFlows(
   winnerIds: ReadonlySet<string>,
   currentRoundEvents: readonly RoomEvent[],
   payload: DrawGameSettlementPayload,
+  options: DrawGameSettlementFlowOptions = {},
 ): readonly DrawGameSettlementFlow[] {
   const flowMap = new Map<string, number>();
   const activePlayers = getActivePlayers(players, winnerIds);
   const flowerPigPlayerIds = new Set(payload.flowerPigPlayerIds);
+  const includeKongTaxRefund = options.includeKongTaxRefund ?? true;
 
   appendFlowerPigFlows(flowMap, activePlayers, flowerPigPlayerIds);
   appendReadyHandFlows(flowMap, activePlayers, payload);
-  appendKongTaxRefundFlows(
-    flowMap,
-    players,
-    currentRoundEvents,
-    new Set(payload.kongTaxRefundPlayerIds),
-  );
+
+  if (includeKongTaxRefund) {
+    appendKongTaxRefundFlows(
+      flowMap,
+      players,
+      currentRoundEvents,
+      new Set(payload.kongTaxRefundPlayerIds),
+    );
+  }
 
   return [...flowMap.entries()]
     .map(([playerId, delta]) => ({

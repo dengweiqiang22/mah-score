@@ -47,6 +47,7 @@ export type {
 export type {
   DrawGameReadyHand,
   DrawGameKongTaxRefundDetail,
+  DrawGameSettlementFlowOptions,
   DrawGameSettlementFlow,
   DrawGameSettlementPayload,
 } from "./domain/drawGameSettlement.js";

@@ -8,6 +8,7 @@ import type {
   RoomState,
   ScoreFan,
   ScoreEventRequest,
+  ScoreHistoryItem,
 } from "@mah-score/shared";
 import type { ReactNode } from "react";
 
@@ -19,6 +20,7 @@ import {
   createScoreHistory,
   createSettlement,
   confirmDrawGame,
+  getDrawGameSettlementPayload,
   getEntryActorId,
   getEntryCounterpartyId,
   getEntryFan,
@@ -202,9 +204,51 @@ function formatScoreFlowSummary(
 
 function formatScoreHistorySummary(item: {
   readonly detail: string;
+  readonly displayFlows?: readonly { readonly nickname: string; readonly delta: number }[];
   readonly flows: readonly { readonly nickname: string; readonly delta: number }[];
 }): string {
-  return item.flows.length === 0 ? item.detail : formatScoreFlowSummary(item.flows);
+  const flows = item.displayFlows ?? item.flows;
+
+  return flows.length === 0 ? item.detail : formatScoreFlowSummary(flows);
+}
+
+function getPayloadPlayerId(event: RoomEvent, key: string): string | undefined {
+  const value = event.payload[key];
+
+  return typeof value === "string" ? value : undefined;
+}
+
+function getCurrentRoundSettlementEntries(
+  entries: readonly ScoreHistoryItem[],
+): readonly ScoreHistoryItem[] {
+  const drawGameItem = entries.find((item) => item.event.type === "DRAW_GAME" && !item.isUndone);
+
+  if (drawGameItem === undefined) {
+    return entries;
+  }
+
+  const refundPlayerIds = new Set(
+    getDrawGameSettlementPayload(drawGameItem.event.payload).kongTaxRefundPlayerIds,
+  );
+
+  return entries
+    .filter((item) => {
+      if (item.event.type !== "KONG" || item.isUndone) {
+        return true;
+      }
+
+      const playerId = getPayloadPlayerId(item.event, "playerId");
+
+      return playerId === undefined || !refundPlayerIds.has(playerId);
+    })
+    .map((item) =>
+      item.event.type === "DRAW_GAME" && item.displayFlows !== undefined
+        ? {
+            ...item,
+            flows: item.displayFlows,
+          }
+        : item,
+    );
 }
 
 function getDrawGameStepLabel(step: DrawGameStep): string {
@@ -1071,9 +1115,13 @@ export function RoomPage({ roomId }: RoomPageProps) {
     [replayState, scoreHistory],
   );
   const recentCurrentRoundEntries = currentRoundEntries.slice(0, 2);
+  const currentRoundSettlementEntries = useMemo(
+    () => getCurrentRoundSettlementEntries(currentRoundEntries),
+    [currentRoundEntries],
+  );
   const currentRoundLedger = useMemo(
-    () => createPlayerLedger(currentRoundEntries, replayState?.players ?? []),
-    [currentRoundEntries, replayState],
+    () => createPlayerLedger(currentRoundSettlementEntries, replayState?.players ?? []),
+    [currentRoundSettlementEntries, replayState],
   );
   const currentRoundTopScore = Math.max(...currentRoundLedger.map((player) => player.total), 0);
   const historyRoundLedgers = useMemo(
@@ -1128,7 +1176,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
       <RecordRow
         actionNumber={item.roundActionNumber}
         detail={item.detail}
-        flows={item.flows}
+        flows={item.displayFlows ?? item.flows}
         flowSummary={formatScoreHistorySummary(item)}
         isUndone={item.isUndone}
         isUndoDisabled={isUndoing || isScoring}
@@ -1604,7 +1652,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
                       {recentCurrentRoundEntries.map((item, index) => (
                         <RecentEventRow
                           detail={item.detail}
-                          flows={item.flows}
+                          flows={item.displayFlows ?? item.flows}
                           flowSummary={formatScoreHistorySummary(item)}
                           isLatest={index === 0}
                           isUndone={item.isUndone}
