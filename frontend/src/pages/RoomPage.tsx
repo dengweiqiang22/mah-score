@@ -53,6 +53,7 @@ import { PlayerTile } from "../components/room/PlayerTile";
 import { PlayerLedgerPanel } from "../components/room/PlayerLedgerPanel";
 import { RecentEventRow } from "../components/room/RecentEventRow";
 import { RecordRow } from "../components/room/RecordRow";
+import { RoomManagementRow } from "../components/room/RoomManagementRow";
 import { RoomDangerActions } from "../components/room/RoomDangerActions";
 import { RoundDetailPanel } from "../components/room/RoundDetailPanel";
 import { RoundSettlementPanel } from "../components/room/RoundSettlementPanel";
@@ -60,6 +61,7 @@ import { ScoreValue } from "../components/room/ScoreValue";
 import { FinishedRoomView } from "../components/room/FinishedRoomView";
 import { PlayingRoomView } from "../components/room/PlayingRoomView";
 import { WaitingRoomView } from "../components/room/WaitingRoomView";
+import { WaitingPlayerRow } from "../components/room/WaitingPlayerRow";
 import { Button } from "../components/ui/Button";
 import { Disclosure } from "../components/ui/Disclosure";
 import { Notice } from "../components/ui/Notice";
@@ -1029,13 +1031,11 @@ export function RoomPage({ roomId }: RoomPageProps) {
                   </p>
                 ) : (
                   room.players.map((player) => (
-                    <div
-                      className="flex items-center justify-between gap-3 rounded-md bg-stone-100 px-3 py-3"
+                    <WaitingPlayerRow
+                      isCurrentPlayer={currentPlayer?.id === player.id}
                       key={player.id}
-                    >
-                      <p className="truncate text-base font-semibold">{player.nickname}</p>
-                      <span className="text-xs font-medium text-stone-400">玩家</span>
-                    </div>
+                      player={player}
+                    />
                   ))
                 )}
               </div>
@@ -1100,25 +1100,18 @@ export function RoomPage({ roomId }: RoomPageProps) {
                       </div>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 gap-3" key={player.id}>
-                      <Button
-                        onClick={() => {
-                          setEditingPlayerId(player.id);
-                          setNicknameInput(player.nickname);
-                        }}
-                      >
-                        {player.nickname} 改名
-                      </Button>
-                      <Button
-                        disabled={!isWaiting}
-                        onClick={() => {
-                          openRemovePlayerConfirm(player.id, player.nickname);
-                        }}
-                        variant="danger"
-                      >
-                        删除
-                      </Button>
-                    </div>
+                    <RoomManagementRow
+                      disabledRemove={!isWaiting}
+                      key={player.id}
+                      onRemove={() => {
+                        openRemovePlayerConfirm(player.id, player.nickname);
+                      }}
+                      onRename={() => {
+                        setEditingPlayerId(player.id);
+                        setNicknameInput(player.nickname);
+                      }}
+                      player={player}
+                    />
                   ),
                 )}
               </div>
