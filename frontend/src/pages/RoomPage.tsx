@@ -186,7 +186,7 @@ function getPlayerNickname(players: readonly RoomPlayer[], playerId: string | un
 }
 
 function getScoreFlowLabel(delta: number): string {
-  return delta > 0 ? `+${delta} 积分` : `${delta} 积分`;
+  return delta > 0 ? `+${delta}` : `${delta}`;
 }
 
 function formatScoreFlowSummary(
@@ -1075,6 +1075,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
       <RecordRow
         actionNumber={item.roundActionNumber}
         detail={item.detail}
+        flows={item.flows}
         flowSummary={formatScoreHistorySummary(item)}
         isUndone={item.isUndone}
         isUndoDisabled={isUndoing || isScoring}
@@ -1526,6 +1527,8 @@ export function RoomPage({ roomId }: RoomPageProps) {
                     <div className="grid">
                       {recentCurrentRoundEntries.map((item, index) => (
                         <RecentEventRow
+                          detail={item.detail}
+                          flows={item.flows}
                           flowSummary={formatScoreHistorySummary(item)}
                           isLatest={index === 0}
                           isUndone={item.isUndone}

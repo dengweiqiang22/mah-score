@@ -1,10 +1,15 @@
 import { Undo2 } from "lucide-react";
 
 import { cn } from "../../utils/className";
+import { ScoreFlowLine } from "./ScoreFlowLine";
 
 interface RecordRowProps {
   readonly actionNumber: number;
   readonly detail: string;
+  readonly flows: readonly {
+    readonly delta: number;
+    readonly nickname: string;
+  }[];
   readonly flowSummary: string;
   readonly isUndone: boolean;
   readonly isUndoDisabled: boolean;
@@ -15,6 +20,7 @@ interface RecordRowProps {
 export function RecordRow({
   actionNumber,
   detail,
+  flows,
   flowSummary,
   isUndone,
   isUndoDisabled,
@@ -22,14 +28,21 @@ export function RecordRow({
   title,
 }: RecordRowProps) {
   return (
-    <article className={cn("border-b border-stone-100 py-3 last:border-b-0", isUndone ? "opacity-60" : "")}>
+    <article
+      className={cn(
+        "rounded-md bg-stone-50 px-3 py-3 ring-1 ring-stone-100",
+        isUndone ? "opacity-60" : "",
+      )}
+    >
       <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3">
-        <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-stone-100 text-xs font-semibold text-stone-500">
+        <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-white text-xs font-semibold text-stone-500 ring-1 ring-stone-200">
           {actionNumber}
         </span>
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-stone-900">{title}</p>
-          <p className="mt-1 truncate text-xs text-stone-400">{detail}</p>
+          <p className="truncate text-sm font-semibold text-stone-900">
+            {flows.length === 0 ? `${title} · ${detail}` : title}
+          </p>
+          {flows.length > 0 ? <p className="mt-1 truncate text-xs text-stone-400">{detail}</p> : null}
         </div>
         {isUndone ? (
           <span className="shrink-0 rounded-full bg-stone-100 px-2 py-1 text-xs font-semibold text-stone-500">
@@ -47,14 +60,9 @@ export function RecordRow({
           </button>
         )}
       </div>
-      <p
-        className={cn(
-          "ml-9 mt-2 truncate text-sm font-semibold",
-          isUndone ? "text-stone-500" : "text-stone-700",
-        )}
-      >
-        {flowSummary}
-      </p>
+      <div className="ml-9 mt-2">
+        <ScoreFlowLine fallback={flowSummary} flows={flows} isUndone={isUndone} />
+      </div>
     </article>
   );
 }
