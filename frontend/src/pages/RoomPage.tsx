@@ -1346,32 +1346,28 @@ export function RoomPage({ roomId }: RoomPageProps) {
                       />
                     </div>
 
-                    <div className="grid min-h-24 gap-3 rounded-md bg-stone-50 p-3">
-                      {entryState.type === "liuju_mode" ? (
-                        <>
-                          <EntryStatus title="流局确认" variant="warning">
-                            {quickScoreSummary ?? quickScoreMissingMessage}
-                          </EntryStatus>
-                          <div className="grid grid-cols-2 gap-3">
-                            <Button disabled={isScoring} onClick={resetQuickScoreSelection}>
-                              取消
-                            </Button>
-                            <Button
-                              disabled={isScoring || quickScoreSummary === undefined}
-                              onClick={() => {
-                                void handleSubmitQuickScore();
-                              }}
-                              variant="primary"
-                            >
-                              {isScoring ? "记录中..." : "确认流局"}
-                            </Button>
-                          </div>
-                        </>
-                      ) : quickScoreMode !== undefined ? (
-                        <p className="self-center text-sm font-medium text-stone-400">
-                          按上方提示完成必要选择后会自动记录。
-                        </p>
-                      ) : scoreFeedbackMessage !== undefined ? (
+                    {entryState.type === "liuju_mode" ? (
+                      <div className="grid gap-3 rounded-md bg-stone-50 p-3">
+                        <EntryStatus title="流局确认" variant="warning">
+                          {quickScoreSummary ?? quickScoreMissingMessage}
+                        </EntryStatus>
+                        <div className="grid grid-cols-2 gap-3">
+                          <Button disabled={isScoring} onClick={resetQuickScoreSelection}>
+                            取消
+                          </Button>
+                          <Button
+                            disabled={isScoring || quickScoreSummary === undefined}
+                            onClick={() => {
+                              void handleSubmitQuickScore();
+                            }}
+                            variant="primary"
+                          >
+                            {isScoring ? "记录中..." : "确认流局"}
+                          </Button>
+                        </div>
+                      </div>
+                    ) : scoreFeedbackMessage !== undefined ? (
+                      <div className="grid gap-3 rounded-md bg-stone-50 p-3">
                         <EntryStatus
                           action={
                             <Button
@@ -1394,10 +1390,8 @@ export function RoomPage({ roomId }: RoomPageProps) {
                             {scoreFeedbackMessage}
                           </span>
                         </EntryStatus>
-                      ) : (
-                        <p className="self-center text-sm text-stone-500">最近记录会显示在下方。</p>
-                      )}
-                    </div>
+                      </div>
+                    ) : null}
                   </div>
                 </Section>
 
