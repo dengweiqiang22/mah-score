@@ -31,7 +31,17 @@ import {
   selectEntryFan,
   selectEntryPlayer,
 } from "@mah-score/shared";
-import { ArrowRightLeft, CircleSlash, Crosshair, EyeOff, Hand, Plus, Share2, Undo2 } from "lucide-react";
+import {
+  ArrowRightLeft,
+  CircleSlash,
+  Crosshair,
+  EyeOff,
+  Hand,
+  Plus,
+  Share2,
+  Undo2,
+  X,
+} from "lucide-react";
 import QRCode from "qrcode";
 
 import {
@@ -1222,32 +1232,33 @@ export function RoomPage({ roomId }: RoomPageProps) {
               <>
                 <Section className="gap-4">
                   <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
+                    <div className="grid min-w-0 gap-1">
                       <h2 className="text-lg font-semibold tracking-normal">高频记录</h2>
+                      <p
+                        aria-live="polite"
+                        className="min-w-0 truncate text-xs font-semibold text-emerald-800"
+                      >
+                        当前：{quickScoreStepMessage}
+                      </p>
                     </div>
-                    <Button
-                      className={
-                        entryState.type === "idle"
-                          ? "invisible shrink-0 whitespace-nowrap"
-                          : "shrink-0 whitespace-nowrap"
-                      }
-                      disabled={isScoring || entryState.type === "idle"}
-                      onClick={resetQuickScoreSelection}
-                      size="sm"
-                      variant="ghost"
-                    >
-                      取消当前录入
-                    </Button>
+                    {entryState.type !== "idle" ? (
+                      <Button
+                        aria-label="取消当前录入"
+                        className="h-9 w-9 shrink-0 px-0 text-stone-500"
+                        disabled={isScoring}
+                        onClick={resetQuickScoreSelection}
+                        size="sm"
+                        title="取消当前录入"
+                        variant="ghost"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    ) : null}
                   </div>
 
                   <div className="grid gap-4">
                     <div className="grid gap-2">
-                      <div className="flex min-w-0 items-center justify-between gap-3">
-                        <p className="shrink-0 text-sm font-semibold text-stone-700">玩家</p>
-                        <p className="min-w-0 truncate rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-800 ring-1 ring-emerald-100">
-                          {quickScoreStepMessage}
-                        </p>
-                      </div>
+                      <p className="text-sm font-semibold text-stone-700">玩家</p>
                       <div className="grid grid-cols-2 gap-2">
                         {room.players.map((player) => {
                           const hasWon = currentRoundWinnerIds.has(player.id);
@@ -1290,15 +1301,6 @@ export function RoomPage({ roomId }: RoomPageProps) {
                               avatarId={player.avatarId}
                               disabled={disabled}
                               key={player.id}
-                              meta={
-                                hasWon
-                                  ? "本局已胡牌"
-                                  : isCounterpartyStep && isActor
-                                    ? "不能选择同一玩家"
-                                    : isEntryLocked
-                                      ? "等待完成当前录入"
-                                      : undefined
-                              }
                               nickname={player.nickname}
                               onClick={() => {
                                 void handleSelectPlayer(player.id);
