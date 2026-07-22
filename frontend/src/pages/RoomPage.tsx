@@ -50,6 +50,7 @@ import { LedgerRow } from "../components/room/LedgerRow";
 import { PlayerTile } from "../components/room/PlayerTile";
 import { RecentEventRow } from "../components/room/RecentEventRow";
 import { RecordRow } from "../components/room/RecordRow";
+import { RoundDetailPanel } from "../components/room/RoundDetailPanel";
 import { RoundSettlementPanel } from "../components/room/RoundSettlementPanel";
 import { ScoreValue } from "../components/room/ScoreValue";
 import { FinishedRoomView } from "../components/room/FinishedRoomView";
@@ -1466,29 +1467,11 @@ export function RoomPage({ roomId }: RoomPageProps) {
                 </Section>
 
                 <Disclosure summary="本局详情">
-                  <div className="grid gap-3">
-                    <div className="grid gap-2">
-                      {currentRoundLedger.map((player) => (
-                        <LedgerRow
-                          expense={player.expense}
-                          income={player.income}
-                          isCurrentPlayer={currentPlayer?.id === player.playerId}
-                          key={player.playerId}
-                          nickname={player.nickname}
-                          total={player.total}
-                        />
-                      ))}
-                    </div>
-                    {currentRoundEntries.length === 0 ? (
-                      <p className="rounded-md bg-stone-50 px-3 py-2 text-sm text-stone-600">
-                        暂无本局明细。
-                      </p>
-                    ) : (
-                      <div className="grid gap-2">
-                        {currentRoundEntries.map((item) => renderCurrentRoundEntry(item))}
-                      </div>
-                    )}
-                  </div>
+                  <RoundDetailPanel
+                    currentPlayerId={currentPlayer?.id}
+                    entries={currentRoundEntries.map((item) => renderCurrentRoundEntry(item))}
+                    players={currentRoundLedger}
+                  />
                 </Disclosure>
               </>
             )}
