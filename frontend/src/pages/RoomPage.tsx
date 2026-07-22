@@ -992,6 +992,8 @@ export function RoomPage({ roomId }: RoomPageProps) {
   function renderCurrentRoundEntry(item: (typeof currentRoundEntries)[number]) {
     return (
       <RecordRow
+        actionNumber={item.roundActionNumber}
+        detail={item.detail}
         flowSummary={formatScoreFlowSummary(item.flows)}
         isUndone={item.isUndone}
         isUndoDisabled={isUndoing || isScoring}
@@ -999,7 +1001,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
         onUndo={() => {
           void handleUndoRoomEvent(item.event.id);
         }}
-        title={`${item.roundActionNumber}. ${item.title}`}
+        title={item.title}
       />
     );
   }
@@ -1179,31 +1181,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
                         暂无本局明细。
                       </p>
                     ) : (
-                      <div className="grid gap-1">
-                        {currentRoundEntries.map((item) => (
-                          <article
-                            className="grid gap-1 border-l border-stone-200 py-2 pl-3"
-                            key={item.event.id}
-                          >
-                            <div className="flex items-center justify-between gap-3">
-                              <p className="min-w-0 truncate text-sm font-semibold text-stone-900">
-                                {item.roundActionNumber}. {item.title}
-                              </p>
-                              {item.isUndone ? (
-                                <span className="shrink-0 text-xs font-semibold text-stone-400">
-                                  已撤销
-                                </span>
-                              ) : null}
-                            </div>
-                            <p className="truncate text-xs font-medium text-stone-500">
-                              {item.detail}
-                            </p>
-                            <p className="truncate text-xs font-semibold text-stone-700">
-                              {formatScoreFlowSummary(item.flows)}
-                            </p>
-                          </article>
-                        ))}
-                      </div>
+                      <div>{currentRoundEntries.map((item) => renderCurrentRoundEntry(item))}</div>
                     )}
 
                     <Button
