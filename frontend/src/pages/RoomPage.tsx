@@ -876,6 +876,10 @@ export function RoomPage({ roomId }: RoomPageProps) {
   const currentRoundNumber = replayState?.currentRound.number ?? 0;
   const isCurrentRoundFinished = replayState?.currentRound.status === "FINISHED";
   const currentRoundResult = replayState?.currentRound.result;
+  const totalScoreByPlayerId = useMemo(
+    () => new Map(replayState?.scores.map((score) => [score.playerId, score.total]) ?? []),
+    [replayState],
+  );
   const settlement = useMemo(
     () =>
       replayState === undefined
@@ -891,7 +895,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
   );
 
   function getPlayerScore(playerId: string): number {
-    return replayState?.scores.find((score) => score.playerId === playerId)?.total ?? 0;
+    return totalScoreByPlayerId.get(playerId) ?? 0;
   }
 
   const currentRoundWinnerIds = useMemo(
@@ -971,17 +975,6 @@ export function RoomPage({ roomId }: RoomPageProps) {
   return (
     <main className="min-h-screen bg-stone-100 px-4 py-4 text-stone-950">
       <section className="mx-auto flex min-h-[calc(100vh-2rem)] w-full max-w-md flex-col gap-3">
-        <div className="flex items-center justify-between gap-3 px-1 text-xs font-medium text-stone-500">
-          <span>
-            {syncStatus === "syncing"
-              ? "同步中"
-              : syncStatus === "error"
-                ? "同步失败"
-                : `已同步 v${room?.version ?? roomVersion}`}
-          </span>
-          <span>{currentPlayer === undefined ? "公共视图" : currentPlayer.nickname}</span>
-        </div>
-
         {errorMessage !== undefined ? <Notice variant="danger">{errorMessage}</Notice> : null}
         {isLoading && room === undefined ? (
           <Section>
@@ -1126,7 +1119,21 @@ export function RoomPage({ roomId }: RoomPageProps) {
         ) : null}
 
         {room !== undefined && isPlaying ? (
-          <PlayingRoomView roomId={roomId} roundNumber={currentRoundNumber}>
+          <PlayingRoomView
+            currentPlayerId={currentPlayer?.id}
+            onMoreClick={() => {
+              document.getElementById("room-more-section")?.scrollIntoView({
+                behavior: "smooth",
+                block: "start",
+              });
+            }}
+            players={room.players}
+            roomId={roomId}
+            roundNumber={currentRoundNumber}
+            scores={totalScoreByPlayerId}
+            syncStatus={syncStatus}
+            version={room.version ?? roomVersion}
+          >
             {roundViewMode === "round_settlement" ? (
               <>
                 <Section className="gap-4">
@@ -1512,6 +1519,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
                   ? "bg-transparent p-1 shadow-none ring-0"
                   : undefined
               }
+              id="room-more-section"
               summary="更多"
             >
               <div className="grid gap-4">
