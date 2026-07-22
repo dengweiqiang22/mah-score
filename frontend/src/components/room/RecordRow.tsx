@@ -39,13 +39,13 @@ export function RecordRow({
         ) : (
           <Button
             aria-label={`撤销第 ${actionNumber} 笔事件`}
-            className="h-8 w-8 shrink-0 bg-red-50 px-0 text-red-700 active:bg-red-100"
+            className="h-9 w-9 shrink-0 bg-red-50 px-0 text-red-700 ring-1 ring-red-100 active:bg-red-100"
             disabled={isUndoDisabled}
             onClick={onUndo}
             size="sm"
             variant="ghost"
           >
-            <Undo2 className="h-3.5 w-3.5" />
+            <Undo2 className="h-4 w-4" />
           </Button>
         )}
       </div>
