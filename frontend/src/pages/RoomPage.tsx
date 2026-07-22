@@ -44,6 +44,7 @@ import {
 import { LedgerRow } from "../components/room/LedgerRow";
 import { PlayerTile } from "../components/room/PlayerTile";
 import { RecordRow } from "../components/room/RecordRow";
+import { SettlementPlayerRow } from "../components/room/SettlementPlayerRow";
 import { FinishedRoomView } from "../components/room/FinishedRoomView";
 import { PlayingRoomView } from "../components/room/PlayingRoomView";
 import { WaitingRoomView } from "../components/room/WaitingRoomView";
@@ -893,6 +894,10 @@ export function RoomPage({ roomId }: RoomPageProps) {
     () => createPlayerLedger(currentRoundEntries, replayState?.players ?? []),
     [currentRoundEntries, replayState],
   );
+  const currentRoundTopScore = Math.max(...currentRoundLedger.map((player) => player.total), 0);
+  const currentRoundTopPlayers = currentRoundLedger.filter(
+    (player) => currentRoundTopScore > 0 && player.total === currentRoundTopScore,
+  );
   const historyRoundLedgers = useMemo(
     () =>
       replayState === undefined
@@ -1102,20 +1107,44 @@ export function RoomPage({ roomId }: RoomPageProps) {
               <>
                 <Section className="gap-4">
                   <div>
-                    <h2 className="text-lg font-semibold tracking-normal">本局结算</h2>
-                    <p className="mt-1 text-sm leading-6 text-stone-500">
-                      {currentRoundResult === "DRAW"
-                        ? "本局已流局，请核对最终分数。"
-                        : "本局只剩 1 名玩家未胡牌，请核对最终分数。"}
+                    <p className="text-sm font-semibold text-stone-500">
+                      第 {currentRoundNumber} 局
                     </p>
+                    <h2 className="mt-1 text-2xl font-semibold tracking-normal">本局结算</h2>
                   </div>
 
-                  <div className="grid gap-2">
+                  <div className="grid grid-cols-3 gap-2 rounded-md bg-stone-50 px-3 py-2">
+                    <div>
+                      <p className="text-xs font-medium text-stone-400">结果</p>
+                      <p className="mt-1 truncate text-sm font-semibold text-stone-800">
+                        {currentRoundResult === "DRAW" ? "流局" : "三家胡牌"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-stone-400">最高分</p>
+                      <p className="mt-1 truncate text-sm font-semibold text-stone-800">
+                        {currentRoundTopPlayers.length > 0
+                          ? `${currentRoundTopPlayers.map((player) => player.nickname).join("、")} +${currentRoundTopScore}`
+                          : "无"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-stone-400">事件</p>
+                      <p className="mt-1 text-sm font-semibold text-stone-800">
+                        {currentRoundEntries.length} 笔
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid">
                     {currentRoundLedger.map((player) => (
-                      <LedgerRow
+                      <SettlementPlayerRow
                         expense={player.expense}
                         income={player.income}
                         isCurrentPlayer={currentPlayer?.id === player.playerId}
+                        isTopPlayer={
+                          currentRoundTopScore > 0 && player.total === currentRoundTopScore
+                        }
                         key={player.playerId}
                         nickname={player.nickname}
                         total={player.total}
@@ -1135,26 +1164,48 @@ export function RoomPage({ roomId }: RoomPageProps) {
                   </Button>
                 </Section>
 
-                <Disclosure summary="查看事件明细">
+                <Disclosure summary={`查看事件明细（${currentRoundEntries.length} 笔）`}>
                   <div className="grid gap-3">
                     {currentRoundEntries.length === 0 ? (
                       <p className="rounded-md bg-stone-50 px-3 py-2 text-sm text-stone-600">
                         暂无本局明细。
                       </p>
                     ) : (
-                      <div className="grid gap-2">
-                        {currentRoundEntries.map((item) => renderCurrentRoundEntry(item))}
+                      <div className="grid gap-1">
+                        {currentRoundEntries.map((item) => (
+                          <article
+                            className="grid gap-1 border-l border-stone-200 py-2 pl-3"
+                            key={item.event.id}
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <p className="min-w-0 truncate text-sm font-semibold text-stone-900">
+                                {item.roundActionNumber}. {item.title}
+                              </p>
+                              {item.isUndone ? (
+                                <span className="shrink-0 text-xs font-semibold text-stone-400">
+                                  已撤销
+                                </span>
+                              ) : null}
+                            </div>
+                            <p className="truncate text-xs font-medium text-stone-500">
+                              {item.detail}
+                            </p>
+                            <p className="truncate text-xs font-semibold text-stone-700">
+                              {formatScoreFlowSummary(item.flows)}
+                            </p>
+                          </article>
+                        ))}
                       </div>
                     )}
 
                     <Button
-                      className="justify-self-start"
+                      className="justify-self-start bg-transparent text-red-700 active:bg-red-50"
                       disabled={!canUndo || isUndoing || isScoring}
                       onClick={() => {
                         void handleUndoRoomEvent();
                       }}
                       size="sm"
-                      variant="danger"
+                      variant="ghost"
                     >
                       <Undo2 className="h-3.5 w-3.5" />
                       {isUndoing ? "撤销中..." : "撤销上一条"}
@@ -1429,7 +1480,14 @@ export function RoomPage({ roomId }: RoomPageProps) {
               </>
             )}
 
-            <Disclosure summary="更多">
+            <Disclosure
+              className={
+                roundViewMode === "round_settlement"
+                  ? "bg-transparent p-1 shadow-none ring-0"
+                  : undefined
+              }
+              summary="更多"
+            >
               <div className="grid gap-4">
                 <div className="grid gap-3">
                   <p className="text-sm font-semibold text-stone-700">邀请加入</p>
@@ -1534,17 +1592,23 @@ export function RoomPage({ roomId }: RoomPageProps) {
                   </div>
                 ) : null}
 
-                <div className="grid grid-cols-2 gap-3">
-                  <Button
-                    disabled={!canUndo || isUndoing || isScoring}
-                    onClick={() => {
-                      void handleUndoRoomEvent();
-                    }}
-                    variant="danger"
-                  >
-                    <Undo2 className="h-4 w-4" />
-                    {isUndoing ? "撤销中..." : "撤销上一条"}
-                  </Button>
+                <div
+                  className={
+                    roundViewMode === "round_settlement" ? "grid gap-3" : "grid grid-cols-2 gap-3"
+                  }
+                >
+                  {roundViewMode === "round_active" ? (
+                    <Button
+                      disabled={!canUndo || isUndoing || isScoring}
+                      onClick={() => {
+                        void handleUndoRoomEvent();
+                      }}
+                      variant="danger"
+                    >
+                      <Undo2 className="h-4 w-4" />
+                      {isUndoing ? "撤销中..." : "撤销上一条"}
+                    </Button>
+                  ) : null}
                   <Button
                     disabled={isScoring || isFinishing}
                     onClick={() => {
