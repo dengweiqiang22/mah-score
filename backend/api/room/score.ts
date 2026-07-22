@@ -1,5 +1,6 @@
 import type {
   AppendRoomEventResponse,
+  DrawGameScoreRequest,
   ScoreEventRequest,
   ScoreFan,
 } from "../../../shared/src/index.js";
@@ -15,6 +16,7 @@ import { getRoom, withRoomLock } from "../../services/roomService.js";
 import { isValidRoomId } from "../../services/roomValidation.js";
 import {
   getScoreEventPayload,
+  getScoreRequestPlayerIds,
   isKongType,
   isScoreAction,
   isScoreFan,
@@ -56,6 +58,64 @@ function getOptionalScoreFan(value: object): ScoreFan | undefined {
 
 function hasInvalidScoreFan(value: object): boolean {
   return "fan" in value && !isScoreFan(value.fan);
+}
+
+function getOptionalStringArray(value: object, key: string): readonly string[] | undefined {
+  if (!(key in value)) {
+    return undefined;
+  }
+
+  const arrayValue = (value as Record<string, unknown>)[key];
+
+  if (!Array.isArray(arrayValue) || !arrayValue.every((item) => typeof item === "string")) {
+    return undefined;
+  }
+
+  return arrayValue.map((item) => item.trim()).filter((item) => item.length > 0);
+}
+
+function hasInvalidStringArray(value: object, key: string): boolean {
+  return key in value && getOptionalStringArray(value, key) === undefined;
+}
+
+function getOptionalReadyHands(
+  value: object,
+): DrawGameScoreRequest["readyHands"] {
+  if (!("readyHands" in value)) {
+    return undefined;
+  }
+
+  const readyHandsValue = value.readyHands;
+
+  if (!Array.isArray(readyHandsValue)) {
+    return undefined;
+  }
+
+  const readyHands = readyHandsValue.map((item) => {
+    if (
+      typeof item !== "object" ||
+      item === null ||
+      !("playerId" in item) ||
+      !("maxFan" in item) ||
+      typeof item.playerId !== "string" ||
+      !isScoreFan(item.maxFan)
+    ) {
+      return undefined;
+    }
+
+    return {
+      playerId: item.playerId.trim(),
+      maxFan: item.maxFan,
+    };
+  });
+
+  return readyHands.every((item) => item !== undefined)
+    ? readyHands.filter((item): item is NonNullable<(typeof readyHands)[number]> => item !== undefined)
+    : undefined;
+}
+
+function hasInvalidReadyHands(value: object): boolean {
+  return "readyHands" in value && getOptionalReadyHands(value) === undefined;
 }
 
 function parseScoreEventRequest(value: unknown): ParseScoreEventRequestResult {
@@ -171,11 +231,29 @@ function parseScoreEventRequest(value: unknown): ParseScoreEventRequestResult {
     };
   }
 
+  if (
+    hasInvalidStringArray(value, "flowerPigPlayerIds") ||
+    hasInvalidStringArray(value, "kongTaxRefundPlayerIds") ||
+    hasInvalidStringArray(value, "notReadyPlayerIds") ||
+    hasInvalidReadyHands(value)
+  ) {
+    return parseFailure("流局结算格式不正确。", "INVALID_DRAW_GAME_SETTLEMENT");
+  }
+
+  const flowerPigPlayerIds = getOptionalStringArray(value, "flowerPigPlayerIds");
+  const kongTaxRefundPlayerIds = getOptionalStringArray(value, "kongTaxRefundPlayerIds");
+  const notReadyPlayerIds = getOptionalStringArray(value, "notReadyPlayerIds");
+  const readyHands = getOptionalReadyHands(value);
+
   return {
     request: {
       roomId: value.roomId.trim(),
       action: value.action,
       operator: value.operator.trim(),
+      ...(flowerPigPlayerIds === undefined ? {} : { flowerPigPlayerIds }),
+      ...(kongTaxRefundPlayerIds === undefined ? {} : { kongTaxRefundPlayerIds }),
+      ...(notReadyPlayerIds === undefined ? {} : { notReadyPlayerIds }),
+      ...(readyHands === undefined ? {} : { readyHands }),
     },
   };
 }
@@ -259,6 +337,13 @@ export async function POST(request: Request): Promise<Response> {
     return getInvalidPlayerResponse();
   }
 
+  if (
+    parsedRequest.action === "DRAW_GAME" &&
+    getScoreRequestPlayerIds(parsedRequest).some((playerId) => !roomHasPlayer(room, playerId))
+  ) {
+    return getInvalidPlayerResponse();
+  }
+
   if (parsedRequest.action === "KONG") {
     if (!roomHasPlayer(room, parsedRequest.playerId)) {
       return getInvalidPlayerResponse();
@@ -294,7 +379,10 @@ export async function POST(request: Request): Promise<Response> {
       }
 
       const winnerId = getScoreWinnerId(parsedRequest);
-      const shouldValidateCurrentRound = winnerId !== undefined || parsedRequest.action === "KONG";
+      const shouldValidateCurrentRound =
+        winnerId !== undefined ||
+        parsedRequest.action === "KONG" ||
+        parsedRequest.action === "DRAW_GAME";
 
       if (shouldValidateCurrentRound) {
         const roomEvents = await readRoomEvents(lockedRoom.roomId);

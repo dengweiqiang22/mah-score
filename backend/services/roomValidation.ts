@@ -13,6 +13,8 @@ export function isExpectedPlayerEditError(error: unknown): boolean {
       error.message === "ROOM_BUSY" ||
       error.message === "ROOM_NOT_EDITABLE" ||
       error.message === "ROOM_NOT_STARTABLE" ||
+      error.message === "ROOM_OWNER_REQUIRED" ||
+      error.message === "PLAYER_EDIT_FORBIDDEN" ||
       error.message === "PLAYER_NOT_FOUND" ||
       error.message === "PLAYER_NICKNAME_EXISTS")
   );

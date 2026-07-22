@@ -57,14 +57,17 @@ export interface GetRoomDetailResponse {
 }
 
 export interface RenamePlayerRequest {
+  readonly avatarId?: string;
   readonly roomId: string;
   readonly playerId: string;
   readonly nickname: string;
+  readonly requesterPlayerId: string;
 }
 
 export interface RemovePlayerRequest {
   readonly roomId: string;
   readonly playerId: string;
+  readonly requesterPlayerId: string;
 }
 
 export interface StartRoomRequest {

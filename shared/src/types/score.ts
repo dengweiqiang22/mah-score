@@ -54,6 +54,13 @@ export interface DrawGameScoreRequest {
   readonly roomId: string;
   readonly action: "DRAW_GAME";
   readonly operator: string;
+  readonly flowerPigPlayerIds?: readonly string[];
+  readonly kongTaxRefundPlayerIds?: readonly string[];
+  readonly notReadyPlayerIds?: readonly string[];
+  readonly readyHands?: readonly {
+    readonly maxFan: ScoreFan;
+    readonly playerId: string;
+  }[];
 }
 
 export type ScoreEventRequest =

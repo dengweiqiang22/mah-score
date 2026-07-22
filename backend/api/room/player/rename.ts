@@ -18,17 +18,24 @@ function parseRenamePlayerRequest(value: unknown): RenamePlayerRequest | undefin
     !("roomId" in value) ||
     !("playerId" in value) ||
     !("nickname" in value) ||
+    !("requesterPlayerId" in value) ||
     typeof value.roomId !== "string" ||
     typeof value.playerId !== "string" ||
-    typeof value.nickname !== "string"
+    typeof value.nickname !== "string" ||
+    typeof value.requesterPlayerId !== "string"
   ) {
     return undefined;
   }
 
   return {
+    avatarId:
+      "avatarId" in value && typeof value.avatarId === "string"
+        ? value.avatarId.trim()
+        : undefined,
     roomId: value.roomId.trim(),
     playerId: value.playerId.trim(),
     nickname: value.nickname.trim(),
+    requesterPlayerId: value.requesterPlayerId.trim(),
   };
 }
 
@@ -58,6 +65,12 @@ function getRenameFailure(error: unknown): Response {
   if (error.message === "PLAYER_NOT_FOUND") {
     return jsonFailure("玩家不存在。", "PLAYER_NOT_FOUND", {
       status: 404,
+    });
+  }
+
+  if (error.message === "PLAYER_EDIT_FORBIDDEN") {
+    return jsonFailure("只能修改自己的昵称。", "PLAYER_EDIT_FORBIDDEN", {
+      status: 403,
     });
   }
 
@@ -102,6 +115,12 @@ export async function POST(request: Request): Promise<Response> {
     });
   }
 
+  if (parsedRequest.requesterPlayerId.length === 0) {
+    return jsonFailure("玩家身份无效。", "INVALID_REQUESTER", {
+      status: 403,
+    });
+  }
+
   if (!isValidNickname(parsedRequest.nickname)) {
     return jsonFailure("昵称长度必须为 1 到 12 个字符。", "INVALID_NICKNAME", {
       status: 400,
@@ -109,7 +128,13 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
-    await renamePlayer(parsedRequest.roomId, parsedRequest.playerId, parsedRequest.nickname);
+    await renamePlayer(
+      parsedRequest.roomId,
+      parsedRequest.requesterPlayerId,
+      parsedRequest.playerId,
+      parsedRequest.nickname,
+      parsedRequest.avatarId,
+    );
 
     return jsonSuccess({});
   } catch (error) {

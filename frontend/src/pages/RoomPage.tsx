@@ -24,6 +24,8 @@ import {
   getEntryFan,
   getEntryKongType,
   getEntryMode,
+  getRoomOwnerPlayerId,
+  getSelfDrawScoreFan,
   isSelectingFan,
   isWaitingForCounterparty,
   replayRoomEvents,
@@ -52,6 +54,7 @@ import {
   startRoom,
   undoRoomEvent,
 } from "../api/roomApi";
+import { AvatarSelector } from "../components/AvatarSelector";
 import { EntryStatus } from "../components/room/EntryStatus";
 import { EventAction } from "../components/room/EventAction";
 import { FanSelector } from "../components/room/FanSelector";
@@ -76,7 +79,12 @@ import { Disclosure } from "../components/ui/Disclosure";
 import { Notice } from "../components/ui/Notice";
 import { Section } from "../components/ui/Section";
 import { useRoomSync } from "../hooks/useRoomSync";
-import { readPlayerIdentity, type StoredPlayerIdentity } from "../utils/playerIdentity";
+import { defaultAvatarId } from "../utils/avatars";
+import {
+  readPlayerIdentity,
+  savePlayerIdentity,
+  type StoredPlayerIdentity,
+} from "../utils/playerIdentity";
 
 interface RoomPageProps {
   readonly roomId: string;
@@ -178,7 +186,7 @@ function getPlayerNickname(players: readonly RoomPlayer[], playerId: string | un
 }
 
 function getScoreFlowLabel(delta: number): string {
-  return delta > 0 ? `+${delta}` : `${delta}`;
+  return delta > 0 ? `+${delta} 积分` : `${delta} 积分`;
 }
 
 function formatScoreFlowSummary(
@@ -191,24 +199,15 @@ function formatScoreFlowSummary(
   return flows.map((flow) => `${flow.nickname} ${getScoreFlowLabel(flow.delta)}`).join("，");
 }
 
-function needsFan(mode: QuickScoreMode): boolean {
-  return mode === "DISCARD_WIN" || mode === "SELF_DRAW";
+function formatScoreHistorySummary(item: {
+  readonly detail: string;
+  readonly flows: readonly { readonly nickname: string; readonly delta: number }[];
+}): string {
+  return item.flows.length === 0 ? item.detail : formatScoreFlowSummary(item.flows);
 }
 
-function getKongTypeLabel(kongType: KongType | undefined): string {
-  if (kongType === "DISCARD_KONG") {
-    return "直杠";
-  }
-
-  if (kongType === "SUPPLEMENT_KONG") {
-    return "补杠";
-  }
-
-  if (kongType === "CONCEALED_KONG") {
-    return "暗杠";
-  }
-
-  return "杠牌";
+function needsFan(mode: QuickScoreMode): boolean {
+  return mode === "DISCARD_WIN" || mode === "SELF_DRAW";
 }
 
 function getRoundFinishWinnerCount(playerCount: number): number {
@@ -296,6 +295,10 @@ export function RoomPage({ roomId }: RoomPageProps) {
   const [removePlayerTarget, setRemovePlayerTarget] = useState<
     { readonly playerId: string; readonly nickname: string } | undefined
   >();
+  const [avatarInput, setAvatarInput] = useState(defaultAvatarId);
+  const [drawFlowerPigPlayerIds, setDrawFlowerPigPlayerIds] = useState<readonly string[]>([]);
+  const [drawNotReadyPlayerIds, setDrawNotReadyPlayerIds] = useState<readonly string[]>([]);
+  const [drawReadyFans, setDrawReadyFans] = useState<Readonly<Record<string, ScoreFan>>>({});
   const [nicknameInput, setNicknameInput] = useState("");
   const [storedPlayerIdentity, setStoredPlayerIdentity] = useState<
     StoredPlayerIdentity | undefined
@@ -304,7 +307,6 @@ export function RoomPage({ roomId }: RoomPageProps) {
   const [settlementCopyMessage, setSettlementCopyMessage] = useState<string | undefined>();
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string | undefined>();
   const [entryState, setEntryState] = useState<EntryState>({ type: "idle" });
-  const [scoreFeedbackMessage, setScoreFeedbackMessage] = useState<string | undefined>();
   const [expandedHistoryRoundNumbers, setExpandedHistoryRoundNumbers] = useState<readonly number[]>(
     [],
   );
@@ -314,8 +316,21 @@ export function RoomPage({ roomId }: RoomPageProps) {
     setErrorMessage,
   );
 
+  function resetDrawGameSettlement() {
+    setDrawFlowerPigPlayerIds([]);
+    setDrawNotReadyPlayerIds([]);
+    setDrawReadyFans({});
+  }
+
   function resetQuickScoreSelection() {
     setEntryState({ type: "idle" });
+    resetDrawGameSettlement();
+  }
+
+  function togglePlayerId(playerIds: readonly string[], playerId: string): readonly string[] {
+    return playerIds.includes(playerId)
+      ? playerIds.filter((currentPlayerId) => currentPlayerId !== playerId)
+      : [...playerIds, playerId];
   }
 
   function toggleHistoryRound(roundNumber: number) {
@@ -357,13 +372,20 @@ export function RoomPage({ roomId }: RoomPageProps) {
   }, [inviteUrl]);
 
   async function handleRenamePlayer(playerId: string) {
+    if (currentPlayer?.id !== playerId) {
+      setErrorMessage("只能修改自己的昵称。");
+      return;
+    }
+
     setErrorMessage(undefined);
 
     try {
       const response = await renamePlayer({
+        avatarId: avatarInput,
         roomId,
         playerId,
         nickname: nicknameInput,
+        requesterPlayerId: currentPlayer.id,
       });
 
       if (!response.success) {
@@ -372,7 +394,17 @@ export function RoomPage({ roomId }: RoomPageProps) {
       }
 
       resetQuickScoreSelection();
+      const nextPlayerIdentity = {
+        avatarId: avatarInput,
+        roomId,
+        playerId,
+        nickname: nicknameInput.trim(),
+      };
+
+      savePlayerIdentity(nextPlayerIdentity);
+      setStoredPlayerIdentity(nextPlayerIdentity);
       setEditingPlayerId(undefined);
+      setAvatarInput(defaultAvatarId);
       setNicknameInput("");
       await loadRoom();
     } catch {
@@ -381,6 +413,11 @@ export function RoomPage({ roomId }: RoomPageProps) {
   }
 
   function openRemovePlayerConfirm(playerId: string, nickname: string) {
+    if (currentPlayer?.id !== ownerPlayerId) {
+      setErrorMessage("只有房主可以删除玩家。");
+      return;
+    }
+
     setErrorMessage(undefined);
     setRemovePlayerTarget({ playerId, nickname });
   }
@@ -394,12 +431,20 @@ export function RoomPage({ roomId }: RoomPageProps) {
       return;
     }
 
+    const requesterPlayerId = currentPlayer?.id;
+
+    if (requesterPlayerId === undefined || requesterPlayerId !== ownerPlayerId) {
+      setErrorMessage("只有房主可以删除玩家。");
+      return;
+    }
+
     setErrorMessage(undefined);
 
     try {
       const response = await removePlayer({
         roomId,
         playerId: removePlayerTarget.playerId,
+        requesterPlayerId,
       });
 
       if (!response.success) {
@@ -577,10 +622,9 @@ export function RoomPage({ roomId }: RoomPageProps) {
     }
   }
 
-  async function submitScoreRequest(scoreRequest: ScoreEventRequest, feedbackSummary = "已记录") {
+  async function submitScoreRequest(scoreRequest: ScoreEventRequest) {
     setIsScoring(true);
     setErrorMessage(undefined);
-    setScoreFeedbackMessage(undefined);
 
     try {
       const response = await recordScoreEvent(scoreRequest);
@@ -591,7 +635,6 @@ export function RoomPage({ roomId }: RoomPageProps) {
       }
 
       resetQuickScoreSelection();
-      setScoreFeedbackMessage(`已记录：${feedbackSummary}`);
       await loadRoom();
     } catch {
       setErrorMessage("记录计分失败，请稍后再试。");
@@ -599,20 +642,6 @@ export function RoomPage({ roomId }: RoomPageProps) {
       setIsScoring(false);
     }
   }
-
-  useEffect(() => {
-    if (scoreFeedbackMessage === undefined) {
-      return;
-    }
-
-    const timerId = window.setTimeout(() => {
-      setScoreFeedbackMessage(undefined);
-    }, 2000);
-
-    return () => {
-      window.clearTimeout(timerId);
-    };
-  }, [scoreFeedbackMessage]);
 
   function canSelectScorePlayer(playerId: string): boolean {
     return (
@@ -633,27 +662,12 @@ export function RoomPage({ roomId }: RoomPageProps) {
 
     setErrorMessage(undefined);
     const transition = selectEntryPlayer(entryState, playerId, Array.from(currentRoundWinnerIds));
-    const feedbackSummary =
-      transition.submitDraft?.action === "KONG" &&
-      transition.submitDraft.kongType === "DISCARD_KONG"
-        ? `${getPlayerNickname(
-            replayState?.players ?? [],
-            transition.submitDraft.playerId,
-          )} 直杠 · ${getPlayerNickname(replayState?.players ?? [], transition.submitDraft.fromPlayerId)} 引杠`
-        : undefined;
-
-    await applyEntryTransition(
-      transition.state,
-      transition.submitDraft,
-      feedbackSummary,
-      transition.errorMessage,
-    );
+    await applyEntryTransition(transition.state, transition.submitDraft, transition.errorMessage);
   }
 
   async function applyEntryTransition(
     nextState: EntryState,
     submitDraft: EntrySubmitDraft | undefined,
-    feedbackSummary: string | undefined,
     transitionErrorMessage?: string,
   ) {
     if (transitionErrorMessage !== undefined) {
@@ -667,7 +681,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
       return;
     }
 
-    await submitScoreRequest(createScoreRequestFromDraft(roomId, submitDraft), feedbackSummary);
+    await submitScoreRequest(createScoreRequestFromDraft(roomId, submitDraft));
   }
 
   async function handleSelectQuickScoreEvent(eventType: EntryEventType) {
@@ -676,24 +690,40 @@ export function RoomPage({ roomId }: RoomPageProps) {
     }
 
     setErrorMessage(undefined);
-    setScoreFeedbackMessage(undefined);
 
     const transition = selectEntryEvent(entryState, eventType);
-    const feedbackSummary =
-      transition.submitDraft?.action === "KONG" &&
-      transition.submitDraft.kongType !== "DISCARD_KONG"
-        ? `${getPlayerNickname(
-            replayState?.players ?? [],
-            transition.submitDraft.playerId,
-          )} ${getKongTypeLabel(transition.submitDraft.kongType)}`
-        : undefined;
+    await applyEntryTransition(transition.state, transition.submitDraft, transition.errorMessage);
+  }
 
-    await applyEntryTransition(
-      transition.state,
-      transition.submitDraft,
-      feedbackSummary,
-      transition.errorMessage,
+  function handleToggleDrawFlowerPig(playerId: string) {
+    setDrawFlowerPigPlayerIds((currentValue) => togglePlayerId(currentValue, playerId));
+    setDrawNotReadyPlayerIds((currentValue) =>
+      currentValue.filter((currentPlayerId) => currentPlayerId !== playerId),
     );
+    setDrawReadyFans((currentValue) =>
+      Object.fromEntries(
+        Object.entries(currentValue).filter(([currentPlayerId]) => currentPlayerId !== playerId),
+      ),
+    );
+  }
+
+  function handleToggleDrawNotReady(playerId: string) {
+    setDrawNotReadyPlayerIds((currentValue) => togglePlayerId(currentValue, playerId));
+    setDrawReadyFans((currentValue) =>
+      Object.fromEntries(
+        Object.entries(currentValue).filter(([currentPlayerId]) => currentPlayerId !== playerId),
+      ),
+    );
+  }
+
+  function handleSelectDrawReadyFan(playerId: string, fan: ScoreFan) {
+    setDrawNotReadyPlayerIds((currentValue) =>
+      currentValue.filter((currentPlayerId) => currentPlayerId !== playerId),
+    );
+    setDrawReadyFans((currentValue) => ({
+      ...currentValue,
+      [playerId]: fan,
+    }));
   }
 
   function getQuickScoreMissingMessage(): string {
@@ -773,7 +803,10 @@ export function RoomPage({ roomId }: RoomPageProps) {
       entryState.eventType === "zimo" &&
       entryState.fan !== undefined
     ) {
-      return `${getPlayerNickname(replayState?.players ?? [], entryState.actorId)} 自摸 · ${entryState.fan} 番`;
+      return `${getPlayerNickname(
+        replayState?.players ?? [],
+        entryState.actorId,
+      )} 自摸 · ${entryState.fan} 番，自摸加番后按 ${getSelfDrawScoreFan(entryState.fan)} 番结算`;
     }
 
     if (
@@ -806,20 +839,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
 
   async function handleSelectFan(fan: ScoreFan) {
     const transition = selectEntryFan(entryState, fan);
-    const feedbackSummary =
-      transition.submitDraft?.action === "SELF_DRAW"
-        ? `${getPlayerNickname(replayState?.players ?? [], transition.submitDraft.winnerId)} 自摸 · ${fan} 番`
-        : transition.submitDraft?.action === "DISCARD_WIN"
-          ? `${getPlayerNickname(
-              replayState?.players ?? [],
-              transition.submitDraft.winnerId,
-            )} 胡牌 · ${getPlayerNickname(
-              replayState?.players ?? [],
-              transition.submitDraft.discarderId,
-            )} 点炮 · ${fan} 番`
-          : undefined;
-
-    await applyEntryTransition(transition.state, transition.submitDraft, feedbackSummary);
+    await applyEntryTransition(transition.state, transition.submitDraft);
   }
 
   async function handleSubmitQuickScore() {
@@ -829,7 +849,26 @@ export function RoomPage({ roomId }: RoomPageProps) {
       return;
     }
 
-    await applyEntryTransition(transition.state, transition.submitDraft, quickScoreSummary);
+    const readyHands = Object.entries(drawReadyFans).map(([playerId, maxFan]) => ({
+      playerId,
+      maxFan,
+    }));
+    const kongTaxRefundPlayerIds = Array.from(
+      new Set([...drawFlowerPigPlayerIds, ...drawNotReadyPlayerIds]),
+    );
+
+    setEntryState(transition.state);
+    await submitScoreRequest({
+      roomId,
+      action: "DRAW_GAME",
+      operator: "room",
+      ...(drawFlowerPigPlayerIds.length === 0
+        ? {}
+        : { flowerPigPlayerIds: drawFlowerPigPlayerIds }),
+      ...(drawNotReadyPlayerIds.length === 0 ? {} : { notReadyPlayerIds: drawNotReadyPlayerIds }),
+      ...(readyHands.length === 0 ? {} : { readyHands }),
+      ...(kongTaxRefundPlayerIds.length === 0 ? {} : { kongTaxRefundPlayerIds }),
+    });
   }
 
   function openFinishConfirm() {
@@ -998,11 +1037,21 @@ export function RoomPage({ roomId }: RoomPageProps) {
         : replayState?.players.find((player) => player.id === storedPlayerIdentity.playerId),
     [replayState, storedPlayerIdentity],
   );
+  const ownerPlayerId = useMemo(
+    () =>
+      replayState === undefined
+        ? undefined
+        : getRoomOwnerPlayerId(replayState.events, replayState.players),
+    [replayState],
+  );
+  const isCurrentPlayerOwner = currentPlayer?.id === ownerPlayerId;
   const currentRoundSettlementPlayers = currentRoundLedger.map((player) => ({
     ...player,
     isCurrentPlayer: currentPlayer?.id === player.playerId,
     isTopPlayer: currentRoundTopScore > 0 && player.total === currentRoundTopScore,
   }));
+  const drawGamePlayers =
+    replayState?.players.filter((player) => !currentRoundWinnerIds.has(player.id)) ?? [];
   const roundViewMode: RoundViewMode = isCurrentRoundFinished ? "round_settlement" : "round_active";
   const canUndo = useMemo(() => scoreHistory.some((item) => !item.isUndone), [scoreHistory]);
   const quickScoreMissingMessage = getQuickScoreMissingMessage();
@@ -1026,7 +1075,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
       <RecordRow
         actionNumber={item.roundActionNumber}
         detail={item.detail}
-        flowSummary={formatScoreFlowSummary(item.flows)}
+        flowSummary={formatScoreHistorySummary(item)}
         isUndone={item.isUndone}
         isUndoDisabled={isUndoing || isScoring}
         key={item.event.id}
@@ -1067,6 +1116,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
                   room.players.map((player) => (
                     <WaitingPlayerRow
                       isCurrentPlayer={currentPlayer?.id === player.id}
+                      isOwner={ownerPlayerId === player.id}
                       key={player.id}
                       player={player}
                     />
@@ -1114,6 +1164,12 @@ export function RoomPage({ roomId }: RoomPageProps) {
                         }}
                         value={nicknameInput}
                       />
+                      <AvatarSelector
+                        onChange={(avatarId) => {
+                          setAvatarInput(avatarId);
+                        }}
+                        value={avatarInput}
+                      />
                       <div className="grid grid-cols-2 gap-3">
                         <Button
                           onClick={() => {
@@ -1126,6 +1182,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
                         <Button
                           onClick={() => {
                             setEditingPlayerId(undefined);
+                            setAvatarInput(defaultAvatarId);
                             setNicknameInput("");
                           }}
                         >
@@ -1135,13 +1192,15 @@ export function RoomPage({ roomId }: RoomPageProps) {
                     </div>
                   ) : (
                     <RoomManagementRow
-                      disabledRemove={!isWaiting}
+                      canRemove={isWaiting && isCurrentPlayerOwner}
+                      canRename={currentPlayer?.id === player.id}
                       key={player.id}
                       onRemove={() => {
                         openRemovePlayerConfirm(player.id, player.nickname);
                       }}
                       onRename={() => {
                         setEditingPlayerId(player.id);
+                        setAvatarInput(player.avatarId ?? defaultAvatarId);
                         setNicknameInput(player.nickname);
                       }}
                       player={player}
@@ -1363,6 +1422,74 @@ export function RoomPage({ roomId }: RoomPageProps) {
                         <EntryStatus title="流局确认" variant="warning">
                           {quickScoreSummary ?? quickScoreMissingMessage}
                         </EntryStatus>
+                        <div className="grid gap-2">
+                          {drawGamePlayers.map((player) => {
+                            const isFlowerPig = drawFlowerPigPlayerIds.includes(player.id);
+                            const isNotReady = drawNotReadyPlayerIds.includes(player.id);
+                            const readyFan = drawReadyFans[player.id];
+
+                            return (
+                              <div
+                                className="grid gap-2 rounded-md bg-white px-3 py-3 ring-1 ring-stone-200"
+                                key={player.id}
+                              >
+                                <div className="flex items-center justify-between gap-3">
+                                  <span className="min-w-0 truncate text-sm font-semibold text-stone-900">
+                                    {player.nickname}
+                                  </span>
+                                  <div className="flex shrink-0 items-center gap-2">
+                                    <button
+                                      className={`h-8 rounded-md px-2 text-xs font-semibold ${
+                                        isFlowerPig
+                                          ? "bg-red-100 text-red-700"
+                                          : "bg-stone-100 text-stone-600"
+                                      }`}
+                                      onClick={() => {
+                                        handleToggleDrawFlowerPig(player.id);
+                                      }}
+                                      type="button"
+                                    >
+                                      花猪
+                                    </button>
+                                    <button
+                                      className={`h-8 rounded-md px-2 text-xs font-semibold ${
+                                        isNotReady
+                                          ? "bg-amber-100 text-amber-800"
+                                          : "bg-stone-100 text-stone-600"
+                                      }`}
+                                      disabled={isFlowerPig}
+                                      onClick={() => {
+                                        handleToggleDrawNotReady(player.id);
+                                      }}
+                                      type="button"
+                                    >
+                                      未叫
+                                    </button>
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-4 gap-1.5">
+                                  {scoreFans.map((fan) => (
+                                    <button
+                                      className={`h-8 rounded-md text-xs font-semibold ${
+                                        readyFan === fan
+                                          ? "bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200"
+                                          : "bg-stone-100 text-stone-500"
+                                      }`}
+                                      disabled={isFlowerPig || isNotReady}
+                                      key={fan}
+                                      onClick={() => {
+                                        handleSelectDrawReadyFan(player.id, fan);
+                                      }}
+                                      type="button"
+                                    >
+                                      听 {fan} 番
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
                         <div className="grid grid-cols-2 gap-3">
                           <Button disabled={isScoring} onClick={resetQuickScoreSelection}>
                             取消
@@ -1377,31 +1504,6 @@ export function RoomPage({ roomId }: RoomPageProps) {
                             {isScoring ? "记录中..." : "确认流局"}
                           </Button>
                         </div>
-                      </div>
-                    ) : scoreFeedbackMessage !== undefined ? (
-                      <div className="grid gap-3 rounded-md bg-stone-50 p-3">
-                        <EntryStatus
-                          action={
-                            <Button
-                              className="shrink-0"
-                              disabled={!canUndo || isUndoing || isScoring}
-                              onClick={() => {
-                                void handleUndoRoomEvent();
-                              }}
-                              size="sm"
-                              variant="danger"
-                            >
-                              <Undo2 className="h-3.5 w-3.5" />
-                              撤销
-                            </Button>
-                          }
-                          title="记录成功"
-                          variant="success"
-                        >
-                          <span className="min-w-0 text-sm font-semibold text-emerald-700">
-                            {scoreFeedbackMessage}
-                          </span>
-                        </EntryStatus>
                       </div>
                     ) : null}
                   </div>
@@ -1424,7 +1526,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
                     <div className="grid">
                       {recentCurrentRoundEntries.map((item, index) => (
                         <RecentEventRow
-                          flowSummary={formatScoreFlowSummary(item.flows)}
+                          flowSummary={formatScoreHistorySummary(item)}
                           isLatest={index === 0}
                           isUndone={item.isUndone}
                           isUndoDisabled={isUndoing || isScoring}

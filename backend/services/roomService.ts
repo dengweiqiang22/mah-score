@@ -1,6 +1,10 @@
 import type { RoomEvent, RoomRecord, RoomSnapshot } from "../../shared/src/index.js";
 
-import { buildReplayEventsFromSnapshot, replayRoomEvents } from "../../shared/src/index.js";
+import {
+  buildReplayEventsFromSnapshot,
+  getRoomOwnerPlayerId,
+  replayRoomEvents,
+} from "../../shared/src/index.js";
 
 import { redis } from "./redis.js";
 import { appendRoomEvent, readRoomEvents } from "./eventStore.js";
@@ -151,7 +155,9 @@ async function createInitialRoom(
     type: "ROOM_CREATED",
     operator: "room",
     timestamp,
-    payload: {},
+    payload: {
+      ownerPlayerId: player.id,
+    },
   };
   const playerJoinedEvent = {
     id: `event_${crypto.randomUUID()}`,
@@ -177,7 +183,7 @@ async function createInitialRoom(
       "\\"version\\":1," ..
       "\\"operator\\":" .. cjson.encode("room") .. "," ..
       "\\"timestamp\\":" .. cjson.encode(ARGV[3]) .. "," ..
-      "\\"payload\\":{}" ..
+      "\\"payload\\":" .. ARGV[6] ..
     "}"
 
     local playerJoinedEvent = "{" ..
@@ -216,6 +222,7 @@ async function createInitialRoom(
         roomCreatedEvent.timestamp,
         playerJoinedEvent.id,
         JSON.stringify(playerJoinedEvent.payload),
+        JSON.stringify(roomCreatedEvent.payload),
       ],
     ),
   );
@@ -411,12 +418,15 @@ export async function joinRoom(
 
 export async function renamePlayer(
   roomId: string,
+  requesterPlayerId: string,
   playerId: string,
   nickname: string,
+  avatarId?: string,
 ): Promise<RoomRecord["players"][number]> {
   return withRoomLock(roomId, async () => {
     const room = await getRoom(roomId);
     const normalizedNickname = nickname.trim();
+    const normalizedAvatarId = normalizeAvatarId(avatarId);
 
     if (room === undefined) {
       throw new Error("ROOM_NOT_FOUND");
@@ -432,6 +442,10 @@ export async function renamePlayer(
       throw new Error("PLAYER_NOT_FOUND");
     }
 
+    if (requesterPlayerId !== playerId) {
+      throw new Error("PLAYER_EDIT_FORBIDDEN");
+    }
+
     if (
       room.players.some(
         (player) => player.id !== playerId && player.nickname === normalizedNickname,
@@ -444,6 +458,7 @@ export async function renamePlayer(
       player.id === playerId
         ? {
             ...player,
+            ...(normalizedAvatarId === undefined ? {} : { avatarId: normalizedAvatarId }),
             nickname: normalizedNickname,
           }
         : player,
@@ -455,6 +470,7 @@ export async function renamePlayer(
       type: "PLAYER_RENAMED",
       operator: "room",
       payload: {
+        ...(normalizedAvatarId === undefined ? {} : { avatarId: normalizedAvatarId }),
         playerId,
         nickname: normalizedNickname,
       },
@@ -468,16 +484,26 @@ export async function renamePlayer(
   });
 }
 
-export async function removePlayer(roomId: string, playerId: string): Promise<void> {
+export async function removePlayer(
+  roomId: string,
+  requesterPlayerId: string,
+  playerId: string,
+): Promise<void> {
   return withRoomLock(roomId, async () => {
-    const room = await getRoom(roomId);
+    const roomDetail = await getRoomDetail(roomId);
 
-    if (room === undefined) {
+    if (roomDetail === undefined) {
       throw new Error("ROOM_NOT_FOUND");
     }
 
+    const { events, room } = roomDetail;
+
     if (room.status !== "WAITING") {
       throw new Error("ROOM_NOT_EDITABLE");
+    }
+
+    if (requesterPlayerId !== getRoomOwnerPlayerId(events, room.players)) {
+      throw new Error("ROOM_OWNER_REQUIRED");
     }
 
     const updatedPlayers = room.players.filter((player) => player.id !== playerId);

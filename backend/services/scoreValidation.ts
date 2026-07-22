@@ -18,6 +18,29 @@ export function roomHasPlayer(room: RoomRecord, playerId: string): boolean {
   return room.players.some((player) => player.id === playerId);
 }
 
+export function getScoreRequestPlayerIds(request: ScoreEventRequest): readonly string[] {
+  if (request.action === "DISCARD_WIN") {
+    return [request.winnerId, request.discarderId];
+  }
+
+  if (request.action === "SELF_DRAW") {
+    return [request.winnerId];
+  }
+
+  if (request.action === "KONG") {
+    return request.kongType === "DISCARD_KONG"
+      ? [request.playerId, request.fromPlayerId]
+      : [request.playerId];
+  }
+
+  return [
+    ...(request.flowerPigPlayerIds ?? []),
+    ...(request.kongTaxRefundPlayerIds ?? []),
+    ...(request.notReadyPlayerIds ?? []),
+    ...(request.readyHands ?? []).map((readyHand) => readyHand.playerId),
+  ];
+}
+
 export function getScoreEventPayload(
   request: ScoreEventRequest,
 ): Readonly<Record<string, unknown>> {
@@ -44,5 +67,16 @@ export function getScoreEventPayload(
     };
   }
 
-  return {};
+  return {
+    ...(request.flowerPigPlayerIds === undefined
+      ? {}
+      : { flowerPigPlayerIds: request.flowerPigPlayerIds }),
+    ...(request.kongTaxRefundPlayerIds === undefined
+      ? {}
+      : { kongTaxRefundPlayerIds: request.kongTaxRefundPlayerIds }),
+    ...(request.notReadyPlayerIds === undefined
+      ? {}
+      : { notReadyPlayerIds: request.notReadyPlayerIds }),
+    ...(request.readyHands === undefined ? {} : { readyHands: request.readyHands }),
+  };
 }

@@ -2,6 +2,12 @@ import type { RoomEvent } from "../types/event.js";
 import type { RoomPlayer, RoomSnapshot } from "../types/room.js";
 import type { CurrentRoundState, RoomState, RoundState, ScoreState } from "../types/roomState.js";
 
+import {
+  createDrawGameSettlementFlows,
+  getDrawGameSettlementPayload,
+} from "./drawGameSettlement.js";
+import { getFanScore, getSelfDrawScoreFan } from "./roomRules.js";
+
 interface MutableReplayState {
   roomId: string;
   version: number;
@@ -27,24 +33,6 @@ function getNumberPayloadValue(event: RoomEvent, key: string): number | undefine
   const value = event.payload[key];
 
   return typeof value === "number" ? value : undefined;
-}
-
-function getFanScore(event: RoomEvent): number {
-  const fan = getNumberPayloadValue(event, "fan");
-
-  if (fan === 2) {
-    return 2;
-  }
-
-  if (fan === 3) {
-    return 4;
-  }
-
-  if (fan === 4) {
-    return 8;
-  }
-
-  return 1;
 }
 
 function getScoreTotal(scores: readonly ScoreState[], playerId: string): number {
@@ -344,6 +332,7 @@ function applyPlayerJoined(state: MutableReplayState, event: RoomEvent): Mutable
 }
 
 function applyPlayerRenamed(state: MutableReplayState, event: RoomEvent): MutableReplayState {
+  const avatarId = getStringPayloadValue(event, "avatarId");
   const playerId = getStringPayloadValue(event, "playerId");
   const nickname = getStringPayloadValue(event, "nickname");
 
@@ -357,6 +346,7 @@ function applyPlayerRenamed(state: MutableReplayState, event: RoomEvent): Mutabl
       player.id === playerId
         ? {
             ...player,
+            ...(avatarId === undefined ? {} : { avatarId }),
             nickname,
           }
         : player,
@@ -409,7 +399,7 @@ function applyDiscardWinScore(state: MutableReplayState, event: RoomEvent): Muta
     return state;
   }
 
-  const score = getFanScore(event);
+  const score = getFanScore(getNumberPayloadValue(event, "fan"));
 
   return {
     ...state,
@@ -428,7 +418,7 @@ function applySelfDrawScore(state: MutableReplayState, event: RoomEvent): Mutabl
     return state;
   }
 
-  const score = getFanScore(event);
+  const score = getFanScore(getSelfDrawScoreFan(getNumberPayloadValue(event, "fan")));
   const activePlayers = getActivePlayers(state);
 
   return {
@@ -515,6 +505,41 @@ function applyKongScore(state: MutableReplayState, event: RoomEvent): MutableRep
   return state;
 }
 
+function getCurrentRoundEvents(events: readonly RoomEvent[]): readonly RoomEvent[] {
+  const lastConfirmedRoundIndex = [...events]
+    .map((event) => event.type)
+    .lastIndexOf("ROUND_CONFIRMED");
+
+  return events
+    .slice(lastConfirmedRoundIndex + 1)
+    .filter((event) => event.type !== "DRAW_GAME");
+}
+
+function applyDrawGameSettlementScore(
+  state: MutableReplayState,
+  event: RoomEvent,
+): MutableReplayState {
+  const settlementPayload = getDrawGameSettlementPayload(event.payload);
+  const flows = createDrawGameSettlementFlows(
+    state.players,
+    getCurrentRoundWinnerIds(state.currentRound),
+    getCurrentRoundEvents(state.events),
+    settlementPayload,
+  );
+
+  if (flows.length === 0) {
+    return state;
+  }
+
+  return {
+    ...state,
+    scores: flows.reduce(
+      (scores, flow) => addScore(scores, flow.playerId, flow.delta),
+      state.scores,
+    ),
+  };
+}
+
 function applyScoreEvent(state: MutableReplayState, event: RoomEvent): MutableReplayState {
   if (event.type === "DISCARD_WIN") {
     const scoredState = applyDiscardWinScore(state, event);
@@ -539,7 +564,7 @@ function applyScoreEvent(state: MutableReplayState, event: RoomEvent): MutableRe
   }
 
   if (event.type === "DRAW_GAME") {
-    return finishCurrentRound(ensureActiveRound(state), "DRAW");
+    return finishCurrentRound(applyDrawGameSettlementScore(ensureActiveRound(state), event), "DRAW");
   }
 
   if (event.type === "ROUND_CONFIRMED") {

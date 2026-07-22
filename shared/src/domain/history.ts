@@ -2,6 +2,12 @@ import type { RoomEvent } from "../types/event.js";
 import type { RoomPlayer } from "../types/room.js";
 import type { RoundState } from "../types/roomState.js";
 
+import {
+  createDrawGameSettlementFlows,
+  getDrawGameSettlementPayload,
+} from "./drawGameSettlement.js";
+import { getFanScore, getSelfDrawScoreFan } from "./roomRules.js";
+
 export interface HistoryFlowItem {
   readonly playerId: string;
   readonly nickname: string;
@@ -57,20 +63,20 @@ function getPayloadNumber(payload: RoomEvent["payload"], key: string): number | 
   return typeof value === "number" ? value : undefined;
 }
 
-function getFanScore(fan: number | undefined): number {
+function getFanLabel(fan: number | undefined): string {
   if (fan === 2) {
-    return 2;
+    return "二番";
   }
 
   if (fan === 3) {
-    return 4;
+    return "三番";
   }
 
   if (fan === 4) {
-    return 8;
+    return "四番";
   }
 
-  return 1;
+  return "一番";
 }
 
 function getPlayerNickname(players: readonly RoomPlayer[], playerId: string | undefined): string {
@@ -100,21 +106,36 @@ function getKongTypeLabel(kongType: string | undefined): string {
 function formatRoundTitle(round: RoundState, players: readonly RoomPlayer[]): string {
   if (round.type === "DISCARD_WIN") {
     const winnerName = getPlayerNickname(players, getPayloadString(round.payload, "winnerId"));
+    const discarderName = getPlayerNickname(
+      players,
+      getPayloadString(round.payload, "discarderId"),
+    );
+    const fan = getPayloadNumber(round.payload, "fan");
 
-    return `${winnerName} 胡牌`;
+    return `${winnerName} · 点炮 · ${discarderName} · ${getFanLabel(fan)}`;
   }
 
   if (round.type === "SELF_DRAW") {
     const winnerName = getPlayerNickname(players, getPayloadString(round.payload, "winnerId"));
+    const fan = getSelfDrawScoreFan(getPayloadNumber(round.payload, "fan"));
 
-    return `${winnerName} 自摸`;
+    return `${winnerName} · 自摸 · ${getFanLabel(fan)}`;
   }
 
   if (round.type === "KONG") {
     const playerName = getPlayerNickname(players, getPayloadString(round.payload, "playerId"));
     const kongType = getPayloadString(round.payload, "kongType");
 
-    return `${playerName} ${getKongTypeLabel(kongType)}`;
+    if (kongType === "DISCARD_KONG") {
+      const fromPlayerName = getPlayerNickname(
+        players,
+        getPayloadString(round.payload, "fromPlayerId"),
+      );
+
+      return `${playerName} · 直杠 · ${fromPlayerName}`;
+    }
+
+    return `${playerName} · ${getKongTypeLabel(kongType)}`;
   }
 
   return "流局";
@@ -134,9 +155,10 @@ function formatRoundDetail(round: RoundState, players: readonly RoomPlayer[]): s
 
   if (round.type === "SELF_DRAW") {
     const fan = getPayloadNumber(round.payload, "fan");
-    const score = getFanScore(fan);
+    const effectiveFan = getSelfDrawScoreFan(fan);
+    const score = getFanScore(effectiveFan);
 
-    return `未胡玩家付分 · ${fan ?? 1} 番 · 每家 ${score}`;
+    return `未胡玩家付分 · ${effectiveFan} 番 · 每家 ${score}`;
   }
 
   if (round.type === "KONG") {
@@ -234,6 +256,7 @@ function createScoreHistoryItem(
   roundActionNumber: number,
   players: readonly RoomPlayer[],
   roundWinnerIds: ReadonlySet<string>,
+  currentRoundEvents: readonly RoomEvent[],
   isUndone: boolean,
 ): ScoreHistoryItem {
   const round = createRoundFromEvent(event);
@@ -263,7 +286,7 @@ function createScoreHistoryItem(
   if (event.type === "SELF_DRAW") {
     const winnerId = getPayloadStringValue(event, "winnerId");
     const fan = getPayloadNumberValue(event, "fan");
-    const score = getFanScore(fan);
+    const score = getFanScore(getSelfDrawScoreFan(fan));
     const activePlayers = getRoundActivePlayers(players, roundWinnerIds);
 
     return {
@@ -334,6 +357,32 @@ function createScoreHistoryItem(
     };
   }
 
+  if (event.type === "DRAW_GAME") {
+    const flows = createDrawGameSettlementFlows(
+      players,
+      roundWinnerIds,
+      currentRoundEvents,
+      getDrawGameSettlementPayload(event.payload),
+    );
+
+    return {
+      event,
+      round,
+      roundNumber,
+      roundActionNumber,
+      title,
+      isUndone,
+      detail:
+        flows.length === 0
+          ? `第 ${roundNumber} 局结束，无分数变化`
+          : `第 ${roundNumber} 局流局结算`,
+      flows: flows.map((flow) => ({
+        ...flow,
+        nickname: getPlayerNickname(players, flow.playerId),
+      })),
+    };
+  }
+
   return {
     event,
     round,
@@ -362,6 +411,7 @@ export function createScoreHistory(
     }),
   );
   const winnerIds = new Set<string>();
+  let currentRoundEvents: RoomEvent[] = [];
   let roundNumber = 1;
   let roundActionNumber = 0;
 
@@ -372,6 +422,7 @@ export function createScoreHistory(
         roundNumber += 1;
         roundActionNumber = 0;
         winnerIds.clear();
+        currentRoundEvents = [];
         return [];
       }
 
@@ -387,6 +438,7 @@ export function createScoreHistory(
         roundActionNumber,
         players,
         new Set(winnerIds),
+        currentRoundEvents,
         undoneEventIds.has(event.id),
       );
 
@@ -402,6 +454,10 @@ export function createScoreHistory(
         if (event.type === "DRAW_GAME") {
           winnerIds.clear();
         }
+      }
+
+      if (!historyItem.isUndone) {
+        currentRoundEvents = [...currentRoundEvents, event];
       }
 
       return [historyItem];

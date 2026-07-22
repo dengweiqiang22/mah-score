@@ -13,8 +13,10 @@ function parseRemovePlayerRequest(value: unknown): RemovePlayerRequest | undefin
     value === null ||
     !("roomId" in value) ||
     !("playerId" in value) ||
+    !("requesterPlayerId" in value) ||
     typeof value.roomId !== "string" ||
-    typeof value.playerId !== "string"
+    typeof value.playerId !== "string" ||
+    typeof value.requesterPlayerId !== "string"
   ) {
     return undefined;
   }
@@ -22,6 +24,7 @@ function parseRemovePlayerRequest(value: unknown): RemovePlayerRequest | undefin
   return {
     roomId: value.roomId.trim(),
     playerId: value.playerId.trim(),
+    requesterPlayerId: value.requesterPlayerId.trim(),
   };
 }
 
@@ -51,6 +54,12 @@ function getRemoveFailure(error: unknown): Response {
   if (error.message === "PLAYER_NOT_FOUND") {
     return jsonFailure("玩家不存在。", "PLAYER_NOT_FOUND", {
       status: 404,
+    });
+  }
+
+  if (error.message === "ROOM_OWNER_REQUIRED") {
+    return jsonFailure("只有房主可以删除玩家。", "ROOM_OWNER_REQUIRED", {
+      status: 403,
     });
   }
 
@@ -89,8 +98,18 @@ export async function POST(request: Request): Promise<Response> {
     });
   }
 
+  if (parsedRequest.requesterPlayerId.length === 0) {
+    return jsonFailure("玩家身份无效。", "INVALID_REQUESTER", {
+      status: 403,
+    });
+  }
+
   try {
-    await removePlayer(parsedRequest.roomId, parsedRequest.playerId);
+    await removePlayer(
+      parsedRequest.roomId,
+      parsedRequest.requesterPlayerId,
+      parsedRequest.playerId,
+    );
 
     return jsonSuccess({});
   } catch (error) {

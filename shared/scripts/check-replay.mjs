@@ -5,6 +5,7 @@ import {
   createPlayerLedger,
   createScoreHistory,
   createSettlement,
+  getRoomOwnerPlayerId,
   parseRoomEvent,
   replayRoomEvents,
 } from "../dist/index.js";
@@ -99,6 +100,41 @@ assert.deepEqual(roomCreatedState.scores, [
     total: 0,
   },
 ]);
+assert.equal(getRoomOwnerPlayerId(roomCreatedState.events, roomCreatedState.players), "player_1");
+
+const ownerPayloadState = replayRoomEvents([
+  {
+    ...baseEvent,
+    id: "owner_payload_1",
+    type: "ROOM_CREATED",
+    version: 1,
+    payload: {
+      ownerPlayerId: "player_2",
+    },
+  },
+  {
+    ...baseEvent,
+    id: "owner_payload_2",
+    type: "PLAYER_JOINED",
+    version: 2,
+    payload: {
+      playerId: "player_1",
+      nickname: "张三",
+    },
+  },
+  {
+    ...baseEvent,
+    id: "owner_payload_3",
+    type: "PLAYER_JOINED",
+    version: 3,
+    payload: {
+      playerId: "player_2",
+      nickname: "李四",
+    },
+  },
+]);
+
+assert.equal(getRoomOwnerPlayerId(ownerPayloadState.events, ownerPayloadState.players), "player_2");
 
 const lifecycleState = replayRoomEvents([
   {
@@ -134,6 +170,7 @@ const lifecycleState = replayRoomEvents([
     type: "PLAYER_RENAMED",
     version: 4,
     payload: {
+      avatarId: "panda",
       playerId: "player_1",
       nickname: "王五",
     },
@@ -177,6 +214,7 @@ assert.equal(lifecycleState.version, 8);
 assert.equal(lifecycleState.status, "FINISHED");
 assert.deepEqual(lifecycleState.players, [
   {
+    avatarId: "panda",
     id: "player_1",
     nickname: "王五",
   },
@@ -493,11 +531,11 @@ assert.deepEqual(state.scores, [
   },
   {
     playerId: "player_2",
-    total: 0,
+    total: 1,
   },
   {
     playerId: "player_3",
-    total: -1,
+    total: -2,
   },
 ]);
 assert.deepEqual(
@@ -529,6 +567,76 @@ assert.deepEqual(drawGameState.currentRound, {
 assert.deepEqual(
   drawGameState.rounds.map((round) => round.eventId),
   ["event_6", "event_draw"],
+);
+
+const settledDrawGameState = replayRoomEvents([
+  ...events.slice(0, 5),
+  {
+    ...baseEvent,
+    id: "settled_draw_6",
+    type: "KONG",
+    version: 6,
+    payload: {
+      playerId: "player_1",
+      kongType: "SUPPLEMENT_KONG",
+    },
+  },
+  {
+    ...baseEvent,
+    id: "settled_draw_7",
+    type: "DRAW_GAME",
+    version: 7,
+    payload: {
+      flowerPigPlayerIds: ["player_3"],
+      readyHands: [
+        {
+          playerId: "player_2",
+          maxFan: 2,
+        },
+      ],
+      notReadyPlayerIds: ["player_1"],
+      kongTaxRefundPlayerIds: ["player_1", "player_3"],
+    },
+  },
+]);
+const settledDrawGameHistory = createScoreHistory(
+  settledDrawGameState.events,
+  settledDrawGameState.players,
+);
+
+assert.deepEqual(settledDrawGameState.scores, [
+  {
+    playerId: "player_1",
+    total: 7,
+  },
+  {
+    playerId: "player_2",
+    total: 11,
+  },
+  {
+    playerId: "player_3",
+    total: -18,
+  },
+]);
+assert.deepEqual(
+  settledDrawGameHistory.find((item) => item.event.id === "settled_draw_7")?.flows,
+  [
+    {
+      playerId: "player_3",
+      nickname: "赵六",
+      delta: -17,
+    },
+    {
+      playerId: "player_1",
+      nickname: "王五",
+      delta: 5,
+    },
+    {
+      playerId: "player_2",
+      nickname: "李四",
+      delta: 12,
+    },
+  ],
 );
 
 const confirmedRoundState = replayRoomEvents([
@@ -721,35 +829,35 @@ assert.deepEqual(
       eventId: "extended_10",
       roundNumber: 1,
       roundActionNumber: 5,
-      title: "王五 自摸",
+      title: "王五 · 自摸 · 四番",
       isUndone: false,
     },
     {
       eventId: "extended_9",
       roundNumber: 1,
       roundActionNumber: 4,
-      title: "李四 暗杠",
+      title: "李四 · 暗杠",
       isUndone: true,
     },
     {
       eventId: "extended_8",
       roundNumber: 1,
       roundActionNumber: 3,
-      title: "赵六 补杠",
+      title: "赵六 · 补杠",
       isUndone: false,
     },
     {
       eventId: "extended_7",
       roundNumber: 1,
       roundActionNumber: 2,
-      title: "王五 直杠",
+      title: "王五 · 直杠 · 赵六",
       isUndone: false,
     },
     {
       eventId: "extended_6",
       roundNumber: 1,
       roundActionNumber: 1,
-      title: "张三 胡牌",
+      title: "张三 · 点炮 · 李四 · 三番",
       isUndone: false,
     },
   ],
@@ -912,15 +1020,15 @@ const undoScoreHistory = createScoreHistory(undoScoreEvents, undoScoreState.play
 assert.deepEqual(undoScoreState.scores, [
   {
     playerId: "player_1",
-    total: -1,
+    total: -2,
   },
   {
     playerId: "player_2",
-    total: 2,
+    total: 4,
   },
   {
     playerId: "player_3",
-    total: -1,
+    total: -2,
   },
 ]);
 assert.deepEqual(
