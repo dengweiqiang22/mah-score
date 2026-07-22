@@ -46,13 +46,14 @@ import { EntryStatus } from "../components/room/EntryStatus";
 import { EventAction } from "../components/room/EventAction";
 import { FanSelector } from "../components/room/FanSelector";
 import { FinalSettlementPanel } from "../components/room/FinalSettlementPanel";
+import { FinishRoomConfirmPanel } from "../components/room/FinishRoomConfirmPanel";
 import { HistoryRoundsPanel } from "../components/room/HistoryRoundsPanel";
 import { InvitePanel } from "../components/room/InvitePanel";
-import { LedgerRow } from "../components/room/LedgerRow";
 import { PlayerTile } from "../components/room/PlayerTile";
 import { PlayerLedgerPanel } from "../components/room/PlayerLedgerPanel";
 import { RecentEventRow } from "../components/room/RecentEventRow";
 import { RecordRow } from "../components/room/RecordRow";
+import { RoomDangerActions } from "../components/room/RoomDangerActions";
 import { RoundDetailPanel } from "../components/room/RoundDetailPanel";
 import { RoundSettlementPanel } from "../components/room/RoundSettlementPanel";
 import { ScoreValue } from "../components/room/ScoreValue";
@@ -1521,59 +1522,29 @@ export function RoomPage({ roomId }: RoomPageProps) {
                   players={playerLedger}
                 />
 
-                <div
-                  className={
-                    roundViewMode === "round_settlement" ? "grid gap-3" : "grid grid-cols-2 gap-3"
-                  }
-                >
-                  {roundViewMode === "round_active" ? (
-                    <Button
-                      disabled={!canUndo || isUndoing || isScoring}
-                      onClick={() => {
-                        void handleUndoRoomEvent();
-                      }}
-                      variant="danger"
-                    >
-                      <Undo2 className="h-4 w-4" />
-                      {isUndoing ? "撤销中..." : "撤销上一条"}
-                    </Button>
-                  ) : null}
-                  <Button
-                    disabled={isScoring || isFinishing}
-                    onClick={() => {
-                      openFinishConfirm();
-                    }}
-                  >
-                    结束整场
-                  </Button>
-                </div>
+                <RoomDangerActions
+                  canUndo={canUndo}
+                  isFinishing={isFinishing}
+                  isScoring={isScoring}
+                  isUndoing={isUndoing}
+                  onFinish={openFinishConfirm}
+                  onUndo={() => {
+                    void handleUndoRoomEvent();
+                  }}
+                  showUndo={roundViewMode === "round_active"}
+                />
               </div>
             </Disclosure>
 
             {isFinishConfirmOpen ? (
-              <section className="grid gap-3 rounded-md border border-amber-200 bg-amber-50 p-4">
-                <div className="grid gap-2">
-                  {getFinishConfirmLines().map((line) => (
-                    <p className="text-sm leading-6 text-amber-950" key={line}>
-                      {line}
-                    </p>
-                  ))}
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <Button disabled={isFinishing} onClick={cancelFinishRoom}>
-                    返回检查
-                  </Button>
-                  <Button
-                    disabled={isFinishing}
-                    onClick={() => {
-                      void confirmFinishRoom();
-                    }}
-                    variant="danger"
-                  >
-                    {isFinishing ? "结束中..." : "确认结束"}
-                  </Button>
-                </div>
-              </section>
+              <FinishRoomConfirmPanel
+                isFinishing={isFinishing}
+                lines={getFinishConfirmLines()}
+                onCancel={cancelFinishRoom}
+                onConfirm={() => {
+                  void confirmFinishRoom();
+                }}
+              />
             ) : null}
           </PlayingRoomView>
         ) : null}
