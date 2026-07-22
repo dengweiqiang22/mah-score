@@ -19,6 +19,10 @@ function parseJoinRoomRequest(value: unknown): JoinRoomRequest | undefined {
   }
 
   return {
+    avatarId:
+      "avatarId" in value && typeof value.avatarId === "string"
+        ? value.avatarId.trim()
+        : undefined,
     roomId: value.roomId.trim(),
     nickname: value.nickname.trim(),
   };
@@ -110,7 +114,11 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
-    const player = await joinRoom(parsedRequest.roomId, parsedRequest.nickname);
+    const player = await joinRoom(
+      parsedRequest.roomId,
+      parsedRequest.nickname,
+      parsedRequest.avatarId,
+    );
     const data: JoinRoomResponse = {
       roomId: parsedRequest.roomId,
       playerId: player.id,

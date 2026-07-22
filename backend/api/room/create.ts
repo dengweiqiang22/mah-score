@@ -18,6 +18,10 @@ function parseCreateRoomRequest(value: unknown): CreateRoomRequest | undefined {
   }
 
   return {
+    avatarId:
+      "avatarId" in value && typeof value.avatarId === "string"
+        ? value.avatarId.trim()
+        : undefined,
     nickname: value.nickname.trim(),
   };
 }
@@ -47,7 +51,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
-    const roomDetail = await createRoomDetail(parsedRequest.nickname);
+    const roomDetail = await createRoomDetail(parsedRequest.nickname, parsedRequest.avatarId);
     const { room, events } = roomDetail;
     const owner = room.players[0];
 

@@ -23,6 +23,14 @@ function createPlayerId(): string {
   return `player_${crypto.randomUUID()}`;
 }
 
+function normalizeAvatarId(avatarId: string | undefined): string | undefined {
+  const normalizedAvatarId = avatarId?.trim();
+
+  return normalizedAvatarId === undefined || normalizedAvatarId.length === 0
+    ? undefined
+    : normalizedAvatarId;
+}
+
 function isRoomPlayer(value: unknown): value is RoomRecord["players"][number] {
   return (
     typeof value === "object" &&
@@ -30,7 +38,8 @@ function isRoomPlayer(value: unknown): value is RoomRecord["players"][number] {
     "id" in value &&
     "nickname" in value &&
     typeof value.id === "string" &&
-    typeof value.nickname === "string"
+    typeof value.nickname === "string" &&
+    (!("avatarId" in value) || typeof value.avatarId === "string")
   );
 }
 
@@ -166,10 +175,13 @@ export async function withRoomLock<T>(roomId: string, operation: () => Promise<T
 
 export async function createRoomDetail(
   nickname: string,
+  avatarId?: string,
 ): Promise<{ readonly room: RoomRecord; readonly events: readonly RoomEvent[] }> {
   const roomId = await createUnusedRoomId();
   const now = new Date().toISOString();
+  const normalizedAvatarId = normalizeAvatarId(avatarId);
   const player = {
+    ...(normalizedAvatarId === undefined ? {} : { avatarId: normalizedAvatarId }),
     id: createPlayerId(),
     nickname,
   };
@@ -201,6 +213,7 @@ export async function createRoomDetail(
     type: "PLAYER_JOINED",
     operator: "room",
     payload: {
+      ...(player.avatarId === undefined ? {} : { avatarId: player.avatarId }),
       playerId: player.id,
       nickname: player.nickname,
     },
@@ -271,10 +284,12 @@ export async function getRoomVersion(roomId: string): Promise<number | undefined
 export async function joinRoom(
   roomId: string,
   nickname: string,
+  avatarId?: string,
 ): Promise<RoomRecord["players"][number]> {
   return withRoomLock(roomId, async () => {
     const room = await getRoom(roomId);
     const normalizedNickname = nickname.trim();
+    const normalizedAvatarId = normalizeAvatarId(avatarId);
 
     if (room === undefined) {
       throw new Error("ROOM_NOT_FOUND");
@@ -293,6 +308,7 @@ export async function joinRoom(
     }
 
     const player = {
+      ...(normalizedAvatarId === undefined ? {} : { avatarId: normalizedAvatarId }),
       id: createPlayerId(),
       nickname: normalizedNickname,
     };
@@ -302,6 +318,7 @@ export async function joinRoom(
       type: "PLAYER_JOINED",
       operator: "room",
       payload: {
+        ...(player.avatarId === undefined ? {} : { avatarId: player.avatarId }),
         playerId: player.id,
         nickname: player.nickname,
       },
