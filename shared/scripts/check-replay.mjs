@@ -5,6 +5,7 @@ import {
   createPlayerLedger,
   createScoreHistory,
   createSettlement,
+  parseRoomEvent,
   replayRoomEvents,
 } from "../dist/index.js";
 
@@ -208,6 +209,42 @@ assert.deepEqual(
   ],
 );
 
+const legacyRoomCreatedEvent = parseRoomEvent(
+  JSON.stringify({
+    ...baseEvent,
+    id: "legacy_room_created_payload",
+    type: "ROOM_CREATED",
+    version: 1,
+    payload: [],
+  }),
+);
+
+assert.deepEqual(legacyRoomCreatedEvent?.payload, {});
+
+const legacyPayloadState = replayRoomEvents(
+  [
+    legacyRoomCreatedEvent,
+    {
+      ...baseEvent,
+      id: "legacy_payload_player",
+      type: "PLAYER_JOINED",
+      version: 2,
+      payload: {
+        playerId: "player_legacy_payload",
+        nickname: "旧格式",
+      },
+    },
+  ].filter((event) => event !== undefined),
+);
+
+assert.equal(legacyPayloadState.version, 2);
+assert.deepEqual(legacyPayloadState.players, [
+  {
+    id: "player_legacy_payload",
+    nickname: "旧格式",
+  },
+]);
+
 const outOfOrderLifecycleState = replayRoomEvents([
   {
     ...baseEvent,
@@ -290,19 +327,16 @@ assert.deepEqual(
   legacyReplayState.players.map((player) => player.id),
   ["legacy_player_1", "legacy_player_2"],
 );
-assert.deepEqual(
-  legacyReplayState.scores,
-  [
-    {
-      playerId: "legacy_player_1",
-      total: 1,
-    },
-    {
-      playerId: "legacy_player_2",
-      total: -1,
-    },
-  ],
-);
+assert.deepEqual(legacyReplayState.scores, [
+  {
+    playerId: "legacy_player_1",
+    total: 1,
+  },
+  {
+    playerId: "legacy_player_2",
+    total: -1,
+  },
+]);
 
 const legacyFinishedReplayState = replayRoomEvents(
   buildReplayEventsFromSnapshot(
@@ -472,16 +506,7 @@ assert.deepEqual(
 );
 assert.deepEqual(
   state.events.map((event) => event.id),
-  [
-    "event_1",
-    "event_2",
-    "event_3",
-    "event_4",
-    "event_5",
-    "event_6",
-    "event_8",
-    "event_11",
-  ],
+  ["event_1", "event_2", "event_3", "event_4", "event_5", "event_6", "event_8", "event_11"],
 );
 
 const drawGameState = replayRoomEvents([
@@ -653,10 +678,7 @@ const extendedScoreEvents = [
 
 const extendedScoreState = replayRoomEvents(extendedScoreEvents);
 const extendedScoreHistory = createScoreHistory(extendedScoreEvents, extendedScoreState.players);
-const extendedScoreLedger = createPlayerLedger(
-  extendedScoreHistory,
-  extendedScoreState.players,
-);
+const extendedScoreLedger = createPlayerLedger(extendedScoreHistory, extendedScoreState.players);
 
 assert.deepEqual(extendedScoreState.currentRound, {
   number: 1,
@@ -733,10 +755,12 @@ assert.deepEqual(
   ],
 );
 assert.deepEqual(
-  extendedScoreHistory.find((item) => item.event.id === "extended_10")?.flows.map((flow) => ({
-    delta: flow.delta,
-    playerId: flow.playerId,
-  })),
+  extendedScoreHistory
+    .find((item) => item.event.id === "extended_10")
+    ?.flows.map((flow) => ({
+      delta: flow.delta,
+      playerId: flow.playerId,
+    })),
   [
     {
       delta: 16,
@@ -753,10 +777,12 @@ assert.deepEqual(
   ],
 );
 assert.deepEqual(
-  extendedScoreHistory.find((item) => item.event.id === "extended_8")?.flows.map((flow) => ({
-    delta: flow.delta,
-    playerId: flow.playerId,
-  })),
+  extendedScoreHistory
+    .find((item) => item.event.id === "extended_8")
+    ?.flows.map((flow) => ({
+      delta: flow.delta,
+      playerId: flow.playerId,
+    })),
   [
     {
       delta: 2,

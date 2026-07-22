@@ -18,6 +18,7 @@
     "check": "npm run typecheck && npm run lint",
     "check:replay": "npm run build -w shared && node shared/scripts/check-replay.mjs",
     "check:room-lock": "node backend/scripts/check-room-lock.mjs",
+    "check:redis-data": "npm run build -w shared && node backend/scripts/check-redis-data.mjs",
     "check:acceptance": "npm run build && npm run check:replay && npm run check:room-lock",
     "check:deploy": "npm run check && npm run test && npm run build"
   },

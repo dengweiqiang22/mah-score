@@ -1,5 +1,6 @@
 import type { RoomEvent, RoomEventPayload, RoomEventType } from "../../shared/src/index.js";
 
+import { parseRoomEvent } from "../../shared/src/index.js";
 import { redis } from "./redis.js";
 
 interface AppendRoomEventInput {
@@ -47,41 +48,6 @@ function parseAppendRoomEventResult(value: unknown): { readonly version: number 
   return {
     version,
   };
-}
-
-function parseRoomEvent(value: unknown): RoomEvent | undefined {
-  let parsedValue: unknown;
-
-  try {
-    parsedValue = typeof value === "string" ? (JSON.parse(value) as unknown) : value;
-  } catch {
-    return undefined;
-  }
-
-  if (
-    typeof parsedValue !== "object" ||
-    parsedValue === null ||
-    !("id" in parsedValue) ||
-    !("roomId" in parsedValue) ||
-    !("type" in parsedValue) ||
-    !("version" in parsedValue) ||
-    !("operator" in parsedValue) ||
-    !("timestamp" in parsedValue) ||
-    !("payload" in parsedValue) ||
-    typeof parsedValue.id !== "string" ||
-    typeof parsedValue.roomId !== "string" ||
-    typeof parsedValue.type !== "string" ||
-    typeof parsedValue.version !== "number" ||
-    typeof parsedValue.operator !== "string" ||
-    typeof parsedValue.timestamp !== "string" ||
-    typeof parsedValue.payload !== "object" ||
-    parsedValue.payload === null ||
-    Array.isArray(parsedValue.payload)
-  ) {
-    return undefined;
-  }
-
-  return parsedValue as RoomEvent;
 }
 
 export async function appendRoomEvent(input: AppendRoomEventInput): Promise<RoomEvent> {

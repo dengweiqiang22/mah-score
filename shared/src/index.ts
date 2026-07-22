@@ -15,7 +15,13 @@ export {
   selectEntryPlayer,
 } from "./domain/gameEntryMachine.js";
 export { buildReplayEventsFromSnapshot, replayRoomEvents } from "./domain/replay.js";
-export type { EntryEventType, EntryState, EntrySubmitDraft, EntryTransition } from "./domain/gameEntryMachine.js";
+export { parseRoomEvent } from "./domain/eventParsing.js";
+export type {
+  EntryEventType,
+  EntryState,
+  EntrySubmitDraft,
+  EntryTransition,
+} from "./domain/gameEntryMachine.js";
 export type {
   HistoryFlowItem,
   PlayerLedgerEntry,
