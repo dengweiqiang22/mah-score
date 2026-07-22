@@ -1,14 +1,18 @@
 import { useEffect, useState } from "react";
+import { LogIn, Plus } from "lucide-react";
 
 import { createRoom, joinRoom } from "../api/roomApi";
-import { HomeActionButton } from "../components/HomeActionButton";
+import { Button } from "../components/ui/Button";
+import { Notice } from "../components/ui/Notice";
 import { saveInitialRoomDetail } from "../utils/initialRoomDetail";
 import { savePlayerIdentity } from "../utils/playerIdentity";
+
+type EntryMode = "join" | "create";
 
 export function HomePage() {
   const [isCreatingRoom, setIsCreatingRoom] = useState(false);
   const [isJoiningRoom, setIsJoiningRoom] = useState(false);
-  const [isCreateRoomOpen, setIsCreateRoomOpen] = useState(false);
+  const [entryMode, setEntryMode] = useState<EntryMode>("join");
   const [createNickname, setCreateNickname] = useState("");
   const [joinNickname, setJoinNickname] = useState("");
   const [manualJoinRoomId, setManualJoinRoomId] = useState("");
@@ -102,113 +106,147 @@ export function HomePage() {
   }
 
   const isInviteMode = invitedRoomId !== undefined && inviteModeError === undefined;
+  const activeEntryMode: EntryMode = isInviteMode ? "join" : entryMode;
 
   return (
-    <main className="min-h-screen bg-stone-50 px-5 py-6 text-stone-950">
-      <section className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-md flex-col justify-between">
-        <div className="pt-12">
-          <p className="text-sm font-semibold text-emerald-700">四川麻将计分</p>
-          <h1 className="mt-3 text-4xl font-semibold tracking-normal">mah-score</h1>
+    <main className="min-h-screen bg-stone-100 px-4 py-6 text-stone-950">
+      <section className="mx-auto grid min-h-[calc(100vh-3rem)] w-full max-w-md content-start gap-5">
+        <div className="grid gap-3 pt-5">
+          <div className="flex h-12 w-12 items-center justify-center rounded-md bg-emerald-700 text-xl font-semibold text-white shadow-sm">
+            麻
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-emerald-700">四川麻将计分</p>
+            <h1 className="mt-1 text-3xl font-semibold tracking-normal">mah-score</h1>
+            <p className="mt-2 text-sm leading-6 text-stone-500">
+              牌桌旁快速开房、邀请好友、记录每一局输赢。
+            </p>
+          </div>
         </div>
 
-        <div className="grid gap-3 pb-8">
+        <div className="grid gap-3">
           {inviteModeError !== undefined ? (
-            <p className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-700">
-              {inviteModeError}
-            </p>
+            <Notice variant="danger">{inviteModeError}</Notice>
           ) : null}
           {errorMessage !== undefined ? (
-            <p className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-700">
-              {errorMessage}
-            </p>
+            <Notice variant="danger">{errorMessage}</Notice>
           ) : null}
-          <div className="grid gap-3 rounded-md border border-stone-200 bg-white p-4">
-            <div>
-              <h2 className="text-lg font-semibold tracking-normal">加入房间</h2>
-              <p className="mt-1 text-sm text-stone-500">
-                {isInviteMode ? `邀请加入房间 ${invitedRoomId}` : "输入房间号和昵称"}
-              </p>
+
+          {!isInviteMode ? (
+            <div className="grid grid-cols-2 gap-2 rounded-md bg-stone-200/70 p-1">
+              <button
+                className={`h-11 rounded-md text-sm font-semibold transition-colors ${
+                  activeEntryMode === "join"
+                    ? "bg-white text-stone-950 shadow-sm"
+                    : "text-stone-600 active:bg-stone-100"
+                }`}
+                onClick={() => {
+                  setEntryMode("join");
+                  setErrorMessage(undefined);
+                }}
+                type="button"
+              >
+                加入房间
+              </button>
+              <button
+                className={`h-11 rounded-md text-sm font-semibold transition-colors ${
+                  activeEntryMode === "create"
+                    ? "bg-white text-stone-950 shadow-sm"
+                    : "text-stone-600 active:bg-stone-100"
+                }`}
+                onClick={() => {
+                  setEntryMode("create");
+                  setErrorMessage(undefined);
+                }}
+                type="button"
+              >
+                创建房间
+              </button>
             </div>
-            {!isInviteMode ? (
+          ) : null}
+
+          {activeEntryMode === "join" ? (
+            <div className="grid gap-4 rounded-md bg-white p-4 shadow-sm ring-1 ring-stone-200/80">
+              <div>
+                <h2 className="text-lg font-semibold tracking-normal">加入房间</h2>
+                <p className="mt-1 text-sm text-stone-500">
+                  {isInviteMode ? `邀请加入房间 ${invitedRoomId}` : "输入房间号和昵称"}
+                </p>
+              </div>
+              {!isInviteMode ? (
+                <input
+                  className="h-12 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-emerald-700"
+                  autoComplete="off"
+                  id="join-room-id"
+                  inputMode="numeric"
+                  maxLength={3}
+                  name="joinRoomId"
+                  onChange={(event) => {
+                    handleJoinRoomIdChange(event.target.value);
+                  }}
+                  placeholder="房间号"
+                  value={manualJoinRoomId}
+                />
+              ) : null}
               <input
                 className="h-12 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-emerald-700"
-                autoComplete="off"
-                id="join-room-id"
-                inputMode="numeric"
-                maxLength={3}
-                name="joinRoomId"
+                autoComplete="name"
+                id="join-nickname"
+                maxLength={12}
+                name="joinNickname"
                 onChange={(event) => {
-                  handleJoinRoomIdChange(event.target.value);
+                  setJoinNickname(event.target.value);
                 }}
-                placeholder="房间号"
-                value={manualJoinRoomId}
+                placeholder="昵称"
+                value={joinNickname}
               />
-            ) : null}
+              <Button
+                disabled={
+                  isJoiningRoom ||
+                  joinNickname.trim().length === 0 ||
+                  (!isInviteMode && manualJoinRoomId.length !== 3)
+                }
+                onClick={() => {
+                  void handleJoinRoom();
+                }}
+                size="lg"
+                variant="primary"
+              >
+                <LogIn className="h-4 w-4" />
+                {isJoiningRoom ? "加入中..." : "加入房间"}
+              </Button>
+            </div>
+          ) : (
+            <div className="grid gap-4 rounded-md bg-white p-4 shadow-sm ring-1 ring-stone-200/80">
+            <div>
+              <h2 className="text-lg font-semibold tracking-normal">创建房间</h2>
+              <p className="mt-1 text-sm text-stone-500">输入你的昵称，创建后分享给好友。</p>
+            </div>
             <input
               className="h-12 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-emerald-700"
               autoComplete="name"
-              id="join-nickname"
+              id="create-nickname"
               maxLength={12}
-              name="joinNickname"
+              name="createNickname"
               onChange={(event) => {
-                setJoinNickname(event.target.value);
+                setCreateNickname(event.target.value);
               }}
-              placeholder="昵称"
-              value={joinNickname}
+              placeholder="房主昵称"
+              value={createNickname}
             />
-            <HomeActionButton
-              disabled={
-                isJoiningRoom ||
-                joinNickname.trim().length === 0 ||
-                (!isInviteMode && manualJoinRoomId.length !== 3)
-              }
-              onClick={handleJoinRoom}
+            <Button
+              disabled={isCreatingRoom || createNickname.trim().length === 0}
+              onClick={() => {
+                void handleCreateRoom();
+              }}
+              size="lg"
               variant="primary"
             >
-              {isJoiningRoom ? "加入中..." : "加入房间"}
-            </HomeActionButton>
-          </div>
-
-          {!isInviteMode ? (
-            <div className="grid gap-3 px-1">
-              <div className="flex items-center justify-center gap-2 text-sm text-stone-500">
-                <span>没有房间？</span>
-                <button
-                  className="font-semibold text-emerald-700"
-                  onClick={() => {
-                    setIsCreateRoomOpen((currentValue) => !currentValue);
-                  }}
-                  type="button"
-                >
-                  创建房间
-                </button>
-              </div>
-
-              {isCreateRoomOpen ? (
-                <div className="grid gap-3 rounded-md border border-stone-200 bg-white p-4">
-                  <input
-                    className="h-12 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-emerald-700"
-                    autoComplete="name"
-                    id="create-nickname"
-                    maxLength={12}
-                    name="createNickname"
-                    onChange={(event) => {
-                      setCreateNickname(event.target.value);
-                    }}
-                    placeholder="房主昵称"
-                    value={createNickname}
-                  />
-                  <HomeActionButton
-                    disabled={isCreatingRoom || createNickname.trim().length === 0}
-                    onClick={handleCreateRoom}
-                    variant="secondary"
-                  >
-                    {isCreatingRoom ? "创建中..." : "确认创建"}
-                  </HomeActionButton>
-                </div>
-              ) : null}
+              <Plus className="h-4 w-4" />
+              {isCreatingRoom ? "创建中..." : "创建房间"}
+            </Button>
             </div>
-          ) : null}
+          )}
         </div>
       </section>
     </main>
