@@ -1,7 +1,7 @@
 # 当前开发任务
 
-当前版本：v0.13.4
+当前版本：v0.14.0
 
 请执行：
 
-docs/tasks/v0.13.4-home-and-sharing-polish.md
+docs/tasks/v0.14.0-high-frequency-entry-polish.md
