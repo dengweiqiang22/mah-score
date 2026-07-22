@@ -1296,6 +1296,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
 
                           return (
                             <PlayerTile
+                              avatarId={player.avatarId}
                               disabled={disabled}
                               key={player.id}
                               meta={

@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import { LogIn, Plus } from "lucide-react";
 
 import { createRoom, joinRoom } from "../api/roomApi";
+import { AvatarSelector } from "../components/AvatarSelector";
 import { Button } from "../components/ui/Button";
 import { Notice } from "../components/ui/Notice";
 import { saveInitialRoomDetail } from "../utils/initialRoomDetail";
+import { defaultAvatarId } from "../utils/avatars";
 import { savePlayerIdentity } from "../utils/playerIdentity";
 
 type EntryMode = "join" | "create";
@@ -13,7 +15,9 @@ export function HomePage() {
   const [isCreatingRoom, setIsCreatingRoom] = useState(false);
   const [isJoiningRoom, setIsJoiningRoom] = useState(false);
   const [entryMode, setEntryMode] = useState<EntryMode>("join");
+  const [createAvatarId, setCreateAvatarId] = useState(defaultAvatarId);
   const [createNickname, setCreateNickname] = useState("");
+  const [joinAvatarId, setJoinAvatarId] = useState(defaultAvatarId);
   const [joinNickname, setJoinNickname] = useState("");
   const [manualJoinRoomId, setManualJoinRoomId] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
@@ -46,6 +50,7 @@ export function HomePage() {
 
     try {
       const response = await createRoom({
+        avatarId: createAvatarId,
         nickname: createNickname.trim(),
       });
 
@@ -55,6 +60,7 @@ export function HomePage() {
       }
 
       savePlayerIdentity({
+        avatarId: createAvatarId,
         roomId: response.data.roomId,
         playerId: response.data.playerId,
         nickname: createNickname.trim(),
@@ -79,6 +85,7 @@ export function HomePage() {
 
     try {
       const response = await joinRoom({
+        avatarId: joinAvatarId,
         roomId,
         nickname: joinNickname,
       });
@@ -89,6 +96,7 @@ export function HomePage() {
       }
 
       savePlayerIdentity({
+        avatarId: joinAvatarId,
         roomId: response.data.roomId,
         playerId: response.data.playerId,
         nickname: joinNickname.trim(),
@@ -200,6 +208,7 @@ export function HomePage() {
                 placeholder="昵称"
                 value={joinNickname}
               />
+              <AvatarSelector onChange={setJoinAvatarId} value={joinAvatarId} />
               <Button
                 disabled={
                   isJoiningRoom ||
@@ -234,6 +243,7 @@ export function HomePage() {
               placeholder="房主昵称"
               value={createNickname}
             />
+            <AvatarSelector onChange={setCreateAvatarId} value={createAvatarId} />
             <Button
               disabled={isCreatingRoom || createNickname.trim().length === 0}
               onClick={() => {

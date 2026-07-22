@@ -1,4 +1,5 @@
 export interface StoredPlayerIdentity {
+  readonly avatarId?: string;
   readonly roomId: string;
   readonly playerId: string;
   readonly nickname: string;
@@ -32,6 +33,9 @@ function parseStoredPlayerIdentity(value: string | null): StoredPlayerIdentity |
     }
 
     return {
+      ...("avatarId" in parsedValue && typeof parsedValue.avatarId === "string"
+        ? { avatarId: parsedValue.avatarId }
+        : {}),
       roomId: parsedValue.roomId,
       playerId: parsedValue.playerId,
       nickname: parsedValue.nickname,
