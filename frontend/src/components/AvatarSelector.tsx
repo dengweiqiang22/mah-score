@@ -18,8 +18,8 @@ export function AvatarSelector({ onChange, value }: AvatarSelectorProps) {
             <button
               aria-label={avatar.label}
               className={cn(
-                "grid aspect-square min-w-0 place-items-center rounded-full bg-stone-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-1",
-                isSelected ? "ring-2 ring-emerald-700 ring-offset-2" : "ring-1 ring-stone-200",
+                "grid aspect-square min-w-0 place-items-center overflow-hidden rounded-full border-2 bg-stone-50 p-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-1",
+                isSelected ? "border-emerald-700" : "border-stone-200",
               )}
               key={avatar.id}
               onClick={() => {

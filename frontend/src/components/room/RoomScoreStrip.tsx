@@ -2,7 +2,7 @@ import type { RoomPlayer } from "@mah-score/shared";
 
 import { cn } from "../../utils/className";
 import { PlayerAvatar } from "./PlayerAvatar";
-import { ScoreValue } from "./ScoreValue";
+import { formatScoreValue } from "./ScoreValue";
 
 interface RoomScoreStripProps {
   readonly currentPlayerId?: string;
@@ -15,7 +15,7 @@ export function RoomScoreStrip({ currentPlayerId, players, scores }: RoomScoreSt
     <section
       aria-label="玩家整场总分"
       className={cn(
-        "grid gap-2 rounded-md bg-white/80 p-3 ring-1 ring-stone-200/70",
+        "grid gap-2 rounded-md bg-white/80 px-3 py-2 ring-1 ring-stone-200/70",
         players.length === 3 ? "grid-cols-3" : "grid-cols-4",
       )}
     >
@@ -25,13 +25,23 @@ export function RoomScoreStrip({ currentPlayerId, players, scores }: RoomScoreSt
 
         return (
           <div className="min-w-0 text-center" key={player.id}>
-            <PlayerAvatar
-              avatarId={player.avatarId}
-              className="mx-auto"
-              isCurrentPlayer={isCurrentPlayer}
-              nickname={player.nickname}
-            />
-            <div className="mt-2 flex min-w-0 items-center justify-center gap-1">
+            <div className="relative mx-auto h-10 w-10">
+              <PlayerAvatar
+                avatarId={player.avatarId}
+                className="h-full w-full"
+                isCurrentPlayer={isCurrentPlayer}
+                nickname={player.nickname}
+              />
+              <span
+                className={cn(
+                  "absolute inset-x-0 bottom-0 grid h-[15px] place-items-center rounded-b-full bg-white/90 text-[10px] font-semibold leading-none tabular-nums shadow-sm",
+                  score > 0 ? "text-emerald-700" : score < 0 ? "text-red-700" : "text-stone-500",
+                )}
+              >
+                {formatScoreValue(score)}
+              </span>
+            </div>
+            <div className="mt-1 flex min-w-0 items-center justify-center gap-1">
               <p className="min-w-0 truncate text-xs font-semibold text-stone-800">
                 {player.nickname}
               </p>
@@ -41,7 +51,6 @@ export function RoomScoreStrip({ currentPlayerId, players, scores }: RoomScoreSt
                 </span>
               ) : null}
             </div>
-            <ScoreValue className="mt-1 block" score={score} size="sm" />
           </div>
         );
       })}

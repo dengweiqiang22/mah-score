@@ -36,8 +36,8 @@ export function PlayerAvatar({
     <span
       aria-label={`${nickname}头像：${avatar.label}`}
       className={cn(
-        "grid shrink-0 place-items-center rounded-full bg-stone-50",
-        isCurrentPlayer ? "ring-2 ring-emerald-200" : "ring-1 ring-stone-200",
+        "grid shrink-0 place-items-center overflow-hidden rounded-full border bg-stone-50",
+        isCurrentPlayer ? "border-emerald-300" : "border-stone-200",
         sizeClassName[size],
         className,
       )}

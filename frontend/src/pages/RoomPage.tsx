@@ -896,7 +896,6 @@ export function RoomPage({ roomId }: RoomPageProps) {
   );
   const currentRoundNumber = replayState?.currentRound.number ?? 0;
   const isCurrentRoundFinished = replayState?.currentRound.status === "FINISHED";
-  const currentRoundResult = replayState?.currentRound.result;
   const totalScoreByPlayerId = useMemo(
     () => new Map(replayState?.scores.map((score) => [score.playerId, score.total]) ?? []),
     [replayState],
@@ -944,15 +943,6 @@ export function RoomPage({ roomId }: RoomPageProps) {
     [currentRoundEntries, replayState],
   );
   const currentRoundTopScore = Math.max(...currentRoundLedger.map((player) => player.total), 0);
-  const currentRoundTopPlayers = currentRoundLedger.filter(
-    (player) => currentRoundTopScore > 0 && player.total === currentRoundTopScore,
-  );
-  const currentRoundResultLabel =
-    currentRoundResult === "DRAW" ? "流局" : getRoundWinResultLabel(room?.players.length ?? 0);
-  const currentRoundTopScoreLabel =
-    currentRoundTopPlayers.length > 0
-      ? `${currentRoundTopPlayers.map((player) => player.nickname).join("、")} +${currentRoundTopScore}`
-      : "无";
   const historyRoundLedgers = useMemo(
     () =>
       replayState === undefined
@@ -1162,16 +1152,13 @@ export function RoomPage({ roomId }: RoomPageProps) {
             {roundViewMode === "round_settlement" ? (
               <>
                 <RoundSettlementPanel
-                  eventCount={currentRoundEntries.length}
                   isConfirmDisabled={isScoring || isFinishing}
                   isConfirming={isScoring}
                   onConfirm={() => {
                     void handleConfirmRound();
                   }}
                   players={currentRoundSettlementPlayers}
-                  resultLabel={currentRoundResultLabel}
                   roundNumber={currentRoundNumber}
-                  topScoreLabel={currentRoundTopScoreLabel}
                 />
 
                 <Disclosure summary={`查看事件明细（${currentRoundEntries.length} 笔）`}>

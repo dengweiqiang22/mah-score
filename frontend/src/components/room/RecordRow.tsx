@@ -1,6 +1,5 @@
 import { Undo2 } from "lucide-react";
 
-import { Button } from "../ui/Button";
 import { cn } from "../../utils/className";
 
 interface RecordRowProps {
@@ -37,16 +36,15 @@ export function RecordRow({
             已撤销
           </span>
         ) : (
-          <Button
+          <button
             aria-label={`撤销第 ${actionNumber} 笔事件`}
-            className="h-9 w-9 shrink-0 bg-red-50 px-0 text-red-700 ring-1 ring-red-100 active:bg-red-100"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-md border border-red-200 bg-red-100 text-red-700 transition-colors active:bg-red-200 disabled:cursor-not-allowed disabled:opacity-50"
             disabled={isUndoDisabled}
             onClick={onUndo}
-            size="sm"
-            variant="ghost"
+            type="button"
           >
-            <Undo2 className="h-4 w-4" />
-          </Button>
+            <Undo2 className="h-5 w-5" />
+          </button>
         )}
       </div>
       <p
