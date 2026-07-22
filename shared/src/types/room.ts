@@ -3,6 +3,7 @@ import type { RoomEvent } from "./event.js";
 export type RoomStatus = "WAITING" | "PLAYING" | "FINISHED";
 
 export interface RoomPlayer {
+  readonly avatarId?: string;
   readonly id: string;
   readonly nickname: string;
 }
@@ -24,6 +25,7 @@ export interface RoomSnapshot {
 }
 
 export interface CreateRoomRequest {
+  readonly avatarId?: string;
   readonly nickname: string;
 }
 
@@ -35,6 +37,7 @@ export interface CreateRoomResponse {
 }
 
 export interface JoinRoomRequest {
+  readonly avatarId?: string;
   readonly roomId: string;
   readonly nickname: string;
 }

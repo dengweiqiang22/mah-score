@@ -92,6 +92,7 @@ function createSyntheticPlayerJoinedEvents(snapshot: RoomSnapshot): readonly Roo
     operator: "room",
     timestamp: snapshot.createdAt,
     payload: {
+      ...(player.avatarId === undefined ? {} : { avatarId: player.avatarId }),
       playerId: player.id,
       nickname: player.nickname,
     },
@@ -316,6 +317,7 @@ function addScore(scores: ScoreState[], playerId: string, delta: number): ScoreS
 }
 
 function applyPlayerJoined(state: MutableReplayState, event: RoomEvent): MutableReplayState {
+  const avatarId = getStringPayloadValue(event, "avatarId");
   const playerId = getStringPayloadValue(event, "playerId");
   const nickname = getStringPayloadValue(event, "nickname");
 
@@ -332,6 +334,7 @@ function applyPlayerJoined(state: MutableReplayState, event: RoomEvent): Mutable
     players: [
       ...state.players,
       {
+        ...(avatarId === undefined ? {} : { avatarId }),
         id: playerId,
         nickname,
       },
