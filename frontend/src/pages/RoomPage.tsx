@@ -8,7 +8,6 @@ import type {
   RoomState,
   ScoreFan,
   ScoreEventRequest,
-  ScoreHistoryItem,
 } from "@mah-score/shared";
 import type { ReactNode } from "react";
 
@@ -20,7 +19,6 @@ import {
   createScoreHistory,
   createSettlement,
   confirmDrawGame,
-  getDrawGameSettlementPayload,
   getEntryActorId,
   getEntryCounterpartyId,
   getEntryFan,
@@ -80,6 +78,7 @@ import { Button } from "../components/ui/Button";
 import { Disclosure } from "../components/ui/Disclosure";
 import { Notice } from "../components/ui/Notice";
 import { Section } from "../components/ui/Section";
+import { useDrawGameEntry, type DrawGameStep } from "../hooks/useDrawGameEntry";
 import { useRoomSync } from "../hooks/useRoomSync";
 import { defaultAvatarId } from "../utils/avatars";
 import {
@@ -87,6 +86,10 @@ import {
   savePlayerIdentity,
   type StoredPlayerIdentity,
 } from "../utils/playerIdentity";
+import {
+  getCurrentRoundSettlementEntries,
+  getDrawGameTaxRefundedKongEventIds,
+} from "../utils/roundSettlementDisplay";
 
 interface RoomPageProps {
   readonly roomId: string;
@@ -94,7 +97,6 @@ interface RoomPageProps {
 
 type QuickScoreMode = "SELF_DRAW" | "DISCARD_WIN" | "KONG" | "DRAW_GAME";
 type RoundViewMode = "round_active" | "round_settlement";
-type DrawGameStep = "flower_pig" | "not_ready" | "ready_fan";
 
 const fixedEventOptions: readonly {
   readonly emphasis?: "default" | "primary" | "muted";
@@ -212,45 +214,6 @@ function formatScoreHistorySummary(item: {
   return flows.length === 0 ? item.detail : formatScoreFlowSummary(flows);
 }
 
-function getPayloadPlayerId(event: RoomEvent, key: string): string | undefined {
-  const value = event.payload[key];
-
-  return typeof value === "string" ? value : undefined;
-}
-
-function getCurrentRoundSettlementEntries(
-  entries: readonly ScoreHistoryItem[],
-): readonly ScoreHistoryItem[] {
-  const drawGameItem = entries.find((item) => item.event.type === "DRAW_GAME" && !item.isUndone);
-
-  if (drawGameItem === undefined) {
-    return entries;
-  }
-
-  const refundPlayerIds = new Set(
-    getDrawGameSettlementPayload(drawGameItem.event.payload).kongTaxRefundPlayerIds,
-  );
-
-  return entries
-    .filter((item) => {
-      if (item.event.type !== "KONG" || item.isUndone) {
-        return true;
-      }
-
-      const playerId = getPayloadPlayerId(item.event, "playerId");
-
-      return playerId === undefined || !refundPlayerIds.has(playerId);
-    })
-    .map((item) =>
-      item.event.type === "DRAW_GAME" && item.displayFlows !== undefined
-        ? {
-            ...item,
-            flows: item.displayFlows,
-          }
-        : item,
-    );
-}
-
 function getDrawGameStepLabel(step: DrawGameStep): string {
   if (step === "flower_pig") {
     return "花猪";
@@ -353,11 +316,6 @@ export function RoomPage({ roomId }: RoomPageProps) {
     { readonly playerId: string; readonly nickname: string } | undefined
   >();
   const [avatarInput, setAvatarInput] = useState(defaultAvatarId);
-  const [drawGameStep, setDrawGameStep] = useState<DrawGameStep>("flower_pig");
-  const [drawFlowerPigPlayerIds, setDrawFlowerPigPlayerIds] = useState<readonly string[]>([]);
-  const [drawNotReadyPlayerIds, setDrawNotReadyPlayerIds] = useState<readonly string[]>([]);
-  const [drawReadyFans, setDrawReadyFans] = useState<Readonly<Record<string, ScoreFan>>>({});
-  const [selectedDrawReadyFan, setSelectedDrawReadyFan] = useState<ScoreFan>(1);
   const [nicknameInput, setNicknameInput] = useState("");
   const [storedPlayerIdentity, setStoredPlayerIdentity] = useState<
     StoredPlayerIdentity | undefined
@@ -374,24 +332,23 @@ export function RoomPage({ roomId }: RoomPageProps) {
     roomId,
     setErrorMessage,
   );
-
-  function resetDrawGameSettlement() {
-    setDrawGameStep("flower_pig");
-    setDrawFlowerPigPlayerIds([]);
-    setDrawNotReadyPlayerIds([]);
-    setDrawReadyFans({});
-    setSelectedDrawReadyFan(1);
-  }
+  const {
+    createDrawGamePayload,
+    drawFlowerPigPlayerIds,
+    drawGameSettlementSummary,
+    drawGameStep,
+    drawNotReadyPlayerIds,
+    drawReadyFans,
+    resetDrawGameEntry,
+    selectedDrawReadyFan,
+    selectDrawGamePlayer,
+    setDrawGameStep,
+    setSelectedDrawReadyFan,
+  } = useDrawGameEntry();
 
   function resetQuickScoreSelection() {
     setEntryState({ type: "idle" });
-    resetDrawGameSettlement();
-  }
-
-  function togglePlayerId(playerIds: readonly string[], playerId: string): readonly string[] {
-    return playerIds.includes(playerId)
-      ? playerIds.filter((currentPlayerId) => currentPlayerId !== playerId)
-      : [...playerIds, playerId];
+    resetDrawGameEntry();
   }
 
   function toggleHistoryRound(roundNumber: number) {
@@ -729,33 +686,10 @@ export function RoomPage({ roomId }: RoomPageProps) {
   }
 
   function handleSelectDrawGamePlayer(playerId: string) {
-    if (currentRoundWinnerIds.has(playerId)) {
-      return;
-    }
-
     setErrorMessage(undefined);
+    const errorMessage = selectDrawGamePlayer(playerId, currentRoundWinnerIds);
 
-    if (drawGameStep === "flower_pig") {
-      handleToggleDrawFlowerPig(playerId);
-      return;
-    }
-
-    if (drawGameStep === "not_ready") {
-      if (drawFlowerPigPlayerIds.includes(playerId)) {
-        setErrorMessage("花猪不参与查叫。");
-        return;
-      }
-
-      handleToggleDrawNotReady(playerId);
-      return;
-    }
-
-    if (drawFlowerPigPlayerIds.includes(playerId)) {
-      setErrorMessage("花猪不参与查叫。");
-      return;
-    }
-
-    handleSelectDrawReadyFan(playerId, selectedDrawReadyFan);
+    setErrorMessage(errorMessage);
   }
 
   async function applyEntryTransition(
@@ -785,42 +719,11 @@ export function RoomPage({ roomId }: RoomPageProps) {
     setErrorMessage(undefined);
 
     if (eventType === "DRAW_GAME") {
-      resetDrawGameSettlement();
+      resetDrawGameEntry();
     }
 
     const transition = selectEntryEvent(entryState, eventType);
     await applyEntryTransition(transition.state, transition.submitDraft, transition.errorMessage);
-  }
-
-  function handleToggleDrawFlowerPig(playerId: string) {
-    setDrawFlowerPigPlayerIds((currentValue) => togglePlayerId(currentValue, playerId));
-    setDrawNotReadyPlayerIds((currentValue) =>
-      currentValue.filter((currentPlayerId) => currentPlayerId !== playerId),
-    );
-    setDrawReadyFans((currentValue) =>
-      Object.fromEntries(
-        Object.entries(currentValue).filter(([currentPlayerId]) => currentPlayerId !== playerId),
-      ),
-    );
-  }
-
-  function handleToggleDrawNotReady(playerId: string) {
-    setDrawNotReadyPlayerIds((currentValue) => togglePlayerId(currentValue, playerId));
-    setDrawReadyFans((currentValue) =>
-      Object.fromEntries(
-        Object.entries(currentValue).filter(([currentPlayerId]) => currentPlayerId !== playerId),
-      ),
-    );
-  }
-
-  function handleSelectDrawReadyFan(playerId: string, fan: ScoreFan) {
-    setDrawNotReadyPlayerIds((currentValue) =>
-      currentValue.filter((currentPlayerId) => currentPlayerId !== playerId),
-    );
-    setDrawReadyFans((currentValue) => ({
-      ...currentValue,
-      [playerId]: fan,
-    }));
   }
 
   function getQuickScoreMissingMessage(): string {
@@ -946,25 +849,12 @@ export function RoomPage({ roomId }: RoomPageProps) {
       return;
     }
 
-    const readyHands = Object.entries(drawReadyFans).map(([playerId, maxFan]) => ({
-      playerId,
-      maxFan,
-    }));
-    const kongTaxRefundPlayerIds = Array.from(
-      new Set([...drawFlowerPigPlayerIds, ...drawNotReadyPlayerIds]),
-    );
-
     setEntryState(transition.state);
     await submitScoreRequest({
       roomId,
       action: "DRAW_GAME",
       operator: "room",
-      ...(drawFlowerPigPlayerIds.length === 0
-        ? {}
-        : { flowerPigPlayerIds: drawFlowerPigPlayerIds }),
-      ...(drawNotReadyPlayerIds.length === 0 ? {} : { notReadyPlayerIds: drawNotReadyPlayerIds }),
-      ...(readyHands.length === 0 ? {} : { readyHands }),
-      ...(kongTaxRefundPlayerIds.length === 0 ? {} : { kongTaxRefundPlayerIds }),
+      ...createDrawGamePayload(),
     });
   }
 
@@ -1119,6 +1009,10 @@ export function RoomPage({ roomId }: RoomPageProps) {
     () => getCurrentRoundSettlementEntries(currentRoundEntries),
     [currentRoundEntries],
   );
+  const taxRefundedKongEventIds = useMemo(
+    () => getDrawGameTaxRefundedKongEventIds(currentRoundEntries),
+    [currentRoundEntries],
+  );
   const currentRoundLedger = useMemo(
     () => createPlayerLedger(currentRoundSettlementEntries, replayState?.players ?? []),
     [currentRoundSettlementEntries, replayState],
@@ -1151,8 +1045,6 @@ export function RoomPage({ roomId }: RoomPageProps) {
     isCurrentPlayer: currentPlayer?.id === player.playerId,
     isTopPlayer: currentRoundTopScore > 0 && player.total === currentRoundTopScore,
   }));
-  const drawReadyPlayerCount = Object.keys(drawReadyFans).length;
-  const drawGameSettlementSummary = `花猪 ${drawFlowerPigPlayerIds.length} · 未叫 ${drawNotReadyPlayerIds.length} · 有叫 ${drawReadyPlayerCount}`;
   const roundViewMode: RoundViewMode = isCurrentRoundFinished ? "round_settlement" : "round_active";
   const canUndo = useMemo(() => scoreHistory.some((item) => !item.isUndone), [scoreHistory]);
   const quickScoreMissingMessage = getQuickScoreMissingMessage();
@@ -1171,7 +1063,15 @@ export function RoomPage({ roomId }: RoomPageProps) {
     setExpandedHistoryRoundNumbers([]);
   }, [roomId, currentRoundNumber]);
 
-  function renderCurrentRoundEntry(item: (typeof currentRoundEntries)[number]) {
+  function renderRoundEntry(
+    item: (typeof currentRoundEntries)[number],
+    roundEntries: readonly (typeof currentRoundEntries)[number][] = currentRoundEntries,
+  ) {
+    const roundTaxRefundedKongEventIds =
+      roundEntries === currentRoundEntries
+        ? taxRefundedKongEventIds
+        : getDrawGameTaxRefundedKongEventIds(roundEntries);
+
     return (
       <RecordRow
         actionNumber={item.roundActionNumber}
@@ -1180,6 +1080,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
         flowSummary={formatScoreHistorySummary(item)}
         isUndone={item.isUndone}
         isUndoDisabled={isUndoing || isScoring}
+        isTaxRefunded={roundTaxRefundedKongEventIds.has(item.event.id)}
         key={item.event.id}
         onUndo={() => {
           void handleUndoRoomEvent(item.event.id);
@@ -1419,7 +1320,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
                         暂无本局明细。
                       </p>
                     ) : (
-                      <div>{currentRoundEntries.map((item) => renderCurrentRoundEntry(item))}</div>
+                      <div>{currentRoundEntries.map((item) => renderRoundEntry(item))}</div>
                     )}
 
                     <Button
@@ -1657,6 +1558,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
                           isLatest={index === 0}
                           isUndone={item.isUndone}
                           isUndoDisabled={isUndoing || isScoring}
+                          isTaxRefunded={taxRefundedKongEventIds.has(item.event.id)}
                           key={item.event.id}
                           onUndo={() => {
                             void handleUndoRoomEvent(item.event.id);
@@ -1672,7 +1574,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
                 <Disclosure summary="本局详情">
                   <RoundDetailPanel
                     currentPlayerId={currentPlayer?.id}
-                    entries={currentRoundEntries.map((item) => renderCurrentRoundEntry(item))}
+                    entries={currentRoundEntries.map((item) => renderRoundEntry(item))}
                     players={currentRoundLedger}
                   />
                 </Disclosure>
@@ -1705,7 +1607,9 @@ export function RoomPage({ roomId }: RoomPageProps) {
                 <HistoryRoundsPanel
                   onToggleRound={toggleHistoryRound}
                   rounds={historyRoundLedgers.map((roundLedger) => ({
-                    entries: roundLedger.entries.map((item) => renderCurrentRoundEntry(item)),
+                    entries: roundLedger.entries.map((item) =>
+                      renderRoundEntry(item, roundLedger.entries),
+                    ),
                     entryCount: roundLedger.entries.length,
                     isExpanded: expandedHistoryRoundNumberSet.has(roundLedger.roundNumber),
                     roundNumber: roundLedger.roundNumber,

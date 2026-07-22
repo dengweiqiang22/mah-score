@@ -13,6 +13,7 @@ interface RecentEventRowProps {
   readonly flowSummary: string;
   readonly isLatest?: boolean;
   readonly isUndone: boolean;
+  readonly isTaxRefunded?: boolean;
   readonly isUndoDisabled: boolean;
   readonly onUndo: () => void;
   readonly taxRefunds?: readonly {
@@ -32,6 +33,7 @@ export function RecentEventRow({
   flowSummary,
   isLatest = false,
   isUndone,
+  isTaxRefunded = false,
   isUndoDisabled,
   onUndo,
   taxRefunds,
@@ -46,7 +48,14 @@ export function RecentEventRow({
       )}
     >
       <div className="min-w-0">
-        <p className="truncate text-sm font-semibold text-stone-900">{title}</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="min-w-0 truncate text-sm font-semibold text-stone-900">{title}</p>
+          {isTaxRefunded && !isUndone ? (
+            <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700 ring-1 ring-amber-100">
+              已退税
+            </span>
+          ) : null}
+        </div>
         <div className="mt-1">
           <ScoreFlowLine fallback={detail || flowSummary} flows={flows} isUndone={isUndone} />
           <TaxRefundLine isUndone={isUndone} taxRefunds={taxRefunds} />

@@ -13,6 +13,7 @@ interface RecordRowProps {
   }[];
   readonly flowSummary: string;
   readonly isUndone: boolean;
+  readonly isTaxRefunded?: boolean;
   readonly isUndoDisabled: boolean;
   readonly onUndo: () => void;
   readonly taxRefunds?: readonly {
@@ -32,6 +33,7 @@ export function RecordRow({
   flows,
   flowSummary,
   isUndone,
+  isTaxRefunded = false,
   isUndoDisabled,
   onUndo,
   taxRefunds,
@@ -52,7 +54,18 @@ export function RecordRow({
           <p className="truncate text-sm font-semibold text-stone-900">
             {flows.length === 0 ? `${title} · ${detail}` : title}
           </p>
-          {flows.length > 0 ? <p className="mt-1 truncate text-xs text-stone-400">{detail}</p> : null}
+          {flows.length > 0 || (isTaxRefunded && !isUndone) ? (
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              {flows.length > 0 ? (
+                <p className="min-w-0 truncate text-xs text-stone-400">{detail}</p>
+              ) : null}
+              {isTaxRefunded && !isUndone ? (
+                <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700 ring-1 ring-amber-100">
+                  已退税
+                </span>
+              ) : null}
+            </div>
+          ) : null}
         </div>
         {isUndone ? (
           <span className="shrink-0 rounded-full bg-stone-100 px-2 py-1 text-xs font-semibold text-stone-500">
