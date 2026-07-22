@@ -1276,9 +1276,12 @@ export function RoomPage({ roomId }: RoomPageProps) {
                                   : isCounterpartyStep && isActor
                                     ? "不能选择同一玩家"
                                     : isCounterparty
-                                      ? quickScoreMode === "KONG"
-                                        ? "引杠玩家"
-                                        : "点炮玩家"
+                                      ? (
+                                          <span className="flex items-center gap-1">
+                                            <ScoreValue score={getPlayerScore(player.id)} size="sm" />
+                                            <span>· 已选</span>
+                                          </span>
+                                        )
                                       : isActor
                                         ? (
                                             <span className="flex items-center gap-1">
