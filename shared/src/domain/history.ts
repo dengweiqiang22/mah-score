@@ -3,6 +3,7 @@ import type { RoomPlayer } from "../types/room.js";
 import type { RoundState } from "../types/roomState.js";
 
 import {
+  createDrawGameKongTaxRefundDetails,
   createDrawGameSettlementFlows,
   getDrawGameSettlementPayload,
 } from "./drawGameSettlement.js";
@@ -14,6 +15,17 @@ export interface HistoryFlowItem {
   readonly delta: number;
 }
 
+export interface HistoryTaxRefundDetail {
+  readonly delta: number;
+  readonly label: string;
+}
+
+export interface HistoryTaxRefundItem {
+  readonly details: readonly HistoryTaxRefundDetail[];
+  readonly nickname: string;
+  readonly playerId: string;
+}
+
 export interface ScoreHistoryItem {
   readonly event: RoomEvent;
   readonly round: RoundState;
@@ -23,6 +35,7 @@ export interface ScoreHistoryItem {
   readonly isUndone: boolean;
   readonly detail: string;
   readonly flows: readonly HistoryFlowItem[];
+  readonly taxRefunds?: readonly HistoryTaxRefundItem[];
 }
 
 export interface PlayerLedgerEntry {
@@ -101,6 +114,37 @@ function getKongTypeLabel(kongType: string | undefined): string {
   }
 
   return "杠牌";
+}
+
+function createHistoryTaxRefunds(
+  players: readonly RoomPlayer[],
+  currentRoundEvents: readonly RoomEvent[],
+  refundPlayerIds: readonly string[],
+): readonly HistoryTaxRefundItem[] {
+  const details = createDrawGameKongTaxRefundDetails(
+    players,
+    currentRoundEvents,
+    new Set(refundPlayerIds),
+  );
+  const detailsByPlayerId = new Map<string, HistoryTaxRefundDetail[]>();
+
+  for (const detail of details) {
+    const playerDetails = detailsByPlayerId.get(detail.playerId) ?? [];
+
+    detailsByPlayerId.set(detail.playerId, [
+      ...playerDetails,
+      {
+        delta: detail.delta,
+        label: getKongTypeLabel(detail.kongType),
+      },
+    ]);
+  }
+
+  return [...detailsByPlayerId.entries()].map(([playerId, playerDetails]) => ({
+    details: playerDetails,
+    nickname: getPlayerNickname(players, playerId),
+    playerId,
+  }));
 }
 
 function formatRoundTitle(round: RoundState, players: readonly RoomPlayer[]): string {
@@ -358,11 +402,12 @@ function createScoreHistoryItem(
   }
 
   if (event.type === "DRAW_GAME") {
+    const settlementPayload = getDrawGameSettlementPayload(event.payload);
     const flows = createDrawGameSettlementFlows(
       players,
       roundWinnerIds,
       currentRoundEvents,
-      getDrawGameSettlementPayload(event.payload),
+      settlementPayload,
     );
 
     return {
@@ -380,6 +425,11 @@ function createScoreHistoryItem(
         ...flow,
         nickname: getPlayerNickname(players, flow.playerId),
       })),
+      taxRefunds: createHistoryTaxRefunds(
+        players,
+        currentRoundEvents,
+        settlementPayload.kongTaxRefundPlayerIds,
+      ),
     };
   }
 

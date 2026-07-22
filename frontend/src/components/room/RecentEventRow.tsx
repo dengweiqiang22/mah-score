@@ -2,6 +2,7 @@ import { Undo2 } from "lucide-react";
 
 import { cn } from "../../utils/className";
 import { ScoreFlowLine } from "./ScoreFlowLine";
+import { TaxRefundLine } from "./TaxRefundLine";
 
 interface RecentEventRowProps {
   readonly detail: string;
@@ -14,6 +15,14 @@ interface RecentEventRowProps {
   readonly isUndone: boolean;
   readonly isUndoDisabled: boolean;
   readonly onUndo: () => void;
+  readonly taxRefunds?: readonly {
+    readonly details: readonly {
+      readonly delta: number;
+      readonly label: string;
+    }[];
+    readonly nickname: string;
+    readonly playerId: string;
+  }[];
   readonly title: string;
 }
 
@@ -25,6 +34,7 @@ export function RecentEventRow({
   isUndone,
   isUndoDisabled,
   onUndo,
+  taxRefunds,
   title,
 }: RecentEventRowProps) {
   return (
@@ -39,6 +49,7 @@ export function RecentEventRow({
         <p className="truncate text-sm font-semibold text-stone-900">{title}</p>
         <div className="mt-1">
           <ScoreFlowLine fallback={detail || flowSummary} flows={flows} isUndone={isUndone} />
+          <TaxRefundLine isUndone={isUndone} taxRefunds={taxRefunds} />
         </div>
       </div>
       {isUndone ? (

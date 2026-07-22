@@ -2,6 +2,7 @@ import { Undo2 } from "lucide-react";
 
 import { cn } from "../../utils/className";
 import { ScoreFlowLine } from "./ScoreFlowLine";
+import { TaxRefundLine } from "./TaxRefundLine";
 
 interface RecordRowProps {
   readonly actionNumber: number;
@@ -14,6 +15,14 @@ interface RecordRowProps {
   readonly isUndone: boolean;
   readonly isUndoDisabled: boolean;
   readonly onUndo: () => void;
+  readonly taxRefunds?: readonly {
+    readonly details: readonly {
+      readonly delta: number;
+      readonly label: string;
+    }[];
+    readonly nickname: string;
+    readonly playerId: string;
+  }[];
   readonly title: string;
 }
 
@@ -25,6 +34,7 @@ export function RecordRow({
   isUndone,
   isUndoDisabled,
   onUndo,
+  taxRefunds,
   title,
 }: RecordRowProps) {
   return (
@@ -62,6 +72,7 @@ export function RecordRow({
       </div>
       <div className="ml-9 mt-2">
         <ScoreFlowLine fallback={flowSummary} flows={flows} isUndone={isUndone} />
+        <TaxRefundLine isUndone={isUndone} taxRefunds={taxRefunds} />
       </div>
     </article>
   );

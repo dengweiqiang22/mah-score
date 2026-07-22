@@ -2,6 +2,7 @@ export type { ApiFailureResponse, ApiResponse, ApiSuccessResponse } from "./type
 export { createPlayerLedger, createRoundLedgers, createScoreHistory } from "./domain/history.js";
 export { getRoomOwnerPlayerId } from "./domain/roomOwner.js";
 export {
+  createDrawGameKongTaxRefundDetails,
   createDrawGameSettlementFlows,
   getDrawGameSettlementPayload,
 } from "./domain/drawGameSettlement.js";
@@ -36,6 +37,8 @@ export type {
 } from "./domain/gameEntryMachine.js";
 export type {
   HistoryFlowItem,
+  HistoryTaxRefundDetail,
+  HistoryTaxRefundItem,
   PlayerLedgerEntry,
   PlayerLedgerItem,
   RoundLedgerItem,
@@ -43,6 +46,7 @@ export type {
 } from "./domain/history.js";
 export type {
   DrawGameReadyHand,
+  DrawGameKongTaxRefundDetail,
   DrawGameSettlementFlow,
   DrawGameSettlementPayload,
 } from "./domain/drawGameSettlement.js";

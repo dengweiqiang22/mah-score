@@ -1136,6 +1136,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
         onUndo={() => {
           void handleUndoRoomEvent(item.event.id);
         }}
+        taxRefunds={item.taxRefunds}
         title={item.title}
       />
     );
@@ -1612,6 +1613,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
                           onUndo={() => {
                             void handleUndoRoomEvent(item.event.id);
                           }}
+                          taxRefunds={item.taxRefunds}
                           title={`${item.roundActionNumber}. ${item.title}`}
                         />
                       ))}

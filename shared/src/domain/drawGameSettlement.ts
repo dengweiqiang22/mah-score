@@ -1,5 +1,6 @@
 import type { RoomEvent } from "../types/event.js";
 import type { RoomPlayer } from "../types/room.js";
+import type { KongType } from "../types/score.js";
 
 import { getFanScore } from "./roomRules.js";
 
@@ -18,6 +19,19 @@ export interface DrawGameSettlementPayload {
 export interface DrawGameSettlementFlow {
   readonly delta: number;
   readonly playerId: string;
+}
+
+export interface DrawGameKongTaxRefundDetail {
+  readonly delta: number;
+  readonly kongType: KongType;
+  readonly playerId: string;
+}
+
+interface KongTaxRefundEntry {
+  readonly delta: number;
+  readonly kongType: KongType;
+  readonly payerPlayerId: string;
+  readonly refundPlayerId: string;
 }
 
 function getPayloadString(payload: RoomEvent["payload"], key: string): string | undefined {
@@ -61,6 +75,14 @@ function getReadyHands(payload: RoomEvent["payload"]): readonly DrawGameReadyHan
       };
     })
     .filter((item): item is DrawGameReadyHand => item !== undefined);
+}
+
+function isKongType(value: string | undefined): value is KongType {
+  return (
+    value === "DISCARD_KONG" ||
+    value === "SUPPLEMENT_KONG" ||
+    value === "CONCEALED_KONG"
+  );
 }
 
 export function getDrawGameSettlementPayload(
@@ -141,7 +163,19 @@ function appendKongTaxRefundFlows(
   currentRoundEvents: readonly RoomEvent[],
   refundPlayerIds: ReadonlySet<string>,
 ): void {
+  for (const entry of createKongTaxRefundEntries(players, currentRoundEvents, refundPlayerIds)) {
+    addFlow(flowMap, entry.refundPlayerId, -entry.delta);
+    addFlow(flowMap, entry.payerPlayerId, entry.delta);
+  }
+}
+
+function createKongTaxRefundEntries(
+  players: readonly RoomPlayer[],
+  currentRoundEvents: readonly RoomEvent[],
+  refundPlayerIds: ReadonlySet<string>,
+): readonly KongTaxRefundEntry[] {
   const winnerIds = new Set<string>();
+  const entries: KongTaxRefundEntry[] = [];
 
   for (const event of currentRoundEvents) {
     if (event.type === "DISCARD_WIN" || event.type === "SELF_DRAW") {
@@ -166,6 +200,10 @@ function appendKongTaxRefundFlows(
 
     const kongType = getPayloadString(event.payload, "kongType");
 
+    if (!isKongType(kongType)) {
+      continue;
+    }
+
     if (kongType === "DISCARD_KONG") {
       const fromPlayerId = getPayloadString(event.payload, "fromPlayerId");
 
@@ -173,8 +211,12 @@ function appendKongTaxRefundFlows(
         continue;
       }
 
-      addFlow(flowMap, playerId, -1);
-      addFlow(flowMap, fromPlayerId, 1);
+      entries.push({
+        delta: 1,
+        kongType,
+        payerPlayerId: fromPlayerId,
+        refundPlayerId: playerId,
+      });
       continue;
     }
 
@@ -186,10 +228,16 @@ function appendKongTaxRefundFlows(
         continue;
       }
 
-      addFlow(flowMap, playerId, -payerScore);
-      addFlow(flowMap, player.id, payerScore);
+      entries.push({
+        delta: payerScore,
+        kongType,
+        payerPlayerId: player.id,
+        refundPlayerId: playerId,
+      });
     }
   }
+
+  return entries;
 }
 
 export function createDrawGameSettlementFlows(
@@ -217,4 +265,25 @@ export function createDrawGameSettlementFlows(
       delta,
     }))
     .filter((flow) => flow.delta !== 0);
+}
+
+export function createDrawGameKongTaxRefundDetails(
+  players: readonly RoomPlayer[],
+  currentRoundEvents: readonly RoomEvent[],
+  refundPlayerIds: ReadonlySet<string>,
+): readonly DrawGameKongTaxRefundDetail[] {
+  const detailMap = new Map<string, DrawGameKongTaxRefundDetail>();
+
+  for (const entry of createKongTaxRefundEntries(players, currentRoundEvents, refundPlayerIds)) {
+    const key = `${entry.refundPlayerId}:${entry.kongType}`;
+    const current = detailMap.get(key);
+
+    detailMap.set(key, {
+      delta: (current?.delta ?? 0) - entry.delta,
+      kongType: entry.kongType,
+      playerId: entry.refundPlayerId,
+    });
+  }
+
+  return [...detailMap.values()].filter((detail) => detail.delta !== 0);
 }

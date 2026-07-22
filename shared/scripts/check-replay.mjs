@@ -638,6 +638,21 @@ assert.deepEqual(
     },
   ],
 );
+assert.deepEqual(
+  settledDrawGameHistory.find((item) => item.event.id === "settled_draw_7")?.taxRefunds,
+  [
+    {
+      playerId: "player_1",
+      nickname: "王五",
+      details: [
+        {
+          label: "补杠",
+          delta: -2,
+        },
+      ],
+    },
+  ],
+);
 
 const confirmedRoundState = replayRoomEvents([
   ...events.slice(0, 6),
