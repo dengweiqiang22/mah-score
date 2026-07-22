@@ -49,8 +49,8 @@ import { LedgerRow } from "../components/room/LedgerRow";
 import { PlayerTile } from "../components/room/PlayerTile";
 import { RecentEventRow } from "../components/room/RecentEventRow";
 import { RecordRow } from "../components/room/RecordRow";
+import { RoundSettlementPanel } from "../components/room/RoundSettlementPanel";
 import { ScoreValue } from "../components/room/ScoreValue";
-import { SettlementPlayerRow } from "../components/room/SettlementPlayerRow";
 import { FinishedRoomView } from "../components/room/FinishedRoomView";
 import { PlayingRoomView } from "../components/room/PlayingRoomView";
 import { WaitingRoomView } from "../components/room/WaitingRoomView";
@@ -939,6 +939,12 @@ export function RoomPage({ roomId }: RoomPageProps) {
   const currentRoundTopPlayers = currentRoundLedger.filter(
     (player) => currentRoundTopScore > 0 && player.total === currentRoundTopScore,
   );
+  const currentRoundResultLabel =
+    currentRoundResult === "DRAW" ? "流局" : getRoundWinResultLabel(room?.players.length ?? 0);
+  const currentRoundTopScoreLabel =
+    currentRoundTopPlayers.length > 0
+      ? `${currentRoundTopPlayers.map((player) => player.nickname).join("、")} +${currentRoundTopScore}`
+      : "无";
   const historyRoundLedgers = useMemo(
     () =>
       replayState === undefined
@@ -953,6 +959,11 @@ export function RoomPage({ roomId }: RoomPageProps) {
         : replayState?.players.find((player) => player.id === storedPlayerIdentity.playerId),
     [replayState, storedPlayerIdentity],
   );
+  const currentRoundSettlementPlayers = currentRoundLedger.map((player) => ({
+    ...player,
+    isCurrentPlayer: currentPlayer?.id === player.playerId,
+    isTopPlayer: currentRoundTopScore > 0 && player.total === currentRoundTopScore,
+  }));
   const roundViewMode: RoundViewMode = isCurrentRoundFinished ? "round_settlement" : "round_active";
   const canUndo = useMemo(() => scoreHistory.some((item) => !item.isUndone), [scoreHistory]);
   const quickScoreMissingMessage = getQuickScoreMissingMessage();
@@ -1149,66 +1160,18 @@ export function RoomPage({ roomId }: RoomPageProps) {
           >
             {roundViewMode === "round_settlement" ? (
               <>
-                <Section className="gap-4">
-                  <div>
-                    <p className="text-sm font-semibold text-stone-500">
-                      第 {currentRoundNumber} 局
-                    </p>
-                    <h2 className="mt-1 text-2xl font-semibold tracking-normal">本局结算</h2>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-2 rounded-md bg-stone-50 px-3 py-2">
-                    <div>
-                      <p className="text-xs font-medium text-stone-400">结果</p>
-                      <p className="mt-1 truncate text-sm font-semibold text-stone-800">
-                        {currentRoundResult === "DRAW"
-                          ? "流局"
-                          : getRoundWinResultLabel(room.players.length)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-medium text-stone-400">最高分</p>
-                      <p className="mt-1 truncate text-sm font-semibold text-stone-800">
-                        {currentRoundTopPlayers.length > 0
-                          ? `${currentRoundTopPlayers.map((player) => player.nickname).join("、")} +${currentRoundTopScore}`
-                          : "无"}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-medium text-stone-400">事件</p>
-                      <p className="mt-1 text-sm font-semibold text-stone-800">
-                        {currentRoundEntries.length} 笔
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="grid">
-                    {currentRoundLedger.map((player) => (
-                      <SettlementPlayerRow
-                        expense={player.expense}
-                        income={player.income}
-                        isCurrentPlayer={currentPlayer?.id === player.playerId}
-                        isTopPlayer={
-                          currentRoundTopScore > 0 && player.total === currentRoundTopScore
-                        }
-                        key={player.playerId}
-                        nickname={player.nickname}
-                        total={player.total}
-                      />
-                    ))}
-                  </div>
-
-                  <Button
-                    disabled={isScoring || isFinishing}
-                    onClick={() => {
-                      void handleConfirmRound();
-                    }}
-                    size="lg"
-                    variant="primary"
-                  >
-                    {isScoring ? "确认中..." : "确认本局，开始下一局"}
-                  </Button>
-                </Section>
+                <RoundSettlementPanel
+                  eventCount={currentRoundEntries.length}
+                  isConfirmDisabled={isScoring || isFinishing}
+                  isConfirming={isScoring}
+                  onConfirm={() => {
+                    void handleConfirmRound();
+                  }}
+                  players={currentRoundSettlementPlayers}
+                  resultLabel={currentRoundResultLabel}
+                  roundNumber={currentRoundNumber}
+                  topScoreLabel={currentRoundTopScoreLabel}
+                />
 
                 <Disclosure summary={`查看事件明细（${currentRoundEntries.length} 笔）`}>
                   <div className="grid gap-3">
