@@ -27,7 +27,7 @@ export function AvatarSelector({ onChange, value }: AvatarSelectorProps) {
               }}
               type="button"
             >
-              <img alt="" className="h-[82%] w-[82%]" src={avatar.src} />
+              <img alt="" className="h-full w-full rounded-full" src={avatar.src} />
             </button>
           );
         })}

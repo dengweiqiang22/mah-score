@@ -18,9 +18,9 @@ const sizeClassName: Record<PlayerAvatarSize, string> = {
 };
 
 const imageSizeClassName: Record<PlayerAvatarSize, string> = {
-  lg: "h-10 w-10",
-  md: "h-8 w-8",
-  sm: "h-6 w-6",
+  lg: "h-full w-full",
+  md: "h-full w-full",
+  sm: "h-full w-full",
 };
 
 export function PlayerAvatar({
@@ -43,7 +43,7 @@ export function PlayerAvatar({
       )}
       role="img"
     >
-      <img alt="" className={imageSizeClassName[size]} src={avatar.src} />
+      <img alt="" className={cn("rounded-full", imageSizeClassName[size])} src={avatar.src} />
     </span>
   );
 }
