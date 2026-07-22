@@ -10,7 +10,7 @@ export function AvatarSelector({ onChange, value }: AvatarSelectorProps) {
   return (
     <div className="grid gap-2">
       <p className="text-sm font-semibold text-stone-700">选择头像</p>
-      <div className="grid grid-cols-8 gap-2">
+      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
         {avatarOptions.map((avatar) => {
           const isSelected = avatar.id === value;
 
@@ -18,7 +18,7 @@ export function AvatarSelector({ onChange, value }: AvatarSelectorProps) {
             <button
               aria-label={avatar.label}
               className={cn(
-                "grid h-10 w-10 place-items-center rounded-full bg-stone-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2",
+                "grid h-11 w-11 shrink-0 place-items-center rounded-full bg-stone-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2",
                 isSelected ? "ring-2 ring-emerald-700 ring-offset-2" : "ring-1 ring-stone-200",
               )}
               key={avatar.id}
@@ -27,7 +27,7 @@ export function AvatarSelector({ onChange, value }: AvatarSelectorProps) {
               }}
               type="button"
             >
-              <img alt="" className="h-8 w-8" src={avatar.src} />
+              <img alt="" className="h-9 w-9" src={avatar.src} />
             </button>
           );
         })}
