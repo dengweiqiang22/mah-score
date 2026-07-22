@@ -326,7 +326,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
     [],
   );
   const [isPlayerLedgerExpanded, setIsPlayerLedgerExpanded] = useState(false);
-  const { events, isLoading, loadRoom, room, roomVersion, syncStatus } = useRoomSync(
+  const { events, isLoading, loadRoom, room, syncStatus } = useRoomSync(
     roomId,
     setErrorMessage,
   );
@@ -1336,6 +1336,9 @@ export function RoomPage({ roomId }: RoomPageProps) {
         {room !== undefined && isPlaying ? (
           <PlayingRoomView
             currentPlayerId={currentPlayer?.id}
+            onHomeClick={() => {
+              window.location.assign("/");
+            }}
             onMoreClick={() => {
               document.getElementById("room-more-section")?.scrollIntoView({
                 behavior: "smooth",
@@ -1347,7 +1350,6 @@ export function RoomPage({ roomId }: RoomPageProps) {
             roundNumber={currentRoundNumber}
             scores={totalScoreByPlayerId}
             syncStatus={syncStatus}
-            version={room.version ?? roomVersion}
           >
             {roundViewMode === "round_settlement" ? (
               <>
