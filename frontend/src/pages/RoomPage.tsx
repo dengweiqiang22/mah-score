@@ -31,7 +31,7 @@ import {
   selectEntryFan,
   selectEntryPlayer,
 } from "@mah-score/shared";
-import { ArrowRightLeft, Crosshair, Layers3, Plus, RotateCcw, Share2, Sparkles, Undo2 } from "lucide-react";
+import { ArrowRightLeft, CircleSlash, Crosshair, EyeOff, Hand, Plus, Share2, Undo2 } from "lucide-react";
 import QRCode from "qrcode";
 
 import {
@@ -99,7 +99,7 @@ const fixedEventOptions: readonly {
   },
   {
     eventType: "CONCEALED_KONG",
-    icon: <Layers3 className="h-4 w-4" />,
+    icon: <EyeOff className="h-4 w-4" />,
     kongType: "CONCEALED_KONG",
     label: "暗杠",
     mode: "KONG",
@@ -112,13 +112,13 @@ const fixedEventOptions: readonly {
   },
   {
     eventType: "SELF_DRAW",
-    icon: <Sparkles className="h-4 w-4" />,
+    icon: <Hand className="h-4 w-4" />,
     label: "自摸",
     mode: "SELF_DRAW",
   },
   {
     eventType: "DRAW_GAME",
-    icon: <RotateCcw className="h-4 w-4" />,
+    icon: <CircleSlash className="h-4 w-4" />,
     label: "流局",
     mode: "DRAW_GAME",
   },
@@ -1390,18 +1390,9 @@ export function RoomPage({ roomId }: RoomPageProps) {
                           </div>
                         </>
                       ) : quickScoreMode !== undefined ? (
-                        <>
-                          <EntryStatus title="当前录入">
-                            {quickScoreSummary ?? quickScoreMissingMessage}
-                          </EntryStatus>
-                          <Button
-                            className="justify-self-start"
-                            disabled={isScoring}
-                            onClick={resetQuickScoreSelection}
-                          >
-                            取消
-                          </Button>
-                        </>
+                        <p className="self-center text-sm font-medium text-stone-400">
+                          按上方提示完成必要选择后会自动记录。
+                        </p>
                       ) : scoreFeedbackMessage !== undefined ? (
                         <EntryStatus
                           action={
