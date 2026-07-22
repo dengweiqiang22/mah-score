@@ -2,6 +2,24 @@
 
 ---
 
+# v0.17.0 候选任务
+
+## 流局事件明细解释优化与房间页职责拆分
+
+任务文档：
+
+docs/tasks/v0.17.0-draw-game-detail-and-roompage-refactor.md
+
+目标：
+
+- 为已退税杠牌事件补充低权重 `已退税` 提示；
+- 保持事件流水完整，不隐藏、不修改历史 Event；
+- 将流局录入状态从 `RoomPage.tsx` 拆出；
+- 将当前局结算展示口径从 `RoomPage.tsx` 拆出；
+- 不改变现有 API、Event payload 和 Replay 计分结果。
+
+---
+
 # v0.16.0 候选任务
 
 ## 流局结算与房间桌规配置基础
