@@ -57,7 +57,6 @@ import { RoomManagementRow } from "../components/room/RoomManagementRow";
 import { RoomDangerActions } from "../components/room/RoomDangerActions";
 import { RoundDetailPanel } from "../components/room/RoundDetailPanel";
 import { RoundSettlementPanel } from "../components/room/RoundSettlementPanel";
-import { ScoreValue } from "../components/room/ScoreValue";
 import { FinishedRoomView } from "../components/room/FinishedRoomView";
 import { PlayingRoomView } from "../components/room/PlayingRoomView";
 import { WaitingRoomView } from "../components/room/WaitingRoomView";
@@ -77,6 +76,7 @@ type QuickScoreMode = "SELF_DRAW" | "DISCARD_WIN" | "KONG" | "DRAW_GAME";
 type RoundViewMode = "round_active" | "round_settlement";
 
 const fixedEventOptions: readonly {
+  readonly emphasis?: "default" | "primary" | "muted";
   readonly eventType: EntryEventType;
   readonly icon: ReactNode;
   readonly kongType?: KongType;
@@ -105,18 +105,21 @@ const fixedEventOptions: readonly {
     mode: "KONG",
   },
   {
+    emphasis: "primary",
     eventType: "DISCARD_WIN",
-    icon: <Crosshair className="h-4 w-4" />,
+    icon: <Crosshair className="h-5 w-5" />,
     label: "点炮",
     mode: "DISCARD_WIN",
   },
   {
+    emphasis: "primary",
     eventType: "SELF_DRAW",
-    icon: <Hand className="h-4 w-4" />,
+    icon: <Hand className="h-5 w-5" />,
     label: "自摸",
     mode: "SELF_DRAW",
   },
   {
+    emphasis: "muted",
     eventType: "DRAW_GAME",
     icon: <CircleSlash className="h-4 w-4" />,
     label: "流局",
@@ -718,6 +721,38 @@ export function RoomPage({ roomId }: RoomPageProps) {
     return "";
   }
 
+  function getQuickScoreStepMessage(): string {
+    if (replayState?.currentRound.status === "FINISHED") {
+      return "请先确认账单";
+    }
+
+    if (entryState.type === "idle") {
+      return "请选择玩家";
+    }
+
+    if (entryState.type === "actor_selected") {
+      return "请选择事件";
+    }
+
+    if (entryState.type === "selecting_fan") {
+      return "请选择番数";
+    }
+
+    if (entryState.type === "selecting_counterparty" && entryState.eventType === "dianpao") {
+      return "请选择点炮玩家";
+    }
+
+    if (entryState.type === "selecting_counterparty" && entryState.eventType === "zhigang") {
+      return "请选择引杠玩家";
+    }
+
+    if (entryState.type === "liuju_mode") {
+      return "请确认流局";
+    }
+
+    return "确认后记录本次事件";
+  }
+
   function getQuickScoreSummary(): string | undefined {
     if (entryState.type === "liuju_mode") {
       return `确认第 ${currentRoundNumber} 局流局，确认后本局结束。`;
@@ -914,10 +949,6 @@ export function RoomPage({ roomId }: RoomPageProps) {
     [events, replayState],
   );
 
-  function getPlayerScore(playerId: string): number {
-    return totalScoreByPlayerId.get(playerId) ?? 0;
-  }
-
   const currentRoundWinnerIds = useMemo(
     () => new Set(replayState?.currentRound.winnerIds ?? []),
     [replayState],
@@ -965,6 +996,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
   const roundViewMode: RoundViewMode = isCurrentRoundFinished ? "round_settlement" : "round_active";
   const canUndo = useMemo(() => scoreHistory.some((item) => !item.isUndone), [scoreHistory]);
   const quickScoreMissingMessage = getQuickScoreMissingMessage();
+  const quickScoreStepMessage = getQuickScoreStepMessage();
   const quickScoreSummary = getQuickScoreSummary();
   const quickScoreMode = getEntryMode(entryState);
   const selectedKongType = getEntryKongType(entryState);
@@ -1208,13 +1240,14 @@ export function RoomPage({ roomId }: RoomPageProps) {
                     </Button>
                   </div>
 
-                  <EntryStatus>
-                    {quickScoreMissingMessage === "" ? "确认后记录本次事件。" : quickScoreMissingMessage}
-                  </EntryStatus>
-
                   <div className="grid gap-4">
                     <div className="grid gap-2">
-                      <p className="text-sm font-semibold text-stone-700">玩家</p>
+                      <div className="flex min-w-0 items-center justify-between gap-3">
+                        <p className="shrink-0 text-sm font-semibold text-stone-700">玩家</p>
+                        <p className="min-w-0 truncate rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-800 ring-1 ring-emerald-100">
+                          {quickScoreStepMessage}
+                        </p>
+                      </div>
                       <div className="grid grid-cols-2 gap-2">
                         {room.players.map((player) => {
                           const hasWon = currentRoundWinnerIds.has(player.id);
@@ -1262,23 +1295,9 @@ export function RoomPage({ roomId }: RoomPageProps) {
                                   ? "本局已胡牌"
                                   : isCounterpartyStep && isActor
                                     ? "不能选择同一玩家"
-                                    : isCounterparty
-                                      ? (
-                                          <span className="flex items-center gap-1">
-                                            <ScoreValue score={getPlayerScore(player.id)} size="sm" />
-                                            <span>· 已选</span>
-                                          </span>
-                                        )
-                                      : isActor
-                                        ? (
-                                            <span className="flex items-center gap-1">
-                                              <ScoreValue score={getPlayerScore(player.id)} size="sm" />
-                                              <span>· 已选</span>
-                                            </span>
-                                          )
-                                        : isEntryLocked
-                                          ? "等待完成当前录入"
-                                          : <ScoreValue score={getPlayerScore(player.id)} size="sm" />
+                                    : isEntryLocked
+                                      ? "等待完成当前录入"
+                                      : undefined
                               }
                               nickname={player.nickname}
                               onClick={() => {
@@ -1303,6 +1322,7 @@ export function RoomPage({ roomId }: RoomPageProps) {
                           return (
                             <EventAction
                               disabled={isScoring}
+                              emphasis={option.emphasis}
                               icon={option.icon}
                               isSelected={isSelected}
                               key={`${option.mode}-${option.kongType ?? option.label}`}

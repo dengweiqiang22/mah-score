@@ -8,7 +8,7 @@ export type PlayerVisualState = "default" | "actor" | "counterparty" | "disabled
 interface PlayerTileProps {
   readonly disabled?: boolean;
   readonly avatarId?: string;
-  readonly meta: ReactNode;
+  readonly meta?: ReactNode;
   readonly nickname: string;
   readonly onClick?: () => void;
   readonly roleLabel?: string;
@@ -24,20 +24,19 @@ export function PlayerTile({
   roleLabel,
   visualState,
 }: PlayerTileProps) {
-  const metaNode: ReactNode = meta;
   const actualVisualState: PlayerVisualState = visualState ?? (disabled ? "disabled" : "default");
 
   return (
     <button
       className={cn(
-        "min-h-16 rounded-md border px-3 py-2 text-left disabled:cursor-not-allowed",
+        "min-h-16 rounded-md border px-3 py-2 text-left shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed",
         actualVisualState === "actor"
           ? "border-emerald-600 bg-emerald-50 text-stone-950 ring-1 ring-emerald-200"
           : actualVisualState === "counterparty"
             ? "border-red-400 bg-red-50 text-stone-950 ring-1 ring-red-100"
             : actualVisualState === "disabled"
               ? "border-stone-200 bg-stone-100 text-stone-500 opacity-60"
-              : "border-stone-200 bg-stone-100 text-stone-950",
+              : "border-stone-200 bg-white text-stone-950 active:border-emerald-200 active:bg-emerald-50",
       )}
       disabled={disabled}
       onClick={onClick}
@@ -70,20 +69,22 @@ export function PlayerTile({
               {roleLabel}
             </span>
           ) : null}
-          <span
-            className={cn(
-              "mt-1 block text-sm font-medium",
-              actualVisualState === "actor"
-                ? "text-emerald-700"
-                : actualVisualState === "counterparty"
-                  ? "text-red-700"
-                  : actualVisualState === "disabled"
-                    ? "text-stone-500"
-                    : "text-stone-600",
-            )}
-          >
-            {metaNode}
-          </span>
+          {meta !== undefined ? (
+            <span
+              className={cn(
+                "mt-1 block truncate text-xs font-medium",
+                actualVisualState === "actor"
+                  ? "text-emerald-700"
+                  : actualVisualState === "counterparty"
+                    ? "text-red-700"
+                    : actualVisualState === "disabled"
+                      ? "text-stone-500"
+                      : "text-stone-500",
+              )}
+            >
+              {meta}
+            </span>
+          ) : null}
         </span>
       </span>
     </button>
