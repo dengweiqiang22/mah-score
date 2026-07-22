@@ -177,6 +177,20 @@ function createHistoryFlow(
   };
 }
 
+function sortIncomeFlowsFirst(flows: readonly HistoryFlowItem[]): readonly HistoryFlowItem[] {
+  return [...flows].sort((left, right) => {
+    if (left.delta > 0 && right.delta <= 0) {
+      return -1;
+    }
+
+    if (left.delta <= 0 && right.delta > 0) {
+      return 1;
+    }
+
+    return 0;
+  });
+}
+
 function getRoundActivePlayers(
   players: readonly RoomPlayer[],
   currentRoundWinnerIds: ReadonlySet<string>,
@@ -260,15 +274,17 @@ function createScoreHistoryItem(
       title,
       isUndone,
       detail: formatRoundDetail(round, players),
-      flows: activePlayers
-        .map((player) =>
-          createHistoryFlow(
-            players,
-            player.id,
-            player.id === winnerId ? score * (activePlayers.length - 1) : -score,
-          ),
-        )
-        .filter((item): item is HistoryFlowItem => item !== undefined),
+      flows: sortIncomeFlowsFirst(
+        activePlayers
+          .map((player) =>
+            createHistoryFlow(
+              players,
+              player.id,
+              player.id === winnerId ? score * (activePlayers.length - 1) : -score,
+            ),
+          )
+          .filter((item): item is HistoryFlowItem => item !== undefined),
+      ),
     };
   }
 
@@ -304,15 +320,17 @@ function createScoreHistoryItem(
       title,
       isUndone,
       detail: formatRoundDetail(round, players),
-      flows: activePlayers
-        .map((player) =>
-          createHistoryFlow(
-            players,
-            player.id,
-            player.id === playerId ? payerScore * (activePlayers.length - 1) : -payerScore,
-          ),
-        )
-        .filter((item): item is HistoryFlowItem => item !== undefined),
+      flows: sortIncomeFlowsFirst(
+        activePlayers
+          .map((player) =>
+            createHistoryFlow(
+              players,
+              player.id,
+              player.id === playerId ? payerScore * (activePlayers.length - 1) : -payerScore,
+            ),
+          )
+          .filter((item): item is HistoryFlowItem => item !== undefined),
+      ),
     };
   }
 

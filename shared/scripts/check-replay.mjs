@@ -733,6 +733,46 @@ assert.deepEqual(
   ],
 );
 assert.deepEqual(
+  extendedScoreHistory.find((item) => item.event.id === "extended_10")?.flows.map((flow) => ({
+    delta: flow.delta,
+    playerId: flow.playerId,
+  })),
+  [
+    {
+      delta: 16,
+      playerId: "player_3",
+    },
+    {
+      delta: -8,
+      playerId: "player_2",
+    },
+    {
+      delta: -8,
+      playerId: "player_4",
+    },
+  ],
+);
+assert.deepEqual(
+  extendedScoreHistory.find((item) => item.event.id === "extended_8")?.flows.map((flow) => ({
+    delta: flow.delta,
+    playerId: flow.playerId,
+  })),
+  [
+    {
+      delta: 2,
+      playerId: "player_4",
+    },
+    {
+      delta: -1,
+      playerId: "player_2",
+    },
+    {
+      delta: -1,
+      playerId: "player_3",
+    },
+  ],
+);
+assert.deepEqual(
   extendedScoreLedger.map((player) => ({
     playerId: player.playerId,
     total: player.total,
