@@ -47,6 +47,7 @@ import { EventAction } from "../components/room/EventAction";
 import { FanSelector } from "../components/room/FanSelector";
 import { LedgerRow } from "../components/room/LedgerRow";
 import { PlayerTile } from "../components/room/PlayerTile";
+import { RecentEventRow } from "../components/room/RecentEventRow";
 import { RecordRow } from "../components/room/RecordRow";
 import { ScoreValue } from "../components/room/ScoreValue";
 import { SettlementPlayerRow } from "../components/room/SettlementPlayerRow";
@@ -1475,12 +1476,27 @@ export function RoomPage({ roomId }: RoomPageProps) {
                   </div>
 
                   {recentCurrentRoundEntries.length === 0 ? (
-                    <p className="rounded-md bg-stone-100 px-3 py-3 text-sm text-stone-600">
-                      本局还没有计分事件。
-                    </p>
+                    <div className="rounded-md border border-dashed border-stone-200 px-3 py-3">
+                      <p className="text-sm font-semibold text-stone-700">尚无本局记录</p>
+                      <p className="mt-1 text-xs text-stone-500">
+                        完成一次记分后会显示在这里。
+                      </p>
+                    </div>
                   ) : (
-                    <div className="grid gap-2">
-                      {recentCurrentRoundEntries.map((item) => renderCurrentRoundEntry(item))}
+                    <div className="grid">
+                      {recentCurrentRoundEntries.map((item, index) => (
+                        <RecentEventRow
+                          flowSummary={formatScoreFlowSummary(item.flows)}
+                          isLatest={index === 0}
+                          isUndone={item.isUndone}
+                          isUndoDisabled={isUndoing || isScoring}
+                          key={item.event.id}
+                          onUndo={() => {
+                            void handleUndoRoomEvent(item.event.id);
+                          }}
+                          title={`${item.roundActionNumber}. ${item.title}`}
+                        />
+                      ))}
                     </div>
                   )}
                 </Section>
