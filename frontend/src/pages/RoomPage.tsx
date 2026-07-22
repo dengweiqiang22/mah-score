@@ -31,7 +31,7 @@ import {
   selectEntryFan,
   selectEntryPlayer,
 } from "@mah-score/shared";
-import { ArrowRightLeft, Copy, Crosshair, Layers3, Plus, RotateCcw, Share2, Sparkles, Undo2 } from "lucide-react";
+import { ArrowRightLeft, Crosshair, Layers3, Plus, RotateCcw, Share2, Sparkles, Undo2 } from "lucide-react";
 import QRCode from "qrcode";
 
 import {
@@ -46,8 +46,11 @@ import { EntryStatus } from "../components/room/EntryStatus";
 import { EventAction } from "../components/room/EventAction";
 import { FanSelector } from "../components/room/FanSelector";
 import { FinalSettlementPanel } from "../components/room/FinalSettlementPanel";
+import { HistoryRoundsPanel } from "../components/room/HistoryRoundsPanel";
+import { InvitePanel } from "../components/room/InvitePanel";
 import { LedgerRow } from "../components/room/LedgerRow";
 import { PlayerTile } from "../components/room/PlayerTile";
+import { PlayerLedgerPanel } from "../components/room/PlayerLedgerPanel";
 import { RecentEventRow } from "../components/room/RecentEventRow";
 import { RecordRow } from "../components/room/RecordRow";
 import { RoundDetailPanel } from "../components/room/RoundDetailPanel";
@@ -1486,108 +1489,37 @@ export function RoomPage({ roomId }: RoomPageProps) {
               summary="更多"
             >
               <div className="grid gap-4">
-                <div className="grid gap-3">
-                  <p className="text-sm font-semibold text-stone-700">邀请加入</p>
-                  <div className="flex items-start justify-between gap-4">
-                    <p className="min-w-0 break-all rounded-md bg-stone-50 px-3 py-2 text-xs leading-5 text-stone-500">
-                      {inviteUrl}
-                    </p>
-                    {qrCodeDataUrl !== undefined ? (
-                      <img
-                        alt={`房间 ${roomId} 邀请二维码`}
-                        className="h-20 w-20 shrink-0 rounded-md border border-stone-200"
-                        src={qrCodeDataUrl}
-                      />
-                    ) : null}
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Button
-                      onClick={() => {
-                        void handleShareInviteLink();
-                      }}
-                    >
-                      <Share2 className="h-4 w-4" />
-                      分享
-                    </Button>
-                    <Button
-                      onClick={() => {
-                        void handleCopyInviteLink();
-                      }}
-                    >
-                      <Copy className="h-4 w-4" />
-                      复制
-                    </Button>
-                  </div>
-                </div>
+                <InvitePanel
+                  inviteUrl={inviteUrl}
+                  message={shareMessage}
+                  onCopy={() => {
+                    void handleCopyInviteLink();
+                  }}
+                  onShare={() => {
+                    void handleShareInviteLink();
+                  }}
+                  qrCodeDataUrl={qrCodeDataUrl}
+                  roomId={roomId}
+                />
 
-                <div className="grid gap-2">
-                  <p className="text-sm font-semibold text-stone-700">历史局</p>
-                  {historyRoundLedgers.length === 0 ? (
-                    <p className="rounded-md bg-stone-50 px-3 py-2 text-sm text-stone-600">
-                      暂无历史局。
-                    </p>
-                  ) : (
-                    historyRoundLedgers.map((roundLedger) => {
-                      const isRoundExpanded = expandedHistoryRoundNumberSet.has(
-                        roundLedger.roundNumber,
-                      );
+                <HistoryRoundsPanel
+                  onToggleRound={toggleHistoryRound}
+                  rounds={historyRoundLedgers.map((roundLedger) => ({
+                    entries: roundLedger.entries.map((item) => renderCurrentRoundEntry(item)),
+                    entryCount: roundLedger.entries.length,
+                    isExpanded: expandedHistoryRoundNumberSet.has(roundLedger.roundNumber),
+                    roundNumber: roundLedger.roundNumber,
+                  }))}
+                />
 
-                      return (
-                        <article
-                          className="grid gap-2 rounded-md bg-stone-50 p-3"
-                          key={roundLedger.roundNumber}
-                        >
-                          <button
-                            className="flex items-center justify-between gap-3 text-left"
-                            onClick={() => {
-                              toggleHistoryRound(roundLedger.roundNumber);
-                            }}
-                            type="button"
-                          >
-                            <span className="text-sm font-semibold text-stone-900">
-                              第 {roundLedger.roundNumber} 局
-                            </span>
-                            <span className="text-xs font-medium text-stone-400">
-                              {isRoundExpanded ? "收起" : `${roundLedger.entries.length} 笔`}
-                            </span>
-                          </button>
-                          {isRoundExpanded ? (
-                            <div className="grid gap-2">
-                              {roundLedger.entries.map((item) => renderCurrentRoundEntry(item))}
-                            </div>
-                          ) : null}
-                        </article>
-                      );
-                    })
-                  )}
-                </div>
-
-                <button
-                  className="flex items-center justify-between gap-3 rounded-md bg-stone-50 px-3 py-3 text-left"
-                  onClick={() => {
+                <PlayerLedgerPanel
+                  currentPlayerId={currentPlayer?.id}
+                  isExpanded={isPlayerLedgerExpanded}
+                  onToggle={() => {
                     setIsPlayerLedgerExpanded((currentValue) => !currentValue);
                   }}
-                  type="button"
-                >
-                  <span className="text-sm font-semibold text-stone-900">玩家总账</span>
-                  <span className="text-xs font-medium text-stone-400">
-                    {isPlayerLedgerExpanded ? "收起" : "展开"}
-                  </span>
-                </button>
-                {isPlayerLedgerExpanded ? (
-                  <div className="grid gap-2">
-                    {playerLedger.map((player) => (
-                      <LedgerRow
-                        expense={player.expense}
-                        income={player.income}
-                        isCurrentPlayer={currentPlayer?.id === player.playerId}
-                        key={player.playerId}
-                        nickname={player.nickname}
-                        total={player.total}
-                      />
-                    ))}
-                  </div>
-                ) : null}
+                  players={playerLedger}
+                />
 
                 <div
                   className={
@@ -1615,10 +1547,6 @@ export function RoomPage({ roomId }: RoomPageProps) {
                     结束整场
                   </Button>
                 </div>
-
-                {shareMessage !== undefined ? (
-                  <p className="text-sm font-medium text-stone-500">{shareMessage}</p>
-                ) : null}
               </div>
             </Disclosure>
 
