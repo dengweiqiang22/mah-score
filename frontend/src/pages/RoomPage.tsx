@@ -45,6 +45,7 @@ import {
 import { EntryStatus } from "../components/room/EntryStatus";
 import { EventAction } from "../components/room/EventAction";
 import { FanSelector } from "../components/room/FanSelector";
+import { FinalSettlementPanel } from "../components/room/FinalSettlementPanel";
 import { LedgerRow } from "../components/room/LedgerRow";
 import { PlayerTile } from "../components/room/PlayerTile";
 import { RecentEventRow } from "../components/room/RecentEventRow";
@@ -1668,48 +1669,16 @@ export function RoomPage({ roomId }: RoomPageProps) {
 
         {isFinished && settlement !== undefined ? (
           <FinishedRoomView roomId={roomId} totalRounds={settlement.totalRounds}>
-            <div className="grid gap-3">
-              {settlement.players.map((player) => (
-                <div
-                  className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-md bg-white p-4 shadow-sm ring-1 ring-stone-200/80"
-                  key={player.playerId}
-                >
-                  <p className="grid h-10 w-10 place-items-center rounded-md bg-stone-100 text-sm font-semibold text-stone-700">
-                    {player.rank}
-                  </p>
-                  <div className="min-w-0">
-                    <p className="truncate text-base font-semibold">{player.nickname}</p>
-                    <p className="mt-1 text-xs font-medium text-stone-500">
-                      胡 {player.winCount} · 点炮 {player.discardCount} · 杠 {player.kongCount}
-                    </p>
-                  </div>
-                  <p className="text-2xl font-semibold tabular-nums">
-                    {player.total >= 0 ? `+${player.total}` : player.total}
-                  </p>
-                </div>
-              ))}
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <Button
-                onClick={() => {
-                  void handleCopySettlementText(settlement.text);
-                }}
-                variant="primary"
-              >
-                <Copy className="h-4 w-4" />
-                复制战绩
-              </Button>
-              <Button
-                onClick={() => {
-                  window.location.assign("/");
-                }}
-              >
-                返回首页
-              </Button>
-            </div>
-            {settlementCopyMessage !== undefined ? (
-              <p className="text-sm font-medium text-stone-500">{settlementCopyMessage}</p>
-            ) : null}
+            <FinalSettlementPanel
+              copyMessage={settlementCopyMessage}
+              onBackHome={() => {
+                window.location.assign("/");
+              }}
+              onCopy={() => {
+                void handleCopySettlementText(settlement.text);
+              }}
+              players={settlement.players}
+            />
           </FinishedRoomView>
         ) : null}
       </section>
