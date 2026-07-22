@@ -9,6 +9,7 @@ import type {
   ScoreFan,
   ScoreEventRequest,
 } from "@mah-score/shared";
+import type { ReactNode } from "react";
 
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -30,7 +31,7 @@ import {
   selectEntryFan,
   selectEntryPlayer,
 } from "@mah-score/shared";
-import { Copy, Share2, Undo2 } from "lucide-react";
+import { ArrowRightLeft, Copy, Crosshair, Layers3, Plus, RotateCcw, Share2, Sparkles, Undo2 } from "lucide-react";
 import QRCode from "qrcode";
 
 import {
@@ -41,9 +42,13 @@ import {
   startRoom,
   undoRoomEvent,
 } from "../api/roomApi";
+import { EntryStatus } from "../components/room/EntryStatus";
+import { EventAction } from "../components/room/EventAction";
+import { FanSelector } from "../components/room/FanSelector";
 import { LedgerRow } from "../components/room/LedgerRow";
 import { PlayerTile } from "../components/room/PlayerTile";
 import { RecordRow } from "../components/room/RecordRow";
+import { ScoreValue } from "../components/room/ScoreValue";
 import { SettlementPlayerRow } from "../components/room/SettlementPlayerRow";
 import { FinishedRoomView } from "../components/room/FinishedRoomView";
 import { PlayingRoomView } from "../components/room/PlayingRoomView";
@@ -64,40 +69,47 @@ type RoundViewMode = "round_active" | "round_settlement";
 
 const fixedEventOptions: readonly {
   readonly eventType: EntryEventType;
+  readonly icon: ReactNode;
   readonly kongType?: KongType;
   readonly label: string;
   readonly mode: QuickScoreMode;
 }[] = [
   {
     eventType: "DISCARD_KONG",
+    icon: <ArrowRightLeft className="h-4 w-4" />,
     kongType: "DISCARD_KONG",
     label: "直杠",
     mode: "KONG",
   },
   {
     eventType: "SUPPLEMENT_KONG",
+    icon: <Plus className="h-4 w-4" />,
     kongType: "SUPPLEMENT_KONG",
     label: "补杠",
     mode: "KONG",
   },
   {
     eventType: "CONCEALED_KONG",
+    icon: <Layers3 className="h-4 w-4" />,
     kongType: "CONCEALED_KONG",
     label: "暗杠",
     mode: "KONG",
   },
   {
     eventType: "DISCARD_WIN",
+    icon: <Crosshair className="h-4 w-4" />,
     label: "点炮",
     mode: "DISCARD_WIN",
   },
   {
     eventType: "SELF_DRAW",
+    icon: <Sparkles className="h-4 w-4" />,
     label: "自摸",
     mode: "SELF_DRAW",
   },
   {
     eventType: "DRAW_GAME",
+    icon: <RotateCcw className="h-4 w-4" />,
     label: "流局",
     mode: "DRAW_GAME",
   },
@@ -1252,11 +1264,6 @@ export function RoomPage({ roomId }: RoomPageProps) {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <h2 className="text-lg font-semibold tracking-normal">高频记录</h2>
-                      <p className="mt-1 text-sm text-stone-500">
-                        {quickScoreMissingMessage === ""
-                          ? "确认后记录本次事件。"
-                          : quickScoreMissingMessage}
-                      </p>
                     </div>
                     <Button
                       className={
@@ -1272,6 +1279,10 @@ export function RoomPage({ roomId }: RoomPageProps) {
                       取消当前录入
                     </Button>
                   </div>
+
+                  <EntryStatus>
+                    {quickScoreMissingMessage === "" ? "确认后记录本次事件。" : quickScoreMissingMessage}
+                  </EntryStatus>
 
                   <div className="grid gap-4">
                     <div className="grid gap-2">
@@ -1327,10 +1338,15 @@ export function RoomPage({ roomId }: RoomPageProps) {
                                         ? "引杠玩家"
                                         : "点炮玩家"
                                       : isActor
-                                        ? `${getPlayerScore(player.id)} · 已选`
+                                        ? (
+                                            <span className="flex items-center gap-1">
+                                              <ScoreValue score={getPlayerScore(player.id)} size="sm" />
+                                              <span>· 已选</span>
+                                            </span>
+                                          )
                                         : isEntryLocked
                                           ? "等待完成当前录入"
-                                          : `${getPlayerScore(player.id)}`
+                                          : <ScoreValue score={getPlayerScore(player.id)} size="sm" />
                               }
                               nickname={player.nickname}
                               onClick={() => {
@@ -1353,21 +1369,17 @@ export function RoomPage({ roomId }: RoomPageProps) {
                             (option.mode !== "KONG" || selectedKongType === option.kongType);
 
                           return (
-                            <button
-                              className={`h-12 rounded-md px-2 text-sm font-semibold ${
-                                isSelected
-                                  ? "bg-emerald-700 text-white"
-                                  : "bg-stone-100 text-stone-900"
-                              } disabled:cursor-not-allowed disabled:opacity-60`}
+                            <EventAction
                               disabled={isScoring}
+                              icon={option.icon}
+                              isSelected={isSelected}
                               key={`${option.mode}-${option.kongType ?? option.label}`}
                               onClick={() => {
                                 void handleSelectQuickScoreEvent(option.eventType);
                               }}
-                              type="button"
                             >
                               {option.label}
-                            </button>
+                            </EventAction>
                           );
                         })}
                       </div>
@@ -1375,43 +1387,29 @@ export function RoomPage({ roomId }: RoomPageProps) {
 
                     <div className="grid gap-2">
                       <p className="text-sm font-semibold text-stone-700">番数</p>
-                      <div className="grid grid-cols-4 gap-2">
-                        {scoreFans.map((fan) => {
-                          const canSelectFan =
+                      <FanSelector
+                        disabled={
+                          isScoring ||
+                          !(
                             isSelectingFan(entryState) &&
                             quickScoreMode !== undefined &&
-                            needsFan(quickScoreMode);
-
-                          return (
-                            <button
-                              className={`h-11 rounded-md px-2 text-sm font-semibold ${
-                                selectedFan === fan
-                                  ? "bg-stone-900 text-white"
-                                  : "bg-stone-100 text-stone-900"
-                              } disabled:cursor-not-allowed disabled:opacity-50`}
-                              disabled={isScoring || !canSelectFan}
-                              key={fan}
-                              onClick={() => {
-                                void handleSelectFan(fan);
-                              }}
-                              type="button"
-                            >
-                              {fan} 番
-                            </button>
-                          );
-                        })}
-                      </div>
+                            needsFan(quickScoreMode)
+                          )
+                        }
+                        fans={scoreFans}
+                        onSelectFan={(fan) => {
+                          void handleSelectFan(fan);
+                        }}
+                        selectedFan={selectedFan}
+                      />
                     </div>
 
                     <div className="grid min-h-24 gap-3 rounded-md bg-stone-50 p-3">
                       {entryState.type === "liuju_mode" ? (
                         <>
-                          <div>
-                            <p className="text-sm font-semibold text-stone-900">流局确认</p>
-                            <p className="mt-1 text-sm text-stone-600">
-                              {quickScoreSummary ?? quickScoreMissingMessage}
-                            </p>
-                          </div>
+                          <EntryStatus title="流局确认" variant="warning">
+                            {quickScoreSummary ?? quickScoreMissingMessage}
+                          </EntryStatus>
                           <div className="grid grid-cols-2 gap-3">
                             <Button disabled={isScoring} onClick={resetQuickScoreSelection}>
                               取消
@@ -1429,12 +1427,9 @@ export function RoomPage({ roomId }: RoomPageProps) {
                         </>
                       ) : quickScoreMode !== undefined ? (
                         <>
-                          <div>
-                            <p className="text-sm font-semibold text-stone-900">当前录入</p>
-                            <p className="mt-1 text-sm text-stone-600">
-                              {quickScoreSummary ?? quickScoreMissingMessage}
-                            </p>
-                          </div>
+                          <EntryStatus title="当前录入">
+                            {quickScoreSummary ?? quickScoreMissingMessage}
+                          </EntryStatus>
                           <Button
                             className="justify-self-start"
                             disabled={isScoring}
@@ -1444,23 +1439,28 @@ export function RoomPage({ roomId }: RoomPageProps) {
                           </Button>
                         </>
                       ) : scoreFeedbackMessage !== undefined ? (
-                        <div className="flex items-center justify-between gap-3 self-center">
-                          <p className="min-w-0 text-sm font-semibold text-emerald-700">
+                        <EntryStatus
+                          action={
+                            <Button
+                              className="shrink-0"
+                              disabled={!canUndo || isUndoing || isScoring}
+                              onClick={() => {
+                                void handleUndoRoomEvent();
+                              }}
+                              size="sm"
+                              variant="danger"
+                            >
+                              <Undo2 className="h-3.5 w-3.5" />
+                              撤销
+                            </Button>
+                          }
+                          title="记录成功"
+                          variant="success"
+                        >
+                          <span className="min-w-0 text-sm font-semibold text-emerald-700">
                             {scoreFeedbackMessage}
-                          </p>
-                          <Button
-                            className="shrink-0"
-                            disabled={!canUndo || isUndoing || isScoring}
-                            onClick={() => {
-                              void handleUndoRoomEvent();
-                            }}
-                            size="sm"
-                            variant="danger"
-                          >
-                            <Undo2 className="h-3.5 w-3.5" />
-                            撤销
-                          </Button>
-                        </div>
+                          </span>
+                        </EntryStatus>
                       ) : (
                         <p className="self-center text-sm text-stone-500">最近记录会显示在下方。</p>
                       )}

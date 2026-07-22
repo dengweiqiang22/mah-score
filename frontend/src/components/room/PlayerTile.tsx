@@ -6,7 +6,7 @@ export type PlayerVisualState = "default" | "actor" | "counterparty" | "disabled
 
 interface PlayerTileProps {
   readonly disabled?: boolean;
-  readonly meta: string;
+  readonly meta: ReactNode;
   readonly nickname: string;
   readonly onClick?: () => void;
   readonly roleLabel?: string;
