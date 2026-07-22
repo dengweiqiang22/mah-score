@@ -19,6 +19,23 @@ docs/tasks/v0.16.0-draw-game-and-room-rules.md
 
 ---
 
+# v0.16.1 候选任务
+
+## 流局结算录入 UI 优化
+
+任务文档：
+
+docs/tasks/v0.16.1-draw-game-entry-ui.md
+
+目标：
+
+- 将流局状态录入并入主事件录入界面；
+- 使用“先选状态，再点玩家”的流局交互；
+- 在玩家卡片右侧展示 `🐷 花猪`、`未叫`、`听 N 番` 等状态标签；
+- 保持 v0.16.0 的流局 payload 和 Replay 逻辑不变。
+
+---
+
 # v0.3.0 候选任务
 
 ## Event Sourcing 补齐第一阶段
